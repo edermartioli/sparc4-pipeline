@@ -1,5 +1,5 @@
 # sparc4-pipeline
-My personal repository of routines to be used in the SPARC4 Pipeline
+My personal repository of routines developed for the SPARC4 Pipeline
 
 To test the SPARC4 products library (`spar4_products.py`) run the following script:
 
