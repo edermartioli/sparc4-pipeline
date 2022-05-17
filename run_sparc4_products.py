@@ -242,6 +242,9 @@ except:
     print("Error: check usage with  -h run_sparc4_products.py")
     sys.exit(1)
 
+# if reduced dir doesn't exist create one
+if not os.path.exists(reduced_dir) :
+    os.mkdir(reduced_dir)
 
 # run master bias example
 run_master_image_example(obstype='ZERO', method='median', output=master_bias)
