@@ -1,3 +1,5 @@
+import os
+import sparc4_utils as s4utils
 # -----------------------------------------------------------------------------
 #   define SPARC4 pipeline parameters
 # -----------------------------------------------------------------------------
@@ -7,8 +9,12 @@ def load_sparc4_parameters() :
     p = {}
     
     #### DIRECTORIES #####
-    p['ROOTDATADIR'] = "/Volumes/Samsung_T5/Data/SPARC4/comissioning_nov22/"
-    p['ROOTREDUCEDIR'] = "/Volumes/Samsung_T5/Data/SPARC4/comissioning_nov22/reduced"
+    #p['ROOTDATADIR'] = "/Volumes/Samsung_T5/Data/SPARC4/comissioning_nov22/"
+    #p['ROOTREDUCEDIR'] = "/Volumes/Samsung_T5/Data/SPARC4/comissioning_nov22/reduced"
+    #p['ROOTDATADIR'] = "/Volumes/Samsung_T5/Data/SPARC4/comissioning_feb23/"
+    #p['ROOTREDUCEDIR'] = "/Volumes/Samsung_T5/Data/SPARC4/comissioning_feb23/reduced"
+    p['ROOTDATADIR'] = "/Volumes/Samsung_T5/Data/SPARC4/comissioning_mai23/"
+    p['ROOTREDUCEDIR'] = "/Volumes/Samsung_T5/Data/SPARC4/comissioning_mai23/reduced"
     # define SPARC4 channel numbers
     p['CHANNELS'] = [1,2,3,4]
     # define SPARC4 channel labels
@@ -19,15 +25,33 @@ def load_sparc4_parameters() :
     p['CALIB_WILD_CARDS'] = ['*.fits']
     # Method to combine calibration images
     p['CALIB_IMCOMBINE_METHOD'] = 'median'
+    # Number of sigmas to clip if using method==mean
+    #p['NSIGMA_IMCOMBINE_METHOD'] = 5
     # Value of obstype keyword used to identify bias images
     p['BIAS_OBSTYPE_KEYVALUE'] = 'ZERO'
     # Value of obstype keyword used to identify flat images
     p['FLAT_OBSTYPE_KEYVALUE'] = 'FLAT'
+    #p['FLAT_OBSTYPE_KEYVALUE'] = 'DFLAT'
+    # Value of obstype keyword used to identify focus images
+    p['FOCUS_OBSTYPE_KEYVALUE'] = 'FOCUS'
+    # Value of obstype keyword used to identify dark images
+    p['DARK_OBSTYPE_KEYVALUE'] = 'DARK'
     # Value of obstype keyword used to identify object images
     p['OBJECT_OBSTYPE_KEYVALUE'] = 'OBJECT'
+    
+    # Value of INSTMODE keyword used to identify photometric instrument mode
+    p['INSTMODE_PHOTOMETRY_KEYVALUE'] = 'PHOT'
+    # Value of INSTMODE keyword used to identify polarimetric instrument mode
+    p['INSTMODE_POLARIMETRY_KEYVALUE'] = 'POLAR'
+
+    # set maximum number of science frames for each reduction loop
+    # it avoids memory issues for long lists
+    p['MAX_NUMBER_OF_SCI_FRAMES_PER_LOOP'] = 100
     #-------------------------------------
     
     #### SCIENCE DATA #####
+    # time keyword in header
+    p['TIME_KEY'] = 'DATE-OBS'
     # wild card to identify object images
     p['OBJECT_WILD_CARDS'] = ['*.fits']
     # FITS image extension where science data is located
@@ -35,15 +59,17 @@ def load_sparc4_parameters() :
     # index of reference image
     p['REF_IMAGE_INDEX'] = 0
     # algorithm to calculate shift: 'cross-correlation' or 'asterism-matching'
-    #p['SHIFT_ALGORITHM'] = 'asterism-matching'
-    p['SHIFT_ALGORITHM'] = 'cross-correlation'
+    p['SHIFT_ALGORITHM'] = 'asterism-matching'
+    #p['SHIFT_ALGORITHM'] = 'cross-correlation'
     ### STACK ###
     # method to select files for stack
     p['METHOD_TO_SELECT_FILES_FOR_STACK'] = 'MAX_FLUXES' # 'MAX_FLUXES' or 'MIN_SHIFTS'
     # stack method
     p['SCI_STACK_METHOD'] = 'median'
     # define number of files for stack
-    p['NFILES_FOR_STACK'] = 30
+    p['NFILES_FOR_STACK'] = 10
+    # define saturation limit
+    p['SATURATION_LIMIT'] = 32000
     #-------------------------------------
     
     #### PHOTOMETRY ####
@@ -69,7 +95,7 @@ def load_sparc4_parameters() :
     p['PHOT_APERTURES'] = [2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50]
     
     # Threshold in number of sigmas to detect sources, where sigma = background error
-    p['PHOT_THRESHOLD'] = 10
+    p['PHOT_THRESHOLD'] = 100
     #-------------------------------------
 
     #### POLARIMETRY ####
@@ -80,16 +106,38 @@ def load_sparc4_parameters() :
     # Set angular sampling of the model in units of degrees
     p['POS_MODEL_SAMPLING'] = 1.0
 
+    p['MIN_APERTURE_FOR_POLARIMETRY'] = 4
+    p['MAX_APERTURE_FOR_POLARIMETRY'] = 12
+
+    # Set zero of polarimetry calibrated from standards
+    p['ZERO_OF_WAVEPLATE'] = 60
     
+    # Set maximum gap between image indices to break polar sequences
+    p['MAX_INDEX_GAP_TO_BREAK_POL_SEQS'] = 1
+    # Set maximum gap between image times to break polar sequences
+    p['MAX_TIME_GAP_TO_BREAK_POL_SEQS'] = 0.04166
     #-------------------------------------
 
     #### ASTROMETRY ####
-    p['PLATE_SCALE'] = 0.33  # ARCSEC/PIXEL
-    p['ASTROM_REF_IMGS'] = ["/Volumes/Samsung_T5/sparc4-pipeline/calibdb/20221104_s4c1_CR7_stack.fits",
-                       "/Volumes/Samsung_T5/sparc4-pipeline/calibdb/20221104_s4c2_CR7_stack.fits",
-                       "/Volumes/Samsung_T5/sparc4-pipeline/calibdb/20221104_s4c3_CR7_stack.fits",
-                       "/Volumes/Samsung_T5/sparc4-pipeline/calibdb/20221104_s4c4_CR7_stack.fits"]
+    p['PLATE_SCALE'] = 0.335  # ARCSEC/PIXEL
+    #p['PLATE_SCALE'] = 0.18  # ARCSEC/PIXEL
+    p['ASTROM_REF_IMGS'] = ["/Volumes/Samsung_T5/sparc4-pipeline/calibdb/20230503_s4c1_CR1_astrometryRef_stack.fits",
+                       "/Volumes/Samsung_T5/sparc4-pipeline/calibdb/20230503_s4c2_CR1_astrometryRef_stack.fits",
+                       "/Volumes/Samsung_T5/sparc4-pipeline/calibdb/20230503_s4c3_CR1_astrometryRef_stack.fits",
+                       "/Volumes/Samsung_T5/sparc4-pipeline/calibdb/20230503_s4c4_CR1_astrometryRef_stack.fits"]
+    p['TWEAK_ORDER'] = 3  # order of polynomial to fit astrometry solution
+    p['SEARCH_RADIUS'] =  0.1  # radius to define the range of solutions in units of degree
+    #-------------------------------------
 
+
+    #### TIME SERIES ####
+    #p['TIME_KEYWORD_IN_PROC'] = 'DATE-OBS'
+    #p['TIME_FORMAT_IN_PROC'] = 'isot'
+    p['TIME_KEYWORD_IN_PROC'] = 'BJD'
+    p['TIME_FORMAT_IN_PROC'] = 'jd'
+
+    p['PHOT_REF_CATALOG_NAME'] = "CATALOG_PHOT_AP010"
+    p['POLAR_REF_CATALOG_NAME'] = "CATALOG_POLAR_N_AP010"
     #-------------------------------------
 
     #### GENERAL PROCESSING #####
@@ -97,4 +145,50 @@ def load_sparc4_parameters() :
     p['USE_MEMMAP'] = False
     #-------------------------------------
     
+    return p
+
+
+def init_s4_p(datadir="", reducedir="", nightdir="", channels="", print_report=False) :
+
+    # load pipeline parameters
+    p = load_sparc4_parameters()
+
+    if datadir != "" :
+        p['ROOTDATADIR'] = datadir
+    
+    if reducedir != "" :
+        p['ROOTREDUCEDIR'] = reducedir
+    
+    p['SELECTED_CHANNELS'] = p['CHANNELS']
+    if channels != "" :
+        p['SELECTED_CHANNELS']  = []
+        chs = channels.split(",")
+        for ch in chs :
+            p['SELECTED_CHANNELS'].append(int(ch))
+            
+    # if reduced dir doesn't exist create one
+    if not os.path.exists(p['ROOTREDUCEDIR']) :
+        os.mkdir(p['ROOTREDUCEDIR'])
+
+    #organize files to be reduced
+    p = s4utils.identify_files(p, nightdir, print_report=print_report)
+
+    p['ch_reduce_directories'] = []
+    p['reduce_directories'] = []
+    
+    for j in range(len(p['CHANNELS'])) :
+        data_dir = p['data_directories'][j]
+        ch_reduce_dir = '{}/sparc4acs{}/'.format(p['ROOTREDUCEDIR'],p['CHANNELS'][j])
+        reduce_dir = '{}/{}/'.format(ch_reduce_dir,nightdir)
+        
+        p['ch_reduce_directories'].append(ch_reduce_dir)
+        p['reduce_directories'].append(reduce_dir)
+
+        if not os.path.exists(ch_reduce_dir) :
+            os.mkdir(ch_reduce_dir)
+
+        # if reduced dir doesn't exist create one
+        if not os.path.exists(reduce_dir) :
+            os.mkdir(reduce_dir)
+
     return p
