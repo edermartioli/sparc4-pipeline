@@ -21,4 +21,4 @@ Download the [minidata package](https://drive.google.com/file/d/1wixhMG6X9_kpQ95
 
 See the [SPARC4 Quick Tutorial](https://docs.google.com/document/d/1gHF8UVxStBSGTgpc1EWEM6cGChxysxAqrQvta2II9Jg/edit?usp=drive_link) (in Portuguese) to start using the pipeline quickly.
 
-The SPARC4 pipeline is under development in collaboration with the scientific community. If you are interested in collaborating with the development of the SPARC4 pipeline, please send an email to the pipeline team at the following address: `sparc4-pipeline@googlegroups.com`.
+The SPARC4 pipeline is under development in collaboration with the scientific community. If you are interested in collaborating, send an email to the pipeline team at the following address: `sparc4-pipeline@googlegroups.com`.
