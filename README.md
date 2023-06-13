@@ -10,9 +10,9 @@ python ~/sparc4-pipeline/sparc4_mini_pipeline.py --datadir=~/minidata/ --reduced
 
 The pipeline routines are organized in the following 4 main libraries:
 
-`sparc4_pipeline_lib.py`: pipeline execution routines and functions
-`sparc4_utils.py`: utility routines for reduction
-`sparc4_products.py`: I/O routines containing the definition of SPARC4 reduction products.
-`sparc4_product_plots.py`: routines to get diagnostic plots of reduction products.
+* `sparc4_pipeline_lib.py`: pipeline execution routines and functions
+* `sparc4_utils.py`: utility routines for reduction
+* `sparc4_products.py`: I/O routines containing the definition of SPARC4 reduction products.
+* `sparc4_product_plots.py`: routines to get diagnostic plots of reduction products.
 
 These libraries can be used independently, as in the examples provided in the Jupyter notebooks.
