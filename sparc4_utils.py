@@ -431,7 +431,7 @@ def select_polar_sequences (list_of_files, max_index_gap=1, max_time_gap=0.04166
         basename = os.path.basename(list_of_files[i])
         index = int(basename.split("_")[-3])
         hdr = fits.getheader(list_of_files[i])
-        print("{}/{} -> {} {} {} {} {} {} {} {}".format(i+1,len(list_of_files),basename,index,hdr['WPPOS'],hdr['NCYCLES'],hdr['CYCLIND'],hdr['NFRAMES'],hdr['FRAMEIND'],hdr['EXPTIME']))
+        #print("{}/{} -> {} {} {} {} {} {} {} {}".format(i+1,len(list_of_files),basename,index,hdr['WPPOS'],hdr['NCYCLES'],hdr['CYCLIND'],hdr['NFRAMES'],hdr['FRAMEIND'],hdr['EXPTIME']))
 
         # From second exposure start comparing with previous one
         if i > 0 :

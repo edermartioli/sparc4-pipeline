@@ -636,8 +636,8 @@ def reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", match_fr
                 p['OBJECT_REDUCED_IMAGES'].append(obj_red_images[i])
     return p
 
-    
-def stack_science_images(p, inputlist, data_dir="./", reduce_dir="./", force=False, stack_suffix="", output_stack="", polarimetry=False) :
+
+def stack_science_images(p, inputlist, reduce_dir="./", force=False, stack_suffix="", output_stack="", polarimetry=False) :
 
     """ Pipeline module to run the stack of science images.
     
@@ -658,8 +658,6 @@ def stack_science_images(p, inputlist, data_dir="./", reduce_dir="./", force=Fal
     p : dict
         dictionary to store pipeline parameters
             
-    data_dir : str, optional
-        String to define the directory path to the raw data
     reduce_dir : str, optional
         String to define the directory path to the reduced data
     force : bool, optional
@@ -686,9 +684,12 @@ def stack_science_images(p, inputlist, data_dir="./", reduce_dir="./", force=Fal
         stack_hdulist = fits.open(p['OBJECT_STACK'])
         hdr = stack_hdulist[0].header
         p['REFERENCE_IMAGE'] = hdr['REFIMG']
-        p['REF_IMAGE_INDEX'] = inputlist.index(p['REFERENCE_IMAGE'])
+        p['REF_IMAGE_INDEX'] = 0
+        for i in range(len(inputlist)) :
+            if inputlist[i] == p['REFERENCE_IMAGE'] :
+                p['REF_IMAGE_INDEX'] = i
         p['REF_OBJECT_HEADER'] = fits.getheader(p['REFERENCE_IMAGE'])
-        
+
         p["CATALOGS"] = s4p.readScienceImagCatalogs(p['OBJECT_STACK'])
 
         return p
@@ -2689,11 +2690,11 @@ def stack_and_reduce_sci_images(p, sci_list, reduce_dir, ref_img="", stack_suffi
         
     # calculate stack
     p = stack_science_images(p,
-                            sci_list,
-                            reduce_dir=reduce_dir,
-                            force=force,
-                            stack_suffix=stack_suffix,
-                            polarimetry=polarimetry)
+                             sci_list,
+                             reduce_dir=reduce_dir,
+                             force=force,
+                             stack_suffix=stack_suffix,
+                             polarimetry=polarimetry)
                             
     # set numbe of science reduction loops to avoid memory issues.
     nloops = int(np.ceil(len(sci_list) / p['MAX_NUMBER_OF_SCI_FRAMES_PER_LOOP']))

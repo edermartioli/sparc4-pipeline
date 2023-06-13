@@ -136,6 +136,16 @@ def load_sparc4_parameters() :
     p['TIME_KEYWORD_IN_PROC'] = 'BJD'
     p['TIME_FORMAT_IN_PROC'] = 'jd'
 
+    # Set a list of catalogs to include in the time series or leave an empty list to include all (very slow)
+    #p['PHOT_CATALOG_NAMES_TO_INCLUDE'] = []
+    p['PHOT_CATALOG_NAMES_TO_INCLUDE'] = ["CATALOG_PHOT_AP006",
+                                  "CATALOG_PHOT_AP008",
+                                  "CATALOG_PHOT_AP010",
+                                  "CATALOG_PHOT_AP012",
+                                  "CATALOG_PHOT_AP014",
+                                  "CATALOG_PHOT_AP016"]
+    
+    # Below are the catalog names to get coordinates from
     p['PHOT_REF_CATALOG_NAME'] = "CATALOG_PHOT_AP010"
     p['POLAR_REF_CATALOG_NAME'] = "CATALOG_POLAR_N_AP010"
     #-------------------------------------

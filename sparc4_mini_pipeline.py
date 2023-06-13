@@ -112,7 +112,14 @@ for channel in p['SELECTED_CHANNELS'] :
         # set suffix for output time series filename
         ts_suffix = "{}_s4c{}_{}".format(options.nightdir,p['CHANNELS'][j],obj.replace(" ",""))
         # run photometric time series
-        phot_ts_product = s4pipelib.phot_time_series(p['OBJECT_REDUCED_IMAGES'][1:], ts_suffix=ts_suffix, reduce_dir=reduce_dir, time_key=p['TIME_KEYWORD_IN_PROC'], time_format=p['TIME_FORMAT_IN_PROC'], ref_catalog_name=p['PHOT_REF_CATALOG_NAME'], force=options.force)
+        phot_ts_product = s4pipelib.phot_time_series(p['OBJECT_REDUCED_IMAGES'][1:],
+                                                     ts_suffix=ts_suffix,
+                                                     reduce_dir=reduce_dir,
+                                                     time_key=p['TIME_KEYWORD_IN_PROC'],
+                                                     time_format=p['TIME_FORMAT_IN_PROC'],
+                                                     ref_catalog_name=p['PHOT_REF_CATALOG_NAME'],
+                                                     catalog_names = p['PHOT_CATALOG_NAMES_TO_INCLUDE'],
+                                                     force=options.force)
                     
         if options.plot :
             target = 0
