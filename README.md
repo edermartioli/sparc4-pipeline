@@ -8,9 +8,11 @@ Below is an example to run the SPARC4 pipeline :
 python ~/sparc4-pipeline/sparc4_mini_pipeline.py --datadir=~/minidata/ --reducedir=~/minidata/reduced --nightdir=20230503
 ```
 
-The pipeline routines are organized in 4 main libraries:
+The pipeline routines are organized in the following 4 main libraries:
 
 `sparc4_pipeline_lib.py`: pipeline execution routines and functions
 `sparc4_utils.py`: utility routines for reduction
 `sparc4_products.py`: I/O routines containing the definition of SPARC4 reduction products.
 `sparc4_product_plots.py`: routines to get diagnostic plots of reduction products.
+
+These libraries can be used independently, as in the examples provided in the Jupyter notebooks.
