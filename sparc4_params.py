@@ -1,5 +1,3 @@
-import os
-import sparc4_utils as s4utils
 # -----------------------------------------------------------------------------
 #   define SPARC4 pipeline parameters
 # -----------------------------------------------------------------------------
@@ -9,12 +7,9 @@ def load_sparc4_parameters() :
     p = {}
     
     #### DIRECTORIES #####
-    #p['ROOTDATADIR'] = "/Volumes/Samsung_T5/Data/SPARC4/comissioning_nov22/"
-    #p['ROOTREDUCEDIR'] = "/Volumes/Samsung_T5/Data/SPARC4/comissioning_nov22/reduced"
-    #p['ROOTDATADIR'] = "/Volumes/Samsung_T5/Data/SPARC4/comissioning_feb23/"
-    #p['ROOTREDUCEDIR'] = "/Volumes/Samsung_T5/Data/SPARC4/comissioning_feb23/reduced"
-    p['ROOTDATADIR'] = "/Volumes/Samsung_T5/Data/SPARC4/comissioning_mai23/"
-    p['ROOTREDUCEDIR'] = "/Volumes/Samsung_T5/Data/SPARC4/comissioning_mai23/reduced"
+    p['ROOTDATADIR'] = "/Volumes/Samsung_T5/Data/SPARC4/minidata"
+    p['ROOTREDUCEDIR'] = "/Volumes/Samsung_T5/Data/SPARC4/minidata/reduced"
+
     # define SPARC4 channel numbers
     p['CHANNELS'] = [1,2,3,4]
     # define SPARC4 channel labels
@@ -106,11 +101,16 @@ def load_sparc4_parameters() :
     # Set angular sampling of the model in units of degrees
     p['POS_MODEL_SAMPLING'] = 1.0
 
+    # set minimum aperture (pixels) to search for best polar results
     p['MIN_APERTURE_FOR_POLARIMETRY'] = 4
+    # set maximum aperture (pixels) to search for best polar results
     p['MAX_APERTURE_FOR_POLARIMETRY'] = 12
 
+    # set aperture index (aperture radius = index + 2) to calculate photometry in polar data
+    p['APERTURE_INDEX_FOR_PHOTOMETRY_IN_POLAR'] = 8
+
     # Set zero of polarimetry calibrated from standards
-    p['ZERO_OF_WAVEPLATE'] = 60
+    p['ZERO_OF_WAVEPLATE'] = 90.5
     
     # Set maximum gap between image indices to break polar sequences
     p['MAX_INDEX_GAP_TO_BREAK_POL_SEQS'] = 1
@@ -120,11 +120,11 @@ def load_sparc4_parameters() :
 
     #### ASTROMETRY ####
     p['PLATE_SCALE'] = 0.335  # ARCSEC/PIXEL
-    #p['PLATE_SCALE'] = 0.18  # ARCSEC/PIXEL
-    p['ASTROM_REF_IMGS'] = ["/Volumes/Samsung_T5/sparc4-pipeline/calibdb/20230503_s4c1_CR1_astrometryRef_stack.fits",
-                       "/Volumes/Samsung_T5/sparc4-pipeline/calibdb/20230503_s4c2_CR1_astrometryRef_stack.fits",
-                       "/Volumes/Samsung_T5/sparc4-pipeline/calibdb/20230503_s4c3_CR1_astrometryRef_stack.fits",
-                       "/Volumes/Samsung_T5/sparc4-pipeline/calibdb/20230503_s4c4_CR1_astrometryRef_stack.fits"]
+    #p['PLATE_SCALE'] = 0.18  # ARCSEC/PIXEL 
+    p['ASTROM_REF_IMGS'] = ['/Volumes/Samsung_T5/sparc4-pipeline/calibdb/20230503_s4c1_CR1_astrometryRef_stack.fits',
+                        '/Volumes/Samsung_T5/sparc4-pipeline/calibdb/20230503_s4c2_CR1_astrometryRef_stack.fits',
+                        '/Volumes/Samsung_T5/sparc4-pipeline/calibdb/20230503_s4c3_CR1_astrometryRef_stack.fits',
+                        '/Volumes/Samsung_T5/sparc4-pipeline/calibdb/20230503_s4c4_CR1_astrometryRef_stack.fits']
     p['TWEAK_ORDER'] = 3  # order of polynomial to fit astrometry solution
     p['SEARCH_RADIUS'] =  0.1  # radius to define the range of solutions in units of degree
     #-------------------------------------
@@ -147,48 +147,3 @@ def load_sparc4_parameters() :
     
     return p
 
-
-def init_s4_p(datadir="", reducedir="", nightdir="", channels="", print_report=False) :
-
-    # load pipeline parameters
-    p = load_sparc4_parameters()
-
-    if datadir != "" :
-        p['ROOTDATADIR'] = datadir
-    
-    if reducedir != "" :
-        p['ROOTREDUCEDIR'] = reducedir
-    
-    p['SELECTED_CHANNELS'] = p['CHANNELS']
-    if channels != "" :
-        p['SELECTED_CHANNELS']  = []
-        chs = channels.split(",")
-        for ch in chs :
-            p['SELECTED_CHANNELS'].append(int(ch))
-            
-    # if reduced dir doesn't exist create one
-    if not os.path.exists(p['ROOTREDUCEDIR']) :
-        os.mkdir(p['ROOTREDUCEDIR'])
-
-    #organize files to be reduced
-    p = s4utils.identify_files(p, nightdir, print_report=print_report)
-
-    p['ch_reduce_directories'] = []
-    p['reduce_directories'] = []
-    
-    for j in range(len(p['CHANNELS'])) :
-        data_dir = p['data_directories'][j]
-        ch_reduce_dir = '{}/sparc4acs{}/'.format(p['ROOTREDUCEDIR'],p['CHANNELS'][j])
-        reduce_dir = '{}/{}/'.format(ch_reduce_dir,nightdir)
-        
-        p['ch_reduce_directories'].append(ch_reduce_dir)
-        p['reduce_directories'].append(reduce_dir)
-
-        if not os.path.exists(ch_reduce_dir) :
-            os.mkdir(ch_reduce_dir)
-
-        # if reduced dir doesn't exist create one
-        if not os.path.exists(reduce_dir) :
-            os.mkdir(reduce_dir)
-
-    return p

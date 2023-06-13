@@ -16,14 +16,9 @@
 
     python /Volumes/Samsung_T5/sparc4-pipeline/sparc4_mini_pipeline.py --datadir=/Volumes/Samsung_T5/sparc4-pipeline/teste/ --reducedir=/Volumes/Samsung_T5/sparc4-pipeline/reduced/ -pv
 
-
     python /Volumes/Samsung_T5/sparc4-pipeline/sparc4_mini_pipeline.py --datadir=/Volumes/Samsung_T5/Data/SPARC4/comissioning_nov22/ --reducedir=/Volumes/Samsung_T5/Data/SPARC4/comissioning_nov22/reduced --nightdir=20221104
-    
-    python /Volumes/Samsung_T5/sparc4-pipeline/sparc4_mini_pipeline.py --nightdir=20221104
-    
-    python /Volumes/Samsung_T5/sparc4-pipeline/sparc4_mini_pipeline.py --nightdir=20230506_wasp41 -v
-    
-    python /Volumes/Samsung_T5/sparc4-pipeline/sparc4_mini_pipeline.py --nightdir=20230503 -v
+
+    python sparc4_mini_pipeline.py --nightdir=20230503 -vp
     
     """
 
@@ -39,7 +34,6 @@ from optparse import OptionParser
 import sparc4_product_plots as s4plt
 import sparc4_pipeline_lib as s4pipelib
 import sparc4_utils as s4utils
-import sparc4_params
 
 import numpy as np
 
@@ -60,15 +54,15 @@ except:
     print("Error: check usage with  -h sparc4_mini_pipeline.py")
     sys.exit(1)
 
-polarimetry = False
 match_frames = True
+fit_zero_of_wppos = False
 
 # initialize pipeline parameters 
-p = sparc4_params.init_s4_p(options.datadir,
-                            options.reducedir,
-                            options.nightdir,
-                            options.channels,
-                            print_report=True)
+p = s4pipelib.init_s4_p(options.datadir,
+                        options.reducedir,
+                        options.nightdir,
+                        options.channels,
+                        print_report=options.verbose)
 
 # Run full reduction for selected channels
 for channel in p['SELECTED_CHANNELS'] :
@@ -159,11 +153,13 @@ for channel in p['SELECTED_CHANNELS'] :
 
         p['PolarL2products'] = []
         for i in range(len(l2_sequences)) :
+
             print("Running half-wave polarimetry for sequence: {} of {}".format(i+1,len(l2_sequences)))
             polarL2product = s4pipelib.compute_polarimetry(l2_sequences[i],
-                                                                wave_plate='halfwave',
-                                                                compute_k=True,
-                                                                zero=0)
+                                                           wave_plate='halfwave',
+                                                           base_aperture=p['APERTURE_INDEX_FOR_PHOTOMETRY_IN_POLAR'],
+                                                           compute_k=True,
+                                                           zero=0)
 
             pol_results = s4pipelib.get_polarimetry_results(polarL2product,
                                                             source_index=0,
@@ -172,8 +168,19 @@ for channel in p['SELECTED_CHANNELS'] :
                                                             plot=options.plot,
                                                             verbose=options.verbose)
             p['PolarL2products'].append(polarL2product)
-                
-        #polar_ts_L2product = s4pipelib.polar_time_series(p['PolarL2products'])
+        
+        
+        # set suffix for output time series filename
+        ts_suffix = "{}_s4c{}_{}_L2".format(options.nightdir,p['CHANNELS'][j],obj.replace(" ",""))
+
+        # create polar time series product
+        polar_ts_L2product = s4pipelib.polar_time_series(p['PolarL2products'],
+                                               reduce_dir=reduce_dir,
+                                               ts_suffix=ts_suffix,
+                                               aperture_index=p['APERTURE_INDEX_FOR_PHOTOMETRY_IN_POLAR'],
+                                               min_aperture=p['MIN_APERTURE_FOR_POLARIMETRY'],
+                                               max_aperture=p['MAX_APERTURE_FOR_POLARIMETRY'],
+                                               force=options.force)
 
 
     for obj in p['objsInPolarl4'][j] :
@@ -204,7 +211,9 @@ for channel in p['SELECTED_CHANNELS'] :
             print("Running quarter-wave polarimetry for sequence: {} of {}".format(i+1,len(l4_sequences)))
             polarL4product = s4pipelib.compute_polarimetry(l4_sequences[i],
                                                                 wave_plate='quarterwave',
+                                                                base_aperture=p['APERTURE_INDEX_FOR_PHOTOMETRY_IN_POLAR'],
                                                                 compute_k=False,
+                                                                fit_zero=fit_zero_of_wppos,
                                                                 zero=p['ZERO_OF_WAVEPLATE'])
 
             pol_results = s4pipelib.get_polarimetry_results(polarL4product,
@@ -214,5 +223,15 @@ for channel in p['SELECTED_CHANNELS'] :
                                                             plot=options.plot,
                                                             verbose=options.verbose)
             p['PolarL4products'].append(polarL4product)
-        
-        #polar_ts_L4product = s4pipelib.polar_time_series(p['PolarL4products'])
+    
+        # set suffix for output time series filename
+        ts_suffix = "{}_s4c{}_{}_L4".format(options.nightdir,p['CHANNELS'][j],obj.replace(" ",""))
+
+        # create polar time series product
+        polar_ts_L4product = s4pipelib.polar_time_series(p['PolarL4products'],
+                                               reduce_dir=reduce_dir,
+                                               ts_suffix=ts_suffix,
+                                               aperture_index=p['APERTURE_INDEX_FOR_PHOTOMETRY_IN_POLAR'],
+                                               min_aperture=p['MIN_APERTURE_FOR_POLARIMETRY'],
+                                               max_aperture=p['MAX_APERTURE_FOR_POLARIMETRY'],
+                                               force=options.force)

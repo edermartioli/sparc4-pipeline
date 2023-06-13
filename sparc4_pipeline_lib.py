@@ -26,6 +26,7 @@ import os,sys
 import sparc4_products as s4p
 import sparc4_product_plots as s4plt
 import sparc4_params
+import sparc4_utils as s4utils
 
 from astropy import units as u
 from astropy.io import fits
@@ -60,6 +61,73 @@ from astropy.wcs import WCS
 from astropy.wcs.utils import proj_plane_pixel_scales
 
 from scipy import signal
+
+
+def init_s4_p(datadir="", reducedir="", nightdir="", channels="", print_report=False) :
+    """ Pipeline module to initialize SPARC4 parameters
+    Parameters
+    ----------
+    datadir : str, optional
+        String to define the directory path to the raw data
+    reducedir : str, optional
+        String to define the directory path to the reduced data
+    nightdir : str, optional
+        String to define the night directory name
+    channels : str, optional
+        String to define SPARC4 channels to be reduced, e.g. "1,2"
+    print_report : bool, optional
+        Boolean to print out report on all existing data for reduction
+
+    Returns
+    -------
+    p : dict
+        dictionary to store pipeline parameters
+    """
+
+    # load pipeline parameters
+    p = sparc4_params.load_sparc4_parameters()
+
+    if datadir != "" :
+        p['ROOTDATADIR'] = datadir
+    
+    if reducedir != "" :
+        p['ROOTREDUCEDIR'] = reducedir
+    
+    p['SELECTED_CHANNELS'] = p['CHANNELS']
+    if channels != "" :
+        p['SELECTED_CHANNELS']  = []
+        chs = channels.split(",")
+        for ch in chs :
+            p['SELECTED_CHANNELS'].append(int(ch))
+            
+    # if reduced dir doesn't exist create one
+    if not os.path.exists(p['ROOTREDUCEDIR']) :
+        os.mkdir(p['ROOTREDUCEDIR'])
+
+    #organize files to be reduced
+    p = s4utils.identify_files(p, nightdir, print_report=print_report)
+
+    p['ch_reduce_directories'] = []
+    p['reduce_directories'] = []
+    
+    for j in range(len(p['CHANNELS'])) :
+        data_dir = p['data_directories'][j]
+        ch_reduce_dir = '{}/sparc4acs{}/'.format(p['ROOTREDUCEDIR'],p['CHANNELS'][j])
+        reduce_dir = '{}/{}/'.format(ch_reduce_dir,nightdir)
+        
+        p['ch_reduce_directories'].append(ch_reduce_dir)
+        p['reduce_directories'].append(reduce_dir)
+
+        if not os.path.exists(ch_reduce_dir) :
+            os.mkdir(ch_reduce_dir)
+
+        # if reduced dir doesn't exist create one
+        if not os.path.exists(reduce_dir) :
+            os.mkdir(reduce_dir)
+
+    return p
+
+
 
 def run_master_calibration(p, inputlist=[], output="", obstype='bias', data_dir="./", reduce_dir="./", normalize=False, force=False) :
     """ Pipeline module to run master calibration
@@ -1321,10 +1389,13 @@ def generate_catalogs(p, data, sources, fwhm, catalogs=[], catalogs_label='', ap
             try :
                 # Solve astrometry
                 #p['WCS'] = solve_astrometry_xy(xs_for_astrometry, ys_for_astrometry, fluxes_for_astrometry, image_height=h, image_width=w, image_header=p['REF_OBJECT_HEADER'], image_params={'ra': p['RA_DEG'],'dec': p['DEC_DEG'],'pltscl': p['PLATE_SCALE']}, return_wcs=True)
-                solution = solve_astrometry_xy(xs_for_astrometry, ys_for_astrometry, fluxes_for_astrometry, height=h, width=w, image_header=p['REF_OBJECT_HEADER'], options={'ra': p['RA_DEG'], 'dec': p['DEC_DEG'], 'radius': p['SEARCH_RADIUS'], 'scale-low': p['PLATE_SCALE']-0.02, 'scale-units': 'arcsecperpix', 'scale-high':p['PLATE_SCALE']+0.02, 'crpix-center': 1, 'tweak-order': p['TWEAK_ORDER']})
-
+                #solution = solve_astrometry_xy(xs_for_astrometry, ys_for_astrometry, fluxes_for_astrometry, height=h, width=w, image_header=p['REF_OBJECT_HEADER'], options={'ra': p['RA_DEG'], 'dec': p['DEC_DEG'], 'radius': p['SEARCH_RADIUS'], 'scale-low': p['PLATE_SCALE']-0.02, 'scale-units': 'arcsecperpix', 'scale-high':p['PLATE_SCALE']+0.02, 'crpix-center': 1, 'tweak-order': p['TWEAK_ORDER']})
+                solution = solve_astrometry_xy(xs_for_astrometry, ys_for_astrometry, fluxes_for_astrometry, w, h, options={'ra': p['RA_DEG'],'dec':p['DEC_DEG'], 'radius': p['SEARCH_RADIUS'], 'scale-low': p['PLATE_SCALE']-0.02,'scale-high': p['PLATE_SCALE']+0.02,'scale-units': 'arcsecperpix','crpix-center': 1, 'tweak-order': p['TWEAK_ORDER']})
+                
                 p['WCS'] = solution.wcs
+                
                 p['WCS_HEADER'] = p['WCS'].to_header(relax=True)
+
             except :
                 print("WARNING: could not solve astrometry, using WCS from database")
 
@@ -2501,7 +2572,7 @@ def psf_analysis(filename, aperture=10, half_windowsize=15, nsources=0, percenti
                 xbox, ybox = box[1]-x, box[2]-y
                 
                 #vmin, vmax = np.percentile(nzbox, 1.), np.percentile(nzbox, 99.)
-                #plot_2d(xbox, ybox, nzbox, LIM=None, LAB=["x (pix)", "y (pix)","flux fraction"], z_lim=[vmin,vmax], title="source: {}".format(j), pfilename="", cmap="gist_heat")
+                #s4plt.plot_2d(xbox, ybox, nzbox, LIM=None, LAB=["x (pix)", "y (pix)","flux fraction"], z_lim=[vmin,vmax], title="source: {}".format(j), pfilename="", cmap="gist_heat")
 
 
         master_box = np.nanmedian(boxes,axis=0)
@@ -2515,7 +2586,7 @@ def psf_analysis(filename, aperture=10, half_windowsize=15, nsources=0, percenti
         master_box_err /= max
 
         #vmin, vmax = np.percentile(master_box, 3.), np.percentile(master_box, 97.)
-        #plot_2d(xbox*0.33, ybox*0.33, master_box, LIM=None, LAB=["x (arcsec)", "y (arcsec)","flux fraction"], z_lim=[vmin,vmax], title="PSF", pfilename="", cmap="gist_heat")
+        #s4plt.plot_2d(xbox*0.33, ybox*0.33, master_box, LIM=None, LAB=["x (arcsec)", "y (arcsec)","flux fraction"], z_lim=[vmin,vmax], title="PSF", pfilename="", cmap="gist_heat")
         
         master_fwhm = _fwhm_loop('gaussian', master_box, xbox, ybox, 0, 0)
         
@@ -2573,78 +2644,9 @@ def psf_analysis(filename, aperture=10, half_windowsize=15, nsources=0, percenti
         plt.show()
         
         #vmin, vmax = np.percentile(img, 3.), np.percentile(img, 97)
-        #plot_2d(xw, yw, img, LIM=None, LAB=["x (pix)", "y (pix)","flux fraction"], z_lim=[vmin,vmax], title="PSF plot", pfilename="", cmap="gist_heat")
+        #s4plt.plot_2d(xw, yw, img, LIM=None, LAB=["x (pix)", "y (pix)","flux fraction"], z_lim=[vmin,vmax], title="PSF plot", pfilename="", cmap="gist_heat")
     
     return loc
-
-
-def plot_2d(x, y, z, LIM=None, LAB=None, z_lim=None, use_index_in_y=False, title="", pfilename="", cmap="gist_heat"):
-    """
-    Use pcolor to display sequence of spectra
-    
-    Inputs:
-    - x:        x array of the 2D map (if x is 1D vector, then meshgrid; else: creation of Y)
-    - y:        y 1D vector of the map
-    - z:        2D array (sequence of spectra; shape: (len(x),len(y)))
-    - LIM:      list containing: [[lim_inf(x),lim_sup(x)],[lim_inf(y),lim_sup(y)],[lim_inf(z),lim_sup(z)]]
-    - LAB:      list containing: [label(x),label(y),label(z)] - label(z) -> colorbar
-    - title:    title of the map
-    - **kwargs: **kwargs of the matplolib function pcolor
-    
-    Outputs:
-    - Display 2D map of the sequence of spectra z
-    
-    """
-    
-    if use_index_in_y :
-        y = np.arange(len(y))
-    
-    if len(np.shape(x))==1:
-        X,Y  = np.meshgrid(x,y)
-    else:
-        X = x
-        Y = []
-        for n in range(len(x)):
-            Y.append(y[n] * np.ones(len(x[n])))
-        Y = np.array(Y,dtype=float)
-    Z = z
-
-    if LIM == None :
-        x_lim = [np.min(X),np.max(X)] #Limits of x axis
-        y_lim = [np.min(Y),np.max(Y)] #Limits of y axis
-        if z_lim == None :
-            z_lim = [np.min(Z),np.max(Z)]
-        LIM   = [x_lim,y_lim,z_lim]
-
-    if LAB == None :
-        ### Labels of the map
-        x_lab = r"$Velocity$ [km/s]"     #Wavelength axis
-        y_lab = r"Time [BJD]"         #Time axis
-        z_lab = r"CCF"     #Intensity (exposures)
-        LAB   = [x_lab,y_lab,z_lab]
-
-    fig = plt.figure()
-    plt.rcParams["figure.figsize"] = (10,7)
-    ax = plt.subplot(111)
-
-    cc = ax.pcolor(X, Y, Z, vmin=LIM[2][0], vmax=LIM[2][1], cmap=cmap)
-    cb = plt.colorbar(cc,ax=ax)
-    
-    ax.set_xlim(LIM[0][0],LIM[0][1])
-    ax.set_ylim(LIM[1][0],LIM[1][1])
-    
-    ax.set_xlabel(LAB[0], fontsize=20)
-    ax.set_ylabel(LAB[1],labelpad=15, fontsize=20)
-    cb.set_label(LAB[2],rotation=270,labelpad=30, fontsize=20)
-
-    ax.set_title(title,pad=15, fontsize=20)
-
-    if pfilename=="" :
-        plt.show()
-    else :
-        plt.savefig(pfilename, format='png')
-    plt.clf()
-    plt.close()
 
 
 def stack_and_reduce_sci_images(p, sci_list, reduce_dir, ref_img="", stack_suffix="", force=True, match_frames=True, polarimetry=False, verbose=False, plot=False) :
@@ -2727,3 +2729,179 @@ def stack_and_reduce_sci_images(p, sci_list, reduce_dir, ref_img="", stack_suffi
             s4plt.plot_sci_frame(p['OBJECT_STACK'], nstars=20, use_sky_coords=True)
 
     return p
+
+
+def polar_time_series(sci_pol_list,
+                    reduce_dir="./",
+                    ts_suffix="",
+                    aperture_index=None,
+                    min_aperture=0,
+                    max_aperture=1024,
+                    force=True) :
+    """ Pipeline module to calculate photometry differential time series for a given list of sparc4 sci image products
+    
+    Parameters
+    ----------
+    sci_pol_list : list
+        list of paths to science polar products
+    ts_suffix : str (optional)
+        time series suffix to add into the output file name
+    reduce_dir : str (optional)
+        path to the reduce directory
+    aperture_index : int (optional)
+        index to select aperture in catalog. Default is None and it will calculate best aperture
+    min_aperture : float
+        minimum aperture radius (pix)
+    max_aperture : float
+        minimum aperture radius (pix)
+    force : bool
+        force reduction even if product already exists
+
+    Returns
+    -------
+    output : str
+        path to the output time series product file
+    """
+    
+    # set output light curve product file name
+    output = os.path.join(reduce_dir, "{}_polar_ts.fits".format(ts_suffix))
+    if os.path.exists(output) and not force:
+        return output
+
+    # get information from the first image in the time series
+    basehdul = fits.open(sci_pol_list[0])
+    basehdr = basehdul[0].header
+
+    # set number of input polar files (size of time series)
+    npolfiles = len(sci_pol_list)
+    
+    # get number of sources in polar catalog of first sequence:
+    nsources = basehdr['NSOURCES']
+    
+    # initialize data container as dict
+    tsdata = {}
+
+    catalog_names=[]
+    ra, dec, src_idx = [], [], []
+    # get catalog names in the first sequence. Each catalog correspond to one source
+    for hdu in basehdul :
+        if hdu.name != "PRIMARY" :
+            catalog_names.append(hdu.name)
+            ra.append(hdu.header["RA"])
+            dec.append(hdu.header["DEC"])
+            src_idx.append(hdu.header["SRCINDEX"])
+            
+            # initialize time series vector for each quantity
+            tsdata[hdu.name] = {}
+            
+            tsdata[hdu.name]['TIME'] = np.array([])
+            tsdata[hdu.name]['MAG'] = np.array([])
+            tsdata[hdu.name]['EMAG'] = np.array([])
+            tsdata[hdu.name]['FWHM'] = np.array([])
+            tsdata[hdu.name]['X1'] = np.array([])
+            tsdata[hdu.name]['Y1'] = np.array([])
+            tsdata[hdu.name]['X2'] = np.array([])
+            tsdata[hdu.name]['Y2'] = np.array([])
+            
+            tsdata[hdu.name]['Q'] = np.array([])
+            tsdata[hdu.name]['EQ'] = np.array([])
+            tsdata[hdu.name]['U'] = np.array([])
+            tsdata[hdu.name]['EU'] = np.array([])
+            tsdata[hdu.name]['V'] = np.array([])
+            tsdata[hdu.name]['EV'] = np.array([])
+            tsdata[hdu.name]['P'] = np.array([])
+            tsdata[hdu.name]['EP'] = np.array([])
+            tsdata[hdu.name]['THETA'] = np.array([])
+            tsdata[hdu.name]['ETHETA'] = np.array([])
+            tsdata[hdu.name]['K'] = np.array([])
+            tsdata[hdu.name]['EK'] = np.array([])
+            tsdata[hdu.name]['ZERO'] = np.array([])
+            tsdata[hdu.name]['EZERO'] = np.array([])
+            tsdata[hdu.name]['NOBS'] = np.array([])
+            tsdata[hdu.name]['NPAR'] = np.array([])
+            tsdata[hdu.name]['CHI2'] = np.array([])
+
+    ti, tf = 0, 0
+
+    for i in range(len(sci_pol_list)) :
+    
+        hdul = fits.open(sci_pol_list[i])
+        header = hdul[0].header
+
+        mid_bjd = (header["TSTART"] + header["TSTOP"]) / 2
+        
+        if i == 0 :
+            ti = header["TSTART"]
+        if i == len(sci_pol_list) - 1 :
+            tf = header["TSTOP"]
+
+        for key in catalog_names :
+            
+            hdr = hdul[key].header
+
+            tsdata[key]['TIME'] = np.append(tsdata[key]['TIME'],mid_bjd)
+            tsdata[key]['MAG'] = np.append(tsdata[key]['MAG'],hdr['MAG'])
+            tsdata[key]['EMAG'] = np.append(tsdata[key]['EMAG'],hdr['EMAG'])
+            tsdata[key]['FWHM'] = np.append(tsdata[key]['FWHM'],hdr['FWHM'])
+            tsdata[key]['X1'] = np.append(tsdata[key]['X1'],hdr['X1'])
+            tsdata[key]['Y1'] = np.append(tsdata[key]['Y1'] ,hdr['Y1'])
+            tsdata[key]['X2'] = np.append(tsdata[key]['X2'],hdr['X2'])
+            tsdata[key]['Y2'] = np.append(tsdata[key]['Y2'],hdr['Y2'])
+
+            # read polarimetry results for the base sequence in the time series
+            polar = get_polarimetry_results(sci_pol_list[i],
+                                        source_index=hdr["SRCINDEX"],
+                                        aperture_index=aperture_index,
+                                        min_aperture=min_aperture,
+                                        max_aperture=max_aperture)
+
+            tsdata[key]['Q'] = np.append(tsdata[key]['Q'], polar['Q'].nominal)
+            tsdata[key]['EQ'] = np.append(tsdata[key]['EQ'], polar['Q'].std_dev)
+            tsdata[key]['U'] = np.append(tsdata[key]['U'], polar['U'].nominal)
+            tsdata[key]['EU'] = np.append(tsdata[key]['EU'], polar['U'].std_dev)
+            tsdata[key]['V'] = np.append(tsdata[key]['V'], polar['V'].nominal)
+            tsdata[key]['EV'] = np.append(tsdata[key]['EV'], polar['V'].std_dev)
+            tsdata[key]['P'] = np.append(tsdata[key]['P'], polar['P'].nominal)
+            tsdata[key]['EP'] = np.append(tsdata[key]['EP'], polar['P'].std_dev)
+            tsdata[key]['THETA'] = np.append(tsdata[key]['THETA'], polar['THETA'].nominal)
+            tsdata[key]['ETHETA'] = np.append(tsdata[key]['ETHETA'], polar['THETA'].std_dev)
+            tsdata[key]['K'] = np.append(tsdata[key]['K'], polar['K'].nominal)
+            tsdata[key]['EK'] = np.append(tsdata[key]['EK'], polar['K'].std_dev)
+            tsdata[key]['ZERO'] = np.append(tsdata[key]['ZERO'], polar['ZERO'].nominal)
+            tsdata[key]['EZERO'] = np.append(tsdata[key]['EZERO'] , polar['ZERO'].std_dev)
+            tsdata[key]['NOBS'] = np.append(tsdata[key]['NOBS'], polar['NOBS'])
+            tsdata[key]['NPAR'] = np.append(tsdata[key]['NPAR'], polar['NPAR'])
+            tsdata[key]['CHI2'] = np.append(tsdata[key]['CHI2'], polar['CHI2'])
+
+        hdul.close()
+        del hdul
+        
+    # Construct information dictionary to add to the header of FITS product
+    info = {}
+
+    info['OBSERV'] = ('OPD', 'observatory')
+    info['OBSLAT'] = (basehdr["OBSLAT"], '[DEG] observatory latitude (N)')
+    info['OBSLONG'] = (basehdr["OBSLONG"], '[DEG] observatory longitude (E)')
+    info['OBSALT'] = (basehdr["OBSALT"], '[m] observatory altitude')
+    info['TELESCOP'] = ('OPD-PE 1.6m', 'telescope')
+    info['INSTRUME'] = ('SPARC4', 'instrument')
+    info['OBJECT'] = (basehdr["OBJECT"], 'ID of object of interest')
+    info['CHANNEL'] = (basehdr["CHANNEL"], 'Instrument channel')
+    info['PHZEROP'] = (0., '[mag] photometric zero point')
+    info['PHOTSYS'] = ("SPARC4", 'photometric system')
+    info['APINDX'] = (aperture_index, 'selected aperture index')
+    info['POLTYPE'] = (basehdr["POLTYPE"], 'polarimetry type l/2 or l/4')
+    info['NSOURCES'] = (basehdr["NSOURCES"], 'number of sources')
+    
+    # get first and last times
+    tstart = Time(ti, format='jd', scale='utc')
+    tstop = Time(tf, format='jd', scale='utc')
+    info['TSTART'] = (tstart.jd, 'observation start time in BJD')
+    info['TSTOP'] = (tstop.jd, 'observation stop time in BJD')
+    info['DATE-OBS'] = (tstart.isot, 'TSTART as UTC calendar date')
+    info['DATE-END'] = (tstop.isot, 'TSTOP as UTC calendar date')
+    
+    # generate the photometric time series product
+    s4p.polarTimeSeriesProduct(tsdata, catalog_names, info=info, filename=output)
+ 
+    return output

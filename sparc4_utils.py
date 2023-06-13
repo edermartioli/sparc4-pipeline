@@ -35,6 +35,31 @@ import glob
 
 def set_timecoords_keys(hdr, timezone=-3, timetype="", ra="", dec="", set_airmass=True, time_key='DATE-OBS') :
 
+    """ Pipeline module to set time and coordinates keywords
+    Parameters
+    ----------
+    hdr : astropy.io.fits.Header
+        FITS header unit to be updated
+    timezone : int, optional
+        Time zone of observations with respect to Greenwich.
+        Default value is OPD's time zone of -3h
+    timetype : str, optional
+        if timetype=="LT" it will adopt time in the header as local time
+    ra : str, optional
+        string to overwrite header RA (Right Ascension) keyword
+    dec : str, optional
+        string to overwrite header DEC (Declination) keyword
+    set_airmass : bool
+        Calculate airmass and write it to the header
+    time_key : str, optional
+        string to point to the main date keyword in FITS header
+
+    Returns
+    -------
+    hdr : astropy.io.fits.Header
+        FITS header unit to be updated
+    """
+
     # set OPD geographic coordinates
     longitude = -(45 + (34 + (57/60))/60)
     latitude = -(22 + (32 + (4/60))/60)
@@ -116,6 +141,23 @@ def set_timecoords_keys(hdr, timezone=-3, timetype="", ra="", dec="", set_airmas
 
 
 def identify_files (p, night, print_report=True) :
+    
+    """ Pipeline module to identify SPARC4 files for reduction
+    Parameters
+    ----------
+    p : dict
+        dictionary to store pipeline parameters
+    night : str
+        Night directory name
+    print_report : bool, optional
+        Whether or not to print out the report
+
+    Returns
+    -------
+    p : dict
+        dictionary to store pipeline parameters
+    """
+    
     
     data_dir = p['ROOTDATADIR']
     channels = p['CHANNELS']
@@ -354,6 +396,26 @@ def identify_files (p, night, print_report=True) :
 
 def select_polar_sequences (list_of_files, max_index_gap=1, max_time_gap=0.04166) :
 
+    """ Pipeline module to select polarimetric sequences
+    Parameters
+    ----------
+    list_of_files : list
+        list of files
+    max_index_gap : int, optional
+        maximum gap between indices to accept files within the same sequence
+    max_time_gap : float, optional
+        maximum gap between times to accept files within the same sequence
+
+    Returns
+    -------
+    sequences, wppositions : (list, list)
+        it returns two lists:
+            sequences: list of sequences, where each sequence is a list of files
+            wppositions: list of wppositions, where each lists waveplate positions
+            respective to the files in the sequences
+
+    """
+
     sequences, wppositions = [], []
 
     seq, wppos = [], []
@@ -369,21 +431,31 @@ def select_polar_sequences (list_of_files, max_index_gap=1, max_time_gap=0.04166
         basename = os.path.basename(list_of_files[i])
         index = int(basename.split("_")[-3])
         hdr = fits.getheader(list_of_files[i])
-        #print("{}/{} -> {} {} {} {} {} {} {} {}".format(i+1,len(list_of_files),basename,index,hdr['WPPOS'],hdr['NCYCLES'],hdr['CYCLIND'],hdr['NFRAMES'],hdr['FRAMEIND'],hdr['EXPTIME']))
+        print("{}/{} -> {} {} {} {} {} {} {} {}".format(i+1,len(list_of_files),basename,index,hdr['WPPOS'],hdr['NCYCLES'],hdr['CYCLIND'],hdr['NFRAMES'],hdr['FRAMEIND'],hdr['EXPTIME']))
 
+        # From second exposure start comparing with previous one
         if i > 0 :
-            if (hdr['WPPOS'] == first_pos and previous_wppos != first_pos) or (index - previous_index) > max_index_gap or (hdr['JD'] - previous_jd) > max_time_gap or i == len(list_of_files)-1:
+            # Criteria to stop a given sequence and start a new one
+            if (hdr['WPPOS'] == first_pos and previous_wppos != first_pos) or (index - previous_index) > max_index_gap or (hdr['JD'] - previous_jd) > max_time_gap :
                 sequences.append(seq)
                 wppositions.append(wppos)
                 if i < len(list_of_files)-1 :
                     first_pos  = fits.getheader(list_of_files[i+1])['WPPOS']
                 seq, wppos = [], []
 
+        # append file to the current sequence
         seq.append(list_of_files[i])
+        # append wave plate position of exposure
         wppos.append(hdr['WPPOS'])
 
+        # retain previous jd, index and wppos to compare with the next exposure
         previous_jd = hdr['JD']
         previous_index = index
         previous_wppos = hdr['WPPOS']
 
+        # if reached the end of list just append the seq and wppos to the list of sequences
+        if i == len(list_of_files)-1 :
+            sequences.append(seq)
+            wppositions.append(wppos)
+    
     return sequences, wppositions

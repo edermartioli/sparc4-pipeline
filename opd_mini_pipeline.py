@@ -151,14 +151,14 @@ ts_suffix = "{}".format(object_id.replace(" ",""))
 phot_ts_product = s4pipelib.phot_time_series(p['OBJECT_REDUCED_IMAGES'][1:], ts_suffix=ts_suffix, reduce_dir=options.reducedir, time_key=p['TIME_KEYWORD_IN_PROC'],time_format=p['TIME_FORMAT_IN_PROC'], ref_catalog_name=p['PHOT_REF_CATALOG_NAME'], catalog_names=[p['PHOT_REF_CATALOG_NAME']], force=options.force)
 
 
-#target = 0
-#comps = [1,2,3]
+target = 0
+comps = [1,2,3]
 
 #target = 3
 #comps = [1,2,4,5,6,8]
 
-target = 1
-comps = [0,2,3,4,5,6,8,9]
+#target = 1
+#comps = [0,2,3,4,5,6,8,9]
 
 #if options.plot :
 # plot light curve

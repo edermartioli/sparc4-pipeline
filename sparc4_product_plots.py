@@ -495,3 +495,77 @@ def plot_polarimetry_results(loc, pos_model_sampling=1, title_label="", wave_pla
     axes[1].tick_params(axis='y', labelsize=14)
     
     plt.show()
+
+
+
+def plot_2d(x, y, z, LIM=None, LAB=None, z_lim=None, use_index_in_y=False, title="", pfilename="", cmap="gist_heat"):
+    """
+    Use pcolor to display sequence of spectra
+    
+    Inputs:
+    - x:        x array of the 2D map (if x is 1D vector, then meshgrid; else: creation of Y)
+    - y:        y 1D vector of the map
+    - z:        2D array (sequence of spectra; shape: (len(x),len(y)))
+    - LIM:      list containing: [[lim_inf(x),lim_sup(x)],[lim_inf(y),lim_sup(y)],[lim_inf(z),lim_sup(z)]]
+    - LAB:      list containing: [label(x),label(y),label(z)] - label(z) -> colorbar
+    - title:    title of the map
+    - **kwargs: **kwargs of the matplolib function pcolor
+    
+    Outputs:
+    - Display 2D map of the sequence of spectra z
+    
+    """
+    
+    if use_index_in_y :
+        y = np.arange(len(y))
+    
+    if len(np.shape(x))==1:
+        X,Y  = np.meshgrid(x,y)
+    else:
+        X = x
+        Y = []
+        for n in range(len(x)):
+            Y.append(y[n] * np.ones(len(x[n])))
+        Y = np.array(Y,dtype=float)
+    Z = z
+
+    if LIM == None :
+        x_lim = [np.min(X),np.max(X)] #Limits of x axis
+        y_lim = [np.min(Y),np.max(Y)] #Limits of y axis
+        if z_lim == None :
+            z_lim = [np.min(Z),np.max(Z)]
+        LIM   = [x_lim,y_lim,z_lim]
+
+    if LAB == None :
+        ### Labels of the map
+        x_lab = r"$Velocity$ [km/s]"     #Wavelength axis
+        y_lab = r"Time [BJD]"         #Time axis
+        z_lab = r"CCF"     #Intensity (exposures)
+        LAB   = [x_lab,y_lab,z_lab]
+
+    fig = plt.figure()
+    plt.rcParams["figure.figsize"] = (10,7)
+    ax = plt.subplot(111)
+
+    cc = ax.pcolor(X, Y, Z, vmin=LIM[2][0], vmax=LIM[2][1], cmap=cmap)
+    cb = plt.colorbar(cc,ax=ax)
+    
+    ax.set_xlim(LIM[0][0],LIM[0][1])
+    ax.set_ylim(LIM[1][0],LIM[1][1])
+    
+    ax.set_xlabel(LAB[0], fontsize=20)
+    ax.set_ylabel(LAB[1],labelpad=15, fontsize=20)
+    cb.set_label(LAB[2],rotation=270,labelpad=30, fontsize=20)
+
+    ax.set_title(title,pad=15, fontsize=20)
+
+    if pfilename=="" :
+        plt.show()
+    else :
+        plt.savefig(pfilename, format='png')
+    plt.clf()
+    plt.close()
+
+
+def plot_polar_time_series(filename, target=0) :
+    pass

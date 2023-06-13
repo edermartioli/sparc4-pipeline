@@ -31,6 +31,8 @@ import sparc4_utils as s4utils
 
 from copy import deepcopy
 
+from astropy.table import Table
+
 ExtensionHDU = Union[fits.ImageHDU, fits.BinTableHDU]
 HDU = Union[fits.PrimaryHDU, ExtensionHDU]
 
@@ -923,19 +925,72 @@ def polarProduct(sources, polar_catalogs, info={}, filename="") :
     return hdu_list
 
 
-
-def polarTimeSeriesProduct() :
-    pass
+def polarTimeSeriesProduct(tsdata, catalog_names, info={}, filename="") :
+    """ Create a polarimetric time series FITS product
     
-def calibS4ImageProduct() :
-    # montage of 
-    pass
+    Parameters
+    ----------
+    tsdata : dict
+        time series data container
+    catalog_names : list
+        list of str with source catalog names
+    info : dict
+        dictionary with additional header cards to include in the header of product
+        The following format must be used:
+            info = {key1: (value1, comment1), key2: (value2, comment2), ... }
+            
+    filename : str, optional
+        The output file name to save product. If empty, file won't be saved.
 
-def scienceS4ImageProduct() :
-    pass
-
-def photS4TimeSeriesProduct() :
-    pass
+    Returns
+    -------
+    hdu_list : astropy.io.fits.HDUList
+        output hdu_list top-level FITS object.
+    """
     
-def polarS4TimeSeriesProduct() :
-    pass
+    # get time array
+    times = tsdata[catalog_names[0]]["TIME"]
+    # get number of polar measurements in the time series
+    npolmeas = len(times)
+
+    # add information about data in the product
+    info['ORIGIN'] = ('LNA/MCTI', 'institution responsible for creating this file')
+    info['CREATOR'] = ("SPARC4-PIPELINE", 'pipeline job and program used to produc')
+    info['FILEVER'] = ('1.0', 'file format version')
+    info['DATE'] = (Time.now().iso, 'file creation date')
+    info['NPOLMEAS'] = (npolmeas, 'number of measurements in time series')
+ 
+    # create empty header
+    header = fits.PrimaryHDU().header
+
+    # add keys given by the info dict
+    for key in info.keys() :
+        header.set(key, info[key][0], info[key][1])
+
+    # create primary hdu
+    primary_hdu = fits.PrimaryHDU(header=header)
+    
+    # initialize list of hdus with the primary hdu
+    hdu_array = [primary_hdu]
+
+    # loop over each key in the tsdata array to create a fits extension for each source
+    for key in catalog_names :
+        
+        tstbl = Table(tsdata[key])
+
+        # create catalog polarimetry hdu for current source
+        catalog_polar_hdu = fits.BinTableHDU(data=tstbl, name=key.replace("CATALOG_POLAR","POLAR_TIMESERIES"))
+        
+        # append hdu
+        hdu_array.append(catalog_polar_hdu)
+
+    # create hdu list
+    hdu_list = fits.HDUList(hdu_array)
+
+    # write FITS file if filename is given
+    if filename != "" :
+        hdu_list.writeto(filename, overwrite=True, output_verify="fix+warn")
+
+    # return hdu list
+    return hdu_list
+    
