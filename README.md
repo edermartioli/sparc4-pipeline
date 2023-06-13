@@ -15,4 +15,8 @@ The pipeline routines are organized in the following 4 main libraries:
 * `sparc4_products.py`: I/O routines containing the definition of SPARC4 reduction products
 * `sparc4_product_plots.py`: routines to get diagnostic plots of reduction products
 
-These libraries can be used independently, as in the examples provided in the Jupyter notebooks.
+These libraries can be used independently to reduce data step by step, as in the examples provided in the Jupyter notebooks.
+
+Download the [minidata package](https://drive.google.com/file/d/1wixhMG6X9_kpQ95CSTi2H2wGlbZrklzM/view?usp=drive_link) containing SPARC4 data to test the pipeline.
+
+See the [SPARC4 Quick Tutorial](https://docs.google.com/document/d/1gHF8UVxStBSGTgpc1EWEM6cGChxysxAqrQvta2II9Jg/edit?usp=drive_link) (in Portuguese) to start using the pipeline quickly.
