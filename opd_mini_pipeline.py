@@ -1,18 +1,16 @@
-# -*- coding: iso-8859-1 -*-
 """
     Created on May 6 2023
-    
+
     Description: Mini pipeline to process OPD data in photometric mode
-    
+
     @author: Eder Martioli <martioli@lna.br>
-    
+
     Laboratório Nacional de Astrofísica - LNA/MCTI
-    
+
     Simple usage example:
 
     python -W"ignore" /Volumes/Samsung_T5/sparc4-pipeline/opd_mini_pipeline.py --bias=/Volumes/Samsung_T5/Data/OPD/WASP-132/raw/*ZERO.fits --flat=/Volumes/Samsung_T5/Data/OPD/WASP-132/raw/*FLAT.fits --science=/Volumes/Samsung_T5/Data/OPD/WASP-132/raw/*WASP-132.fits --reducedir=/Volumes/Samsung_T5/Data/OPD/WASP-132/reduced/ --time_key="DATE" --object="WASP-132" -pv
-    
-    
+
     python -W"ignore" /Volumes/Samsung_T5/sparc4-pipeline/opd_mini_pipeline.py --bias=/Volumes/Samsung_T5/Data/OPD/WASP-34/fixed/ZERO*.fits --flat=/Volumes/Samsung_T5/Data/OPD/WASP-34/fixed/flat_I*.fits --science=/Volumes/Samsung_T5/Data/OPD/WASP-34fixed/wasp34*.fits --reducedir=/Volumes/Samsung_T5/Data/OPD/WASP-34/reduced/ --time_key="UTDATE" --object="WASP-34" -pv
     """
 
@@ -121,7 +119,7 @@ if options.plot :
     s4plt.plot_sci_frame(p['OBJECT_STACK'], nstars=10)
 
 # set number of loops to reduce science data. Each loop must contain a
-# given maximum number of frames to avoid memory issues. 
+# given maximum number of frames to avoid memory issues.
 nloops = int(np.ceil(len(sci_list) / p['MAX_NUMBER_OF_SCI_FRAMES_PER_LOOP']))
 # set reference image
 ref_img = p['REFERENCE_IMAGE']
@@ -132,7 +130,7 @@ for j in range(nloops) :
     last = p['MAX_NUMBER_OF_SCI_FRAMES_PER_LOOP'] * (j+1)
     if last > len(sci_list) :
         last = len(sci_list)
-        
+
     print("Running loop {} of {} -> images in loop: {} to {} ... ".format(j,nloops,first,last))
 
     print("REFERENCE_IMAGE=", ref_img)

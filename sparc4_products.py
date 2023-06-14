@@ -1,11 +1,10 @@
-# -*- coding: iso-8859-1 -*-
 """
     Created on May 2 2022
 
     Description: Library for the SPARC4 pipeline products
-    
+
     @author: Eder Martioli <martioli@iap.fr>
-    
+
     Laboratório Nacional de Astrofísica - LNA/MCTI
     """
 
@@ -55,7 +54,7 @@ def create_hdu_list(hdus: Collection[HDU]) -> fits.HDUList:
 
 def masterCalibration(list_of_imgs, img_data=[], err_data=[], mask_data=[], info={}, filename="") :
     """ Create a master calibration FITS image product (BIAS, DARK, FLAT, etc)
-    
+
     Parameters
     ----------
     list_of_imgs : list
@@ -78,15 +77,15 @@ def masterCalibration(list_of_imgs, img_data=[], err_data=[], mask_data=[], info
     hdu_list : astropy.io.fits.HDUList
         output hdu_list top-level FITS object.
     """
-    
+
     # get header from base image
     baseheader = fits.getheader(list_of_imgs[0])
-    
+
     # add information about data in the product
     info['DATA0'] = ('IMG DATA', 'content of slice 0 in cube')
     info['DATA1'] = ('ERR DATA', 'content of slice 1 in cube')
     info['DATA2'] = ('MASK DATA', 'content of slice 2 in cube')
-    
+
     # get number of images in the list
     ninimgs = len(list_of_imgs)
 
@@ -98,7 +97,7 @@ def masterCalibration(list_of_imgs, img_data=[], err_data=[], mask_data=[], info
         # get file basename and add it to the info dict
         basename = os.path.basename(list_of_imgs[i])
         info['IN{:06d}'.format(i)] = (basename, 'input file {} of {}'.format(i,ninimgs))
-    
+
     # create primary hdu with header of base image
     primary_hdu = fits.PrimaryHDU(header=baseheader)
 
@@ -119,38 +118,38 @@ def masterCalibration(list_of_imgs, img_data=[], err_data=[], mask_data=[], info
 
     # create hdu list
     hdu_list = create_hdu_list([primary_hdu])
-    
+
     # write FITS file if filename is given
     if filename != "" :
         hdu_list.writeto(filename, overwrite=True, output_verify="fix+warn")
 
     # return hdu list
     return hdu_list
-    
+
 
 def getFrameFromMasterCalibration(filename) :
-    
+
     hdu_list = fits.open(filename)
-    
+
     img_data = hdu_list[0].data[0]
     err_data = hdu_list[0].data[1]
     mask_data = hdu_list[0].data[2]
 
     header = hdu_list[0].header
-    
+
     unit=None
     if header['BUNIT'] == 'electron' :
         unit=u.electron
 
     frame = FrameData(data=img_data, unit=unit, uncertainty=err_data, mask=mask_data, header=header)
-    
+
     return frame
 
 
 
 def scienceImageProduct(original_image, img_data=[], err_data=[], mask_data=[], info={}, catalogs=[], polarimetry=False,  skip_ref_catalogs=True, filename="", catalog_beam_ids=["S","N"], wcs_header=None, time_key="DATE-OBS", ra="", dec="") :
     """ Create a Science FITS image product
-    
+
     Parameters
     ----------
     original_image : str
@@ -203,20 +202,20 @@ def scienceImageProduct(original_image, img_data=[], err_data=[], mask_data=[], 
     hdu_list : astropy.io.fits.HDUList
         output hdu_list top-level FITS object.
     """
-    
+
     # get header from base image
     baseheader = fits.getheader(original_image)
-    
+
     # add information about data in the product
     info['DATA0'] = ('IMG DATA', 'content of slice 0 in cube')
     info['DATA1'] = ('ERR DATA', 'content of slice 1 in cube')
     info['DATA2'] = ('MASK DATA', 'content of slice 2 in cube')
-    
+
     # get file basename and add it to the info dict
     basename = os.path.basename(original_image)
     info['ORIGIMG'] = (basename, 'original file name')
     info['POLAR'] = (polarimetry, 'polarimetry frame')
-    
+
     if wcs_header :
         baseheader += wcs_header
 
@@ -259,10 +258,10 @@ def scienceImageProduct(original_image, img_data=[], err_data=[], mask_data=[], 
         catdata = []
         for key in catalogs[j].keys() :
             catdata.append(catalogs[j][key])
-    
+
         # set names and data format for each column in the catalog table
         dtype=[('INDEX', 'i4'), ('RA', 'f8'), ('DEC', 'f8'), ('X', 'f8'), ('Y', 'f8'), ('FWHMX', 'f8'), ('FWHMY', 'f8'), ('MAG', 'f8'), ('EMAG', 'f8'), ('SKYMAG', 'f8'), ('ESKYMAG', 'f8'), ('APER', 'i4'), ('FLAG', 'i4')]
-    
+
         # cast catalog data into numpy array
         catalog_array = np.array(catdata, dtype=dtype)
 
@@ -270,7 +269,7 @@ def scienceImageProduct(original_image, img_data=[], err_data=[], mask_data=[], 
         aperture_value = catalog_array[0][11]
 
         cat_label = "UNLABELED_CATALOG"
-        
+
         if polarimetry :
             if j == 0 :
                 catalog_header.set("POLBEAM", catalog_beam_ids[0], "Polar beam: [N]orth or [S]outh")
@@ -298,10 +297,10 @@ def scienceImageProduct(original_image, img_data=[], err_data=[], mask_data=[], 
                 cat_label = "CATALOG_PHOT_AP{:03d}".format(aperture_value)
 
         hdu_catalog = fits.TableHDU(data=catalog_array, header=catalog_header, name=cat_label)
-        
+
         # set each column unit
         column_units = ["", "DEG", "DEG", "PIXEL", "PIXEL", "PIXEL", "PIXEL", "MAG", "MAG", "MAG", "MAG", "PIXEL", ""]
-        
+
         # add description for each column in the header
         for i in range(len(column_units)) :
             if column_units[i] != "" :
@@ -309,10 +308,10 @@ def scienceImageProduct(original_image, img_data=[], err_data=[], mask_data=[], 
 
         # append catalog hdu to hdulist
         hdus.append(hdu_catalog)
-        
+
     # create hdu list
     hdu_list = create_hdu_list(hdus)
-    
+
     # write FITS file if filename is given
     if filename != "" :
         hdu_list.writeto(filename, overwrite=True, output_verify="fix+warn")
@@ -335,9 +334,9 @@ def readScienceImagCatalogs(input) :
         returns a list of catalog dictionaries
     """
     hdu_list = fits.open(input)
-    
+
     catalogs = []
-    
+
     for hdu in hdu_list :
         if hdu.name != 'PRIMARY' :
             catdata = hdu.data
@@ -351,7 +350,7 @@ def readScienceImagCatalogs(input) :
 
 def scienceImageLightProduct(original_image, img_data=[], info={}, catalogs=[], polarimetry=False,  skip_ref_catalogs=True, filename="", catalog_beam_ids=["S","N"], wcs_header=None, time_key="DATE-OBS", ra="", dec="") :
     """ Create a Science FITS image product
-    
+
     Parameters
     ----------
     original_image : str
@@ -400,18 +399,18 @@ def scienceImageLightProduct(original_image, img_data=[], info={}, catalogs=[], 
     hdu_list : astropy.io.fits.HDUList
         output hdu_list top-level FITS object.
     """
-    
+
     # get header from base image
     baseheader = fits.getheader(original_image)
-    
+
     # add information about data in the product
     info['DATA0'] = ('IMG DATA', 'content of slice 0 in cube')
-    
+
     # get file basename and add it to the info dict
     basename = os.path.basename(original_image)
     info['ORIGIMG'] = (basename, 'original file name')
     info['POLAR'] = (polarimetry, 'polarimetry frame')
-    
+
     if wcs_header :
         baseheader += wcs_header
 
@@ -450,10 +449,10 @@ def scienceImageLightProduct(original_image, img_data=[], info={}, catalogs=[], 
         catdata = []
         for key in catalogs[j].keys() :
             catdata.append(catalogs[j][key])
-    
+
         # set names and data format for each column in the catalog table
         dtype=[('INDEX', 'i4'), ('RA', 'f8'), ('DEC', 'f8'), ('X', 'f8'), ('Y', 'f8'), ('FWHMX', 'f8'), ('FWHMY', 'f8'), ('MAG', 'f8'), ('EMAG', 'f8'), ('SKYMAG', 'f8'), ('ESKYMAG', 'f8'), ('APER', 'i4'), ('FLAG', 'i4')]
-    
+
         # cast catalog data into numpy array
         catalog_array = np.array(catdata, dtype=dtype)
 
@@ -461,7 +460,7 @@ def scienceImageLightProduct(original_image, img_data=[], info={}, catalogs=[], 
         aperture_value = catalog_array[0][11]
 
         cat_label = "UNLABELED_CATALOG"
-        
+
         if polarimetry :
             if j == 0 :
                 catalog_header.set("POLBEAM", catalog_beam_ids[0], "Polar beam: [N]orth or [S]outh")
@@ -489,10 +488,10 @@ def scienceImageLightProduct(original_image, img_data=[], info={}, catalogs=[], 
                 cat_label = "CATALOG_PHOT_AP{:03d}".format(aperture_value)
 
         hdu_catalog = fits.TableHDU(data=catalog_array, header=catalog_header, name=cat_label)
-        
+
         # set each column unit
         column_units = ["", "DEG", "DEG", "PIXEL", "PIXEL", "PIXEL", "PIXEL", "MAG", "MAG", "MAG", "MAG", "PIXEL", ""]
-        
+
         # add description for each column in the header
         for i in range(len(column_units)) :
             if column_units[i] != "" :
@@ -500,10 +499,10 @@ def scienceImageLightProduct(original_image, img_data=[], info={}, catalogs=[], 
 
         # append catalog hdu to hdulist
         hdus.append(hdu_catalog)
-        
+
     # create hdu list
     hdu_list = create_hdu_list(hdus)
-    
+
     # write FITS file if filename is given
     if filename != "" :
         hdu_list.writeto(filename, overwrite=True, output_verify="fix+warn")
@@ -514,7 +513,7 @@ def scienceImageLightProduct(original_image, img_data=[], info={}, catalogs=[], 
 
 def packTimeSeriesData(times, vars=[], labs=[]) :
     """ Pack time series data into a numpy array ready to be saved into a FITS Table HDU
-    
+
     Parameters
     ----------
     times : numpy.ndarray (N)
@@ -529,16 +528,16 @@ def packTimeSeriesData(times, vars=[], labs=[]) :
     tsarray : numpy.recarray (N x (2 x M + 1))
         output tsarray time series array
     """
-    
+
     # get number of sources
     nsources = np.shape(vars[0])[1]
-        
+
     # set array with times
     tsarray = []
 
     # set names and data format for each column in the catalog table
     dtype=[('TIME', 'f8')]
-    
+
     for j in range(nsources) :
         for k in range(len(labs)) :
             dtype.append(('{}{:08d}'.format(labs[k],j), 'f8'))
@@ -549,16 +548,16 @@ def packTimeSeriesData(times, vars=[], labs=[]) :
             for k in range(len(labs)) :
                 visit.append(vars[k][i][j])
         tsarray.append(tuple(visit))
-        
+
     # cast coordinates data into numpy array
     tsarray = np.array(tsarray, dtype=dtype)
-    
+
     return tsarray
 
 
 def photTimeSeriesProduct(tsdata, catalog_names, info={}, filename="") :
     """ Create a photometric time series FITS product
-    
+
     Parameters
     ----------
     tsdata : dict
@@ -569,7 +568,7 @@ def photTimeSeriesProduct(tsdata, catalog_names, info={}, filename="") :
         dictionary with additional header cards to include in the header of product
         The following format must be used:
             info = {key1: (value1, comment1), key2: (value2, comment2), ... }
-            
+
     filename : str, optional
         The output file name to save product. If empty, file won't be saved.
 
@@ -578,8 +577,8 @@ def photTimeSeriesProduct(tsdata, catalog_names, info={}, filename="") :
     hdu_list : astropy.io.fits.HDUList
         output hdu_list top-level FITS object.
     """
-    
-    # get time array 
+
+    # get time array
     times = tsdata["TIME"]
     nexps = len(times)
     nsources = np.shape(tsdata["X"])[1]
@@ -609,7 +608,7 @@ def photTimeSeriesProduct(tsdata, catalog_names, info={}, filename="") :
 
     # create primary hdu
     primary_hdu = fits.PrimaryHDU(header=header)
-    
+
     # initialize list of hdus with the primary hdu
     hdu_array = [primary_hdu]
 
@@ -622,7 +621,7 @@ def photTimeSeriesProduct(tsdata, catalog_names, info={}, filename="") :
     coords_hdu = fits.TableHDU(data=coords_array, name='TIME_COORDS')
     # append time+coords hdu
     hdu_array.append(coords_hdu)
-    
+
     # loop over each key in the tsdata array to create a fits extension for each source
     for key in catalog_names :
 
@@ -641,7 +640,7 @@ def photTimeSeriesProduct(tsdata, catalog_names, info={}, filename="") :
         catalog_phot_hdu = fits.TableHDU(data=catalog_phot_array, name=key)
         # append hdu
         hdu_array.append(catalog_phot_hdu)
-    
+
     # create hdu list
     hdu_list = fits.HDUList(hdu_array)
 
@@ -657,7 +656,7 @@ def photTimeSeriesProduct(tsdata, catalog_names, info={}, filename="") :
 def readPhotTimeSeriesData(sci_list, catalog_key='CATALOG_PHOT_AP006', longitude=-45.5825, latitude=-22.5344, altitude=1864, time_keyword='DATE-OBS', time_format='isot', time_scale='utc', gettimedata=True, getcoordsdata=True, getphotdata=True) :
 
     """ Read photometric time series data from a list of images
-    
+
     Parameters
     ----------
     sci_list : list
@@ -676,7 +675,7 @@ def readPhotTimeSeriesData(sci_list, catalog_key='CATALOG_PHOT_AP006', longitude
         Time format in fits header. Default is 'isot'
     time_scale : str
         Time scale in fits header. Default is 'utc'
-    
+
     Returns
     -------
     tsdata : dict
@@ -735,7 +734,7 @@ def readPhotTimeSeriesData(sci_list, catalog_key='CATALOG_PHOT_AP006', longitude
         # open sci image product
         hdu_list = fits.open(sci_list[i])
         hdr = deepcopy(hdu_list[0].header)
-        
+
         try :
             catalog = deepcopy(hdu_list[catalog_key].data)
         except :
@@ -756,41 +755,41 @@ def readPhotTimeSeriesData(sci_list, catalog_key='CATALOG_PHOT_AP006', longitude
             ras.append(catalog['RA'])
             decs.append(catalog['DEC'])
             fwhms.append(np.sqrt(catalog['FWHMX']*catalog['FWHMX'] + catalog['FWHMY']*catalog['FWHMY']))
-            
+
         if getphotdata :
             mags.append(catalog['MAG'])
             emags.append(catalog['EMAG'])
             smags.append(catalog['SKYMAG'])
             esmags.append(catalog['ESKYMAG'])
             flags.append(catalog['FLAG'])
-        
+
         hdu_list.close()
         del catalog
         del hdu_list
 
     tsdata = {}
-    
+
     if gettimedata :
-    
+
         times = np.array(times, dtype='f8')
         tsdata["TIME"] = times
-        
+
     if getcoordsdata :
-    
+
         xs = np.array(xs, dtype='f8')
         ys = np.array(ys, dtype='f8')
         ras = np.array(ras, dtype='f8')
         decs = np.array(decs, dtype='f8')
         fwhms = np.array(fwhms, dtype='f8')
-        
+
         tsdata["X"] = xs
         tsdata["Y"] = ys
         tsdata["RA"] = ras
         tsdata["DEC"] = decs
         tsdata["FWHM"] = fwhms
-    
+
     if getphotdata :
-    
+
         mags = np.array(mags, dtype='f8')
         emags = np.array(emags, dtype='f8')
         smags = np.array(smags, dtype='f8')
@@ -816,7 +815,7 @@ def nan_proof_keyword(value) :
 
 def polarProduct(sources, polar_catalogs, info={}, filename="") :
     """ Create a polarimetry FITS product
-    
+
     Parameters
     ----------
     sources : list
@@ -829,7 +828,7 @@ def polarProduct(sources, polar_catalogs, info={}, filename="") :
         dictionary with additional header cards to include in the header of product
         The following format must be used:
             info = {key1: (value1, comment1), key2: (value2, comment2), ... }
-            
+
     filename : str, optional
         The output file name to save product. If empty, file won't be saved.
 
@@ -862,11 +861,11 @@ def polarProduct(sources, polar_catalogs, info={}, filename="") :
 
     # create primary hdu
     primary_hdu = fits.PrimaryHDU(header = header)
-    
+
     hdus = [primary_hdu]
 
     for j in range(nsources) :
-    
+
         # create empty header for catalog extension
         catalog_header = fits.PrimaryHDU().header
 
@@ -886,7 +885,7 @@ def polarProduct(sources, polar_catalogs, info={}, filename="") :
 
         # add number of apertures in catalog table
         catalog_header.set("NAPER", len(polar_catalogs), "Number of apertures")
-        
+
         # collect catalog data
         catdata = []
 
@@ -899,11 +898,11 @@ def polarProduct(sources, polar_catalogs, info={}, filename="") :
                    ('P', 'f8'), ('EP', 'f8'), ('THETA', 'f8'), ('ETHETA', 'f8'),
                    ('K', 'f8'), ('EK', 'f8'), ('ZERO', 'f8'), ('EZERO', 'f8'), ('NOBS', 'i4'), ('NPAR', 'i4'),
                    ('CHI2', 'f8'), ('FLAG', 'i4')]
-                   
+
         for ii in range(header['NEXPS']) :
             dtype.append(("Z{:04d}".format(ii), 'f8'))
             dtype.append(("EZ{:04d}".format(ii), 'f8'))
-            
+
         # cast catalog data into numpy array
         catalog_array = np.array(catdata, dtype=dtype)
 
@@ -913,7 +912,7 @@ def polarProduct(sources, polar_catalogs, info={}, filename="") :
 
         # append catalog hdu to hdulist
         hdus.append(hdu_catalog)
-        
+
     # create hdu list
     hdu_list = create_hdu_list(hdus)
 
@@ -927,7 +926,7 @@ def polarProduct(sources, polar_catalogs, info={}, filename="") :
 
 def polarTimeSeriesProduct(tsdata, catalog_names, info={}, filename="") :
     """ Create a polarimetric time series FITS product
-    
+
     Parameters
     ----------
     tsdata : dict
@@ -938,7 +937,7 @@ def polarTimeSeriesProduct(tsdata, catalog_names, info={}, filename="") :
         dictionary with additional header cards to include in the header of product
         The following format must be used:
             info = {key1: (value1, comment1), key2: (value2, comment2), ... }
-            
+
     filename : str, optional
         The output file name to save product. If empty, file won't be saved.
 
@@ -947,7 +946,7 @@ def polarTimeSeriesProduct(tsdata, catalog_names, info={}, filename="") :
     hdu_list : astropy.io.fits.HDUList
         output hdu_list top-level FITS object.
     """
-    
+
     # get time array
     times = tsdata[catalog_names[0]]["TIME"]
     # get number of polar measurements in the time series
@@ -959,7 +958,7 @@ def polarTimeSeriesProduct(tsdata, catalog_names, info={}, filename="") :
     info['FILEVER'] = ('1.0', 'file format version')
     info['DATE'] = (Time.now().iso, 'file creation date')
     info['NPOLMEAS'] = (npolmeas, 'number of measurements in time series')
- 
+
     # create empty header
     header = fits.PrimaryHDU().header
 
@@ -969,18 +968,18 @@ def polarTimeSeriesProduct(tsdata, catalog_names, info={}, filename="") :
 
     # create primary hdu
     primary_hdu = fits.PrimaryHDU(header=header)
-    
+
     # initialize list of hdus with the primary hdu
     hdu_array = [primary_hdu]
 
     # loop over each key in the tsdata array to create a fits extension for each source
     for key in catalog_names :
-        
+
         tstbl = Table(tsdata[key])
 
         # create catalog polarimetry hdu for current source
         catalog_polar_hdu = fits.BinTableHDU(data=tstbl, name=key.replace("CATALOG_POLAR","POLAR_TIMESERIES"))
-        
+
         # append hdu
         hdu_array.append(catalog_polar_hdu)
 
@@ -993,4 +992,4 @@ def polarTimeSeriesProduct(tsdata, catalog_names, info={}, filename="") :
 
     # return hdu list
     return hdu_list
-    
+
