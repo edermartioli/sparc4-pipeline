@@ -1,11 +1,10 @@
-# -*- coding: iso-8859-1 -*-
 """
     Created on Jun 7 2022
 
     Description: Library for plotting SPARC4 pipeline products
-    
+
     @author: Eder Martioli <martioli@iap.fr>
-    
+
     Laboratório Nacional de Astrofísica - LNA/MCTI
     """
 
@@ -37,12 +36,12 @@ from astropy.stats import sigma_clip
 def plot_cal_frame(filename, output="", percentile=99.5, xcut=512, ycut=512, combine_rows=False, combine_cols=False, combine_method="mean") :
 
     """ Plot calibration (bias, flat) frame
-    
+
     Parameters
     ----------
     filename : str
         string for fits file path
-            
+
     output : str, optional
         The output plot file name to save graphic to file. If empty, it won't be saved.
 
@@ -67,10 +66,10 @@ def plot_cal_frame(filename, output="", percentile=99.5, xcut=512, ycut=512, com
     axes[0,0].imshow(img_data, vmin=np.percentile(img_data,100 - percentile), vmax=np.percentile(img_data, percentile), origin='lower')
     axes[0,0].set_xlabel("columns (pixel)", fontsize=16)
     axes[0,0].set_ylabel("rows (pixel)", fontsize=16)
-    
+
     xsize, ysize = np.shape(img_data)
     x, y = np.arange(xsize), np.arange(ysize)
-    
+
     if combine_rows :
         crow = None
         if combine_method == "mean" :
@@ -86,7 +85,7 @@ def plot_cal_frame(filename, output="", percentile=99.5, xcut=512, ycut=512, com
         axes[1,0].plot(x, img_data[ycut,:])
         axes[1,0].set_ylabel("flux".format(ycut), fontsize=16)
     axes[1,0].set_xlabel("columns (pixel)", fontsize=16)
-    
+
     if combine_cols :
         ccol = None
         if combine_method == "mean" :
@@ -111,7 +110,7 @@ def plot_cal_frame(filename, output="", percentile=99.5, xcut=512, ycut=512, com
     axes[1,1].plot(x, err_data[ycut,:])
     axes[1,1].set_ylabel(r"$\sigma$".format(ycut), fontsize=16)
     axes[1,1].set_xlabel("columns (pixel)", fontsize=16)
-    
+
     axes[2,1].plot(y, err_data[:,xcut])
     axes[2,1].set_ylabel(r"$\sigma$".format(xcut), fontsize=16)
     axes[2,1].set_xlabel("rows (pixel)", fontsize=16)
@@ -123,12 +122,12 @@ def plot_cal_frame(filename, output="", percentile=99.5, xcut=512, ycut=512, com
 def plot_sci_frame(filename, cat_ext=9, nstars=5, output="", percentile=98, use_sky_coords=False) :
 
     """ Plot science frame
-    
+
     Parameters
     ----------
     filename : str
         string for fits file path
-            
+
     output : str, optional
         The output plot file name to save graphic to file. If empty, it won't be saved.
 
@@ -148,19 +147,19 @@ def plot_sci_frame(filename, cat_ext=9, nstars=5, output="", percentile=98, use_
 
     if nstars > len(x) :
         nstars = len(x)
-        
+
     fig = plt.figure(figsize=(10, 10))
 
     if use_sky_coords :
         # load WCS from image header
         wcs_obj = WCS(hdul[0].header,naxis=2)
-        
+
         # calculate pixel scale
         pixel_scale = proj_plane_pixel_scales(wcs_obj)
 
         # assume  the N-S component of the pixel scale
         pixel_scale = (pixel_scale[1] * 3600)
-        
+
         ax = plt.subplot(projection=wcs_obj)
         ax.imshow(img_data, vmin=np.percentile(img_data, 100. - percentile), vmax=np.percentile(img_data, percentile), origin='lower', cmap='cividis', aspect='equal')
 
@@ -181,9 +180,9 @@ def plot_sci_frame(filename, cat_ext=9, nstars=5, output="", percentile=98, use_
         plt.ylabel(r'Dec')
         overlay = ax.get_coords_overlay('icrs')
         overlay.grid(color='white', ls='dotted')
-    
+
     else :
-    
+
         plt.plot(x, y, 'wo', ms=mean_aper, fillstyle='none', lw=1.5, alpha=0.7)
         plt.plot(x[:nstars], y[:nstars], 'k+', ms=2*mean_aper/3, lw=1.0, alpha=0.7)
         for i in range(nstars) :
@@ -191,20 +190,20 @@ def plot_sci_frame(filename, cat_ext=9, nstars=5, output="", percentile=98, use_
         plt.imshow(img_data, vmin=np.percentile(img_data, 100. - percentile), vmax=np.percentile(img_data, percentile), origin='lower')
         plt.xlabel("columns (pixel)", fontsize=16)
         plt.ylabel("rows (pixel)", fontsize=16)
-    
-    
+
+
     plt.show()
 
 
 
 def plot_sci_polar_frame(filename, percentile=99.5) :
     """ Plot science polar frame
-    
+
     Parameters
     ----------
     filename : str
         string for fits file path
-            
+
     output : str, optional
         The output plot file name to save graphic to file. If empty, it won't be saved.
 
@@ -220,7 +219,7 @@ def plot_sci_polar_frame(filename, percentile=99.5) :
 
     x_o, y_o = hdul["CATALOG_POL_N_AP010"].data['x'], hdul["CATALOG_POL_N_AP010"].data['y']
     x_e, y_e = hdul["CATALOG_POL_S_AP010"].data['x'], hdul["CATALOG_POL_S_AP010"].data['y']
-    
+
     mean_aper = np.mean(hdul["CATALOG_POL_N_AP010"].data['APER'])
 
     plt.figure(figsize=(10, 10))
@@ -229,28 +228,28 @@ def plot_sci_polar_frame(filename, percentile=99.5) :
     plt.plot(x_e, y_e, 'wo', ms=mean_aper, fillstyle='none', lw=1.5, alpha=0.7)
 
     plt.imshow(img_data, vmin=np.percentile(img_data, 100-percentile), vmax=np.percentile(img_data, percentile), origin='lower')
-    
+
     for i in range(len(x_o)):
         x = [x_o[i], x_e[i]]
         y = [y_o[i], y_e[i]]
         plt.plot(x, y, 'w-o', alpha=0.5)
         plt.annotate(f"{i}", [np.mean(x)-25, np.mean(y)+25], color='w')
-        
+
     plt.xlabel("columns (pixel)", fontsize=16)
     plt.ylabel("rows (pixel)", fontsize=16)
-    
+
     plt.show()
 
 
 def plot_diff_light_curve(filename, target=0, comps=[], output="", nsig=100, plot_sum=True, plot_comps=False) :
-        
+
     """ Plot light curve
-    
+
     Parameters
     ----------
     filename : str
         string for fits file path
-            
+
     output : str, optional
         The output plot file name to save graphic to file. If empty, it won't be saved.
 
@@ -261,45 +260,45 @@ def plot_diff_light_curve(filename, target=0, comps=[], output="", nsig=100, plo
 
     hdul = fits.open(filename)
     # Below is a hack to avoid very high values of time in some bad data
-    
+
     time = hdul["DIFFPHOTOMETRY"].data['TIME']
-    
+
     mintime, maxtime = np.min(time), np.max(time)
-    
+
     data = hdul["DIFFPHOTOMETRY"].data
-    
+
     nstars = int((len(data.columns) - 1) / 2)
-    
+
     warnings.filterwarnings('ignore')
-    
+
     offset = 0.
     for i in range(nstars) :
         lc = -data['DMAG{:06d}'.format(i)][keeplowtimes]
         elc = data['EDMAG{:06d}'.format(i)][keeplowtimes]
-        
+
         mlc = np.nanmedian(lc)
         rms = np.nanmedian(np.abs(lc-mlc)) / 0.67449
         #rms = np.nanstd(lc-mlc)
-        
+
         keep = elc < nsig*rms
-        
+
         if i == 0 :
             if plot_sum :
                 comp_label = "SUM"
                 plt.errorbar(time[keep], lc[keep], yerr=elc[keep], fmt='k.', alpha=0.8, label=r"{} $\Delta$mag={:.3f} $\sigma$={:.2f} mmag".format(comp_label, mlc, rms*1000))
                 #plt.plot(time[keep], lc[keep], "k-", lw=0.5)
-            
+
             offset = np.nanpercentile(lc[keep], 1.0) - 4.0*rms
-            
+
             plt.hlines(offset, mintime, maxtime, colors='k', linestyle='-', lw=0.5)
             plt.hlines(offset-rms, mintime, maxtime, colors='k', linestyle='--', lw=0.5)
             plt.hlines(offset+rms, mintime, maxtime, colors='k', linestyle='--', lw=0.5)
-        
+
         else :
             if plot_comps :
                 comp_label = "C{:03d}".format(comps[i-1])
                 plt.errorbar(time[keep], (lc[keep]-mlc)+offset, yerr=elc[keep], fmt='.', alpha=0.5, label=r"{} $\Delta$mag={:.3f} $\sigma$={:.2f} mmag".format(comp_label, mlc, rms*1000))
-            
+
         #print(i, mlc, rms)
 
     plt.xlabel(r"time (BJD)", fontsize=16)
@@ -309,14 +308,14 @@ def plot_diff_light_curve(filename, target=0, comps=[], output="", nsig=100, plo
 
 
 def plot_light_curve(filename, target=0, comps=[], output="", nsig=10, plot_coords=True, plot_rawmags=True, plot_sum=True, plot_comps=True, catalog_name="CATALOG_PHOT_AP008") :
-        
+
     """ Plot light curve
-    
+
     Parameters
     ----------
     filename : str
         string for fits file path
-            
+
     output : str, optional
         The output plot file name to save graphic to file. If empty, it won't be saved.
 
@@ -327,7 +326,7 @@ def plot_light_curve(filename, target=0, comps=[], output="", nsig=10, plot_coor
 
     hdul = fits.open(filename)
     # Below is a hack to avoid very high values of time in some bad data
-    
+
     time = hdul["TIME_COORDS"].data['TIME']
     mintime, maxtime = np.min(time), np.max(time)
 
@@ -377,9 +376,9 @@ def plot_light_curve(filename, target=0, comps=[], output="", nsig=10, plot_coor
         ecmag = hdul[catalog_name].data['EMAG{:08d}'.format(comps[i])]
         cm.append(cmag)
         ecm.append(ecmag)
-        
+
         sumag += 10**(-0.4*cmag)
-        
+
         mdm = np.nanmedian(cmag - m)
         dm = (cmag - m) - mdm
         rms = np.nanmedian(np.abs(dm)) / 0.67449
@@ -389,7 +388,7 @@ def plot_light_curve(filename, target=0, comps=[], output="", nsig=10, plot_coor
 
         if plot_comps :
             plt.errorbar(time[keep], dm[keep], yerr=edm[keep], fmt='.', alpha=0.3, label=r"C{} $\Delta$mag={:.3f} $\sigma$={:.2f} mmag".format(comps[i], mdm, rms*1000))
- 
+
     sumag = -2.5*np.log10(sumag)
     mdm = np.nanmedian(sumag - m)
     dm = (sumag - m) - mdm
@@ -398,7 +397,7 @@ def plot_light_curve(filename, target=0, comps=[], output="", nsig=10, plot_coor
     keep &= np.abs(dm) < nsig*rms
     if plot_sum :
         plt.errorbar(time[keep], dm[keep], yerr=em[keep], fmt='k.', label=r"SUM $\Delta$mag={:.3f} $\sigma$={:.2f} mmag".format(mdm, rms*1000))
-        
+
     if plot_comps or plot_sum :
         plt.xlabel(r"time (BJD)", fontsize=16)
         plt.ylabel(r"$\Delta$mag", fontsize=16)
@@ -409,7 +408,7 @@ def plot_light_curve(filename, target=0, comps=[], output="", nsig=10, plot_coor
 def plot_polarimetry_results(loc, pos_model_sampling=1, title_label="", wave_plate='halfwave') :
 
     """ Pipeline module to plot half-wave polarimetry data
-    
+
     Parameters
     ----------
     loc : dict
@@ -425,7 +424,7 @@ def plot_polarimetry_results(loc, pos_model_sampling=1, title_label="", wave_pla
     -------
 
     """
-    
+
     waveplate_angles = loc["WAVEPLATE_ANGLES"]
     zi = loc["ZI"]
     qpol = loc["Q"]
@@ -435,7 +434,7 @@ def plot_polarimetry_results(loc, pos_model_sampling=1, title_label="", wave_pla
     theta = loc["THETA"]
     kcte = loc["K"]
     zero = loc["ZERO"]
-    
+
     qlab = "q: {:.2f}+-{:.2f} %".format(100*qpol.nominal,100*qpol.std_dev)
     ulab = "u: {:.2f}+-{:.2f} %".format(100*upol.nominal,100*upol.std_dev)
     vlab = "v: {:.2f}+-{:.2f} %".format(100*vpol.nominal,100*vpol.std_dev)
@@ -451,10 +450,10 @@ def plot_polarimetry_results(loc, pos_model_sampling=1, title_label="", wave_pla
 
     if title_label != "":
         axes[0].set_title(title_label)
-                
+
     # define grid of position angle points for model
     pos_model = np.arange(0, 360, pos_model_sampling)
-    
+
     # Plot the model
     best_fit_model = np.full_like(pos_model,np.nan)
     if wave_plate == 'halfwave' :
@@ -464,18 +463,18 @@ def plot_polarimetry_results(loc, pos_model_sampling=1, title_label="", wave_pla
 
     axes[0].plot(pos_model, best_fit_model,'r:', alpha=0.8, label='Best fit model')
     #axes[0].fill_between(pos_model, pred_mean+pred_std, pred_mean-pred_std, color=color, alpha=0.3, edgecolor="none")
- 
+
     # Plot data
     axes[0].errorbar(waveplate_angles, zi.nominal, yerr=zi.std_dev, fmt='ko', ms=2, capsize=2, lw=0.5, alpha=0.9, label='data')
     axes[0].set_ylabel(r"$Z(\phi) = \frac{f_\parallel(\phi)-f_\perp(\phi)}{f_\parallel(\phi)+f_\perp(\phi)}$", fontsize=16)
     axes[0].legend(fontsize=16)
     axes[0].tick_params(axis='x', labelsize=14)
     axes[0].tick_params(axis='y', labelsize=14)
-    
+
     # Print q, u, p and theta values
     ylims = axes[0].get_ylim()
     #axes[0].text(-10, ylims[1]-0.06,'{}\n{}\n{}\n{}'.format(qlab, ulab, plab, thetalab), size=12)
-    
+
     # Plot residuals
     observed_model = np.full_like(waveplate_angles,np.nan)
     if wave_plate == 'halfwave' :
@@ -485,7 +484,7 @@ def plot_polarimetry_results(loc, pos_model_sampling=1, title_label="", wave_pla
 
     resids = observed_model - zi.nominal
     sig_res = np.nanstd(resids)
-    
+
     axes[1].errorbar(waveplate_angles, resids, yerr=zi.std_dev, fmt='ko', alpha=0.5, label='residuals')
     axes[1].set_xlabel(r"waveplate position angle, $\phi$ [deg]", fontsize=16)
     axes[1].hlines(0., 0, 360, color="k", linestyles=":", lw=0.6)
@@ -493,7 +492,7 @@ def plot_polarimetry_results(loc, pos_model_sampling=1, title_label="", wave_pla
     axes[1].set_ylabel(r"residuals", fontsize=16)
     axes[1].tick_params(axis='x', labelsize=14)
     axes[1].tick_params(axis='y', labelsize=14)
-    
+
     plt.show()
 
 
@@ -501,7 +500,7 @@ def plot_polarimetry_results(loc, pos_model_sampling=1, title_label="", wave_pla
 def plot_2d(x, y, z, LIM=None, LAB=None, z_lim=None, use_index_in_y=False, title="", pfilename="", cmap="gist_heat"):
     """
     Use pcolor to display sequence of spectra
-    
+
     Inputs:
     - x:        x array of the 2D map (if x is 1D vector, then meshgrid; else: creation of Y)
     - y:        y 1D vector of the map
@@ -510,15 +509,15 @@ def plot_2d(x, y, z, LIM=None, LAB=None, z_lim=None, use_index_in_y=False, title
     - LAB:      list containing: [label(x),label(y),label(z)] - label(z) -> colorbar
     - title:    title of the map
     - **kwargs: **kwargs of the matplolib function pcolor
-    
+
     Outputs:
     - Display 2D map of the sequence of spectra z
-    
+
     """
-    
+
     if use_index_in_y :
         y = np.arange(len(y))
-    
+
     if len(np.shape(x))==1:
         X,Y  = np.meshgrid(x,y)
     else:
@@ -549,10 +548,10 @@ def plot_2d(x, y, z, LIM=None, LAB=None, z_lim=None, use_index_in_y=False, title
 
     cc = ax.pcolor(X, Y, Z, vmin=LIM[2][0], vmax=LIM[2][1], cmap=cmap)
     cb = plt.colorbar(cc,ax=ax)
-    
+
     ax.set_xlim(LIM[0][0],LIM[0][1])
     ax.set_ylim(LIM[1][0],LIM[1][1])
-    
+
     ax.set_xlabel(LAB[0], fontsize=20)
     ax.set_ylabel(LAB[1],labelpad=15, fontsize=20)
     cb.set_label(LAB[2],rotation=270,labelpad=30, fontsize=20)

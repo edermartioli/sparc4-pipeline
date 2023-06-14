@@ -1,13 +1,12 @@
-# -*- coding: iso-8859-1 -*-
 """
     Created on Jun 4 2022
-    
+
     Description: Mini pipeline to process sparc4 data in photometric mode
-    
+
     @author: Eder Martioli <martioli@lna.br>
-    
+
     Laboratório Nacional de Astrofísica - LNA/MCTI
-    
+
     Simple usage example:
 
     python /Volumes/Samsung_T5/sparc4-pipeline/sparc4_mini_pipeline.py --datadir=/Volumes/Samsung_T5/Data/OPD/HATS-20/test/ --reducedir=/Volumes/Samsung_T5/Data/OPD/HATS-20/reduced/
@@ -19,7 +18,7 @@
     python /Volumes/Samsung_T5/sparc4-pipeline/sparc4_mini_pipeline.py --datadir=/Volumes/Samsung_T5/Data/SPARC4/comissioning_nov22/ --reducedir=/Volumes/Samsung_T5/Data/SPARC4/comissioning_nov22/reduced --nightdir=20221104
 
     python sparc4_mini_pipeline.py --nightdir=20230503 -vp
-    
+
     """
 
 __version__ = "1.0"
@@ -57,7 +56,7 @@ except:
 match_frames = True
 fit_zero_of_wppos = False
 
-# initialize pipeline parameters 
+# initialize pipeline parameters
 p = s4pipelib.init_s4_p(options.datadir,
                         options.reducedir,
                         options.nightdir,
@@ -67,14 +66,14 @@ p = s4pipelib.init_s4_p(options.datadir,
 # Run full reduction for selected channels
 for channel in p['SELECTED_CHANNELS'] :
 #for j in range(1,2) :
-    
+
     # set zero based index of current channel
     j = channel - 1
 
     data_dir = p['data_directories'][j]
     ch_reduce_dir = p['ch_reduce_directories'][j]
     reduce_dir = p['reduce_directories'][j]
-    
+
     # calculate master bias
     master_zero = "{}/{}_s4c{}_MasterZero.fits".format(reduce_dir,options.nightdir,p['CHANNELS'][j])
     p = s4pipelib.run_master_calibration(p, inputlist=p['zeros'][j], output=master_zero, obstype='bias', data_dir=data_dir, reduce_dir=reduce_dir, force=options.force)
@@ -89,7 +88,7 @@ for channel in p['SELECTED_CHANNELS'] :
     p = s4pipelib.run_master_calibration(p, inputlist=p['dflats'][j], output=master_dflat, obstype='flat', data_dir=data_dir, reduce_dir=reduce_dir, normalize=True, force=options.force)
 
     p["ASTROM_REF_IMG"] = p["ASTROM_REF_IMGS"][j]
-    
+
     for obj in p['objsInPhot'][j] :
         # set suffix for output stack filename
         stack_suffix = "{}_s4c{}_{}".format(options.nightdir,p['CHANNELS'][j],obj.replace(" ",""))
@@ -120,7 +119,7 @@ for channel in p['SELECTED_CHANNELS'] :
                                                      ref_catalog_name=p['PHOT_REF_CATALOG_NAME'],
                                                      catalog_names = p['PHOT_CATALOG_NAMES_TO_INCLUDE'],
                                                      force=options.force)
-                    
+
         if options.plot :
             target = 0
             comps = [1,2,3,4]
@@ -175,8 +174,8 @@ for channel in p['SELECTED_CHANNELS'] :
                                                             plot=options.plot,
                                                             verbose=options.verbose)
             p['PolarL2products'].append(polarL2product)
-        
-        
+
+
         # set suffix for output time series filename
         ts_suffix = "{}_s4c{}_{}_L2".format(options.nightdir,p['CHANNELS'][j],obj.replace(" ",""))
 
@@ -230,7 +229,7 @@ for channel in p['SELECTED_CHANNELS'] :
                                                             plot=options.plot,
                                                             verbose=options.verbose)
             p['PolarL4products'].append(polarL4product)
-    
+
         # set suffix for output time series filename
         ts_suffix = "{}_s4c{}_{}_L4".format(options.nightdir,p['CHANNELS'][j],obj.replace(" ",""))
 
