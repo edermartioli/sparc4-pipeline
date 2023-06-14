@@ -1,4 +1,4 @@
-from pyyaml import yaml
+import yaml
 import os
 
 
