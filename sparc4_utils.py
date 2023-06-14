@@ -14,12 +14,6 @@ __copyright__ = """
     Copyright (c) ...  All rights reserved.
     """
 
-__version__ = "1.0"
-
-__copyright__ = """
-    Copyright (c) ...  All rights reserved.
-    """
-
 import os,sys
 from astropy.time import Time, TimeDelta
 import astropy.units as u
