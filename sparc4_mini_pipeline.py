@@ -83,20 +83,20 @@ for channel in p['SELECTED_CHANNELS'] :
         zero_list = s4db.get_file_list(db, obstype=p['BIAS_OBSTYPE_KEYVALUE'], detector_mode=detector_modes[key])
         # calculate master bias
         p["master_bias"] = "{}/{}_s4c{}{}_MasterZero.fits".format(reduce_dir,options.nightdir,p['CHANNELS'][j],key)
-        p = s4pipelib.run_master_calibration(p, inputlist=zero_list, output=master_zero, obstype='bias', data_dir=data_dir, reduce_dir=reduce_dir, force=options.force)
+        p = s4pipelib.run_master_calibration(p, inputlist=zero_list, output=p["master_bias"], obstype='bias', data_dir=data_dir, reduce_dir=reduce_dir, force=options.force)
 
         # create a list of sky flats
         skyflat_list = s4db.get_file_list(db, detector_mode=detector_modes[key], skyflat=True)
         if len(skyflat_list) :
             # calculate master sky flat
             p["master_skyflat"] = "{}/{}_s4c{}{}_MasterSkyFlat.fits".format(reduce_dir,options.nightdir,p['CHANNELS'][j],key)
-            p = s4pipelib.run_master_calibration(p, inputlist=skyflat_list, output=master_skyflat, obstype='flat', data_dir=data_dir, reduce_dir=reduce_dir, normalize=True, force=options.force)
+            p = s4pipelib.run_master_calibration(p, inputlist=skyflat_list, output=p["master_skyflat"], obstype='flat', data_dir=data_dir, reduce_dir=reduce_dir, normalize=True, force=options.force)
 
         # create a list of flats for current detector mode
         flat_list = s4db.get_file_list(db, obstype=p['FLAT_OBSTYPE_KEYVALUE'], detector_mode=detector_modes[key])
         # calculate master dome flat
         p["master_flat"] = "{}/{}_s4c{}{}_MasterDomeFlat.fits".format(reduce_dir,options.nightdir,p['CHANNELS'][j],key)
-        p = s4pipelib.run_master_calibration(p, inputlist=flat_list, output=master_dflat, obstype='flat', data_dir=data_dir, reduce_dir=reduce_dir, normalize=True, force=options.force)
+        p = s4pipelib.run_master_calibration(p, inputlist=flat_list, output=p["master_flat"], obstype='flat', data_dir=data_dir, reduce_dir=reduce_dir, normalize=True, force=options.force)
 
         # set astrometry ref image as the one for this channel
         p["ASTROM_REF_IMG"] = p["ASTROM_REF_IMGS"][j]
