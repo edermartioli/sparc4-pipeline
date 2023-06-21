@@ -26,11 +26,14 @@ import sparc4_products as s4p
 import sparc4_product_plots as s4plt
 import sparc4_params
 import sparc4_utils as s4utils
+import sparc4_db as s4db
+
+import glob
 
 from astropy import units as u
 from astropy.io import fits
 from astropy.coordinates import SkyCoord
-from astropy.table import Table
+from astropy.table import vstack, Table
 from astropy.time import Time
 from astropy.modeling import models, fitting
 
@@ -62,16 +65,16 @@ from astropy.wcs.utils import proj_plane_pixel_scales
 from scipy import signal
 
 
-def init_s4_p(datadir="", reducedir="", nightdir="", channels="", print_report=False) :
+def init_s4_p(nightdir, datadir="", reducedir="", channels="", print_report=False) :
     """ Pipeline module to initialize SPARC4 parameters
     Parameters
     ----------
+    nightdir : str
+        String to define the night directory name
     datadir : str, optional
         String to define the directory path to the raw data
     reducedir : str, optional
         String to define the directory path to the reduced data
-    nightdir : str, optional
-        String to define the night directory name
     channels : str, optional
         String to define SPARC4 channels to be reduced, e.g. "1,2"
     print_report : bool, optional
@@ -104,19 +107,30 @@ def init_s4_p(datadir="", reducedir="", nightdir="", channels="", print_report=F
         os.mkdir(p['ROOTREDUCEDIR'])
 
     #organize files to be reduced
+    
     p = s4utils.identify_files(p, nightdir, print_report=print_report)
 
+    p['data_directories'] = []
     p['ch_reduce_directories'] = []
     p['reduce_directories'] = []
+    p['s4db_files'] = []
+    p['filelists'] = []
 
     for j in range(len(p['CHANNELS'])) :
-        data_dir = p['data_directories'][j]
+        # figure out directory structures
+        ch_night_data_dir = '{}/sparc4acs{}/{}/'.format(p['ROOTDATADIR'],p['CHANNELS'][j],nightdir)
         ch_reduce_dir = '{}/sparc4acs{}/'.format(p['ROOTREDUCEDIR'],p['CHANNELS'][j])
         reduce_dir = '{}/{}/'.format(ch_reduce_dir,nightdir)
 
+        # produce lists of files for all channels
+        channel_data_pattern = '{}/*.fits'.format(ch_night_data_dir)
+        p['filelists'].append(sorted(glob.glob(channel_data_pattern)))
+
         p['ch_reduce_directories'].append(ch_reduce_dir)
         p['reduce_directories'].append(reduce_dir)
-
+        p['data_directories'].append(ch_night_data_dir)
+    
+        # if reduced dir doesn't exist create one
         if not os.path.exists(ch_reduce_dir) :
             os.mkdir(ch_reduce_dir)
 
@@ -124,8 +138,176 @@ def init_s4_p(datadir="", reducedir="", nightdir="", channels="", print_report=F
         if not os.path.exists(reduce_dir) :
             os.mkdir(reduce_dir)
 
+        db_file = '{}/{}/{}_sparc4acs{}_db.fits'.format(ch_reduce_dir,nightdir,nightdir,p['CHANNELS'][j])
+        
+        p['s4db_files'].append(db_file)
+
     return p
 
+
+def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, reduce_dir, polar_mode=None, fit_zero=False, detector_mode_key="", obj=None, match_frames=True, force=False, verbose=False, plot=False) :
+
+    """ Pipeline module to run the reduction of science data
+
+    Parameters
+    ----------
+    db : astropy.table
+        data base table
+    p : dict
+        dictionary to store pipeline parameters
+    channel_index : int
+        SPARC4 channel index
+    inst_mode : str, optional
+        to select observations of a given instrument mode
+    detector_mode : dict
+        to select observations of a given detector mode
+    nightdir : str
+        String to define the night directory name
+    reduce_dir : str
+        path to the reduce directory
+    polar_mode : str, optional
+        to select observations of a given polarimetric mode
+    fit_zero : bool
+        to fit zero of waveplate position angle
+    aperture_index : int (optional)
+        index to select aperture in catalog. Default is None and it will calculate best aperture
+    detector_mode_key : str (optional)
+        keyword name of detector mode
+    obj : str (optional)
+        object name to reduce only data for this object
+    match_frames : bool
+        match images using stack as reference
+    force : bool
+        force reduction even if product already exists
+    vebose : bool
+        turn on verbose
+    plot : bool
+        turn on plotting
+
+    Returns
+    -------
+    p : dict
+        updated dictionary to store pipeline parameters
+    """
+
+    polsuffix = ""
+    polarimetry = False
+    if inst_mode == p['INSTMODE_POLARIMETRY_KEYVALUE'] :
+        polarimetry = True
+        polsuffix = "_{}_{}".format(inst_mode,polar_mode)
+
+    # get list of objects observed in photometric mode
+    objs = s4db.get_targets_observed(db, inst_mode=inst_mode, polar_mode=polar_mode, detector_mode=detector_mode)
+    
+    if obj != None :
+        objs = objs[objs['OBJECT'] == obj]
+
+    # loop over each object to run the reduction
+    for k in range(len(objs)) :
+        obj = objs[k][0]
+
+        # set suffix for output stack filename
+        stack_suffix = "{}_s4c{}{}_{}{}".format(nightdir, p['CHANNELS'][channel_index], detector_mode_key, obj.replace(" ",""), polsuffix)
+
+        sci_list = s4db.get_file_list(db, object_id=obj, inst_mode=inst_mode, polar_mode=polar_mode, obstype=p['OBJECT_OBSTYPE_KEYVALUE'], calwheel_mode=None, detector_mode=detector_mode)
+
+        # run stack and reduce individual science images (produce *_proc.fits)
+        p = stack_and_reduce_sci_images(p,
+                                        sci_list,
+                                        reduce_dir,
+                                        ref_img="",
+                                        stack_suffix=stack_suffix,
+                                        force=force,
+                                        match_frames=match_frames,
+                                        polarimetry=polarimetry,
+                                        verbose=verbose,
+                                        plot=plot)
+
+        # set suffix for output time series filename
+        ts_suffix = "{}_s4c{}_{}{}".format(nightdir,p['CHANNELS'][channel_index],obj.replace(" ",""),polsuffix)
+
+        ###################################
+        ## TIME SERIES FOR PHOTOMETRIC MODE ##
+        ###################################
+        if inst_mode == p['INSTMODE_PHOTOMETRY_KEYVALUE']  :
+            # run photometric time series
+            phot_ts_product = phot_time_series(p['OBJECT_REDUCED_IMAGES'][1:],
+                                                ts_suffix=ts_suffix,
+                                                reduce_dir=reduce_dir,
+                                                time_key=p['TIME_KEYWORD_IN_PROC'],
+                                                time_format=p['TIME_FORMAT_IN_PROC'],
+                                                catalog_names = p['PHOT_CATALOG_NAMES_TO_INCLUDE'],
+                                                time_span_for_rms = p['TIME_SPAN_FOR_RMS'],
+                                                force=force)
+
+            if plot :
+                target = 0
+                comps = [1,2,3,4]
+                #plot light curve
+                s4plt.plot_light_curve(phot_ts_product,
+                                       target=target,
+                                       comps=comps,
+                                       nsig=10,
+                                       plot_coords=True,
+                                       plot_rawmags=True,
+                                       plot_sum=True,
+                                       plot_comps=True,
+                                       catalog_name=p['PHOT_REF_CATALOG_NAME'])
+
+        ##############################################
+        ## POLARIMETRY AND TIME SERIES FOR POLARIMETRIC MODE (L2 OR L4) ##
+        ##############################################
+        elif  inst_mode == p['INSTMODE_POLARIMETRY_KEYVALUE'] :
+
+            compute_k, zero = True, 0
+            wave_plate = 'halfwave'
+
+            if polar_mode == 'L4' :
+                wave_plate = 'quarterwave'
+                compute_k = False
+                zero = p['ZERO_OF_WAVEPLATE']
+                
+            # divide input list into a many sequences
+            pol_sequences = s4utils.select_polar_sequences(p['OBJECT_REDUCED_IMAGES'], sortlist=True, verbose=verbose)
+
+            p['PolarProducts'] = []
+            
+            for i in range(len(pol_sequences)) :
+
+                if len(pol_sequences[i]) == 0 :
+                    continue
+
+                if verbose :
+                    print("Running {} polarimetry for sequence: {} of {}".format(wave_plate, i+1, len(pol_sequences)))
+                polarproduct = compute_polarimetry(pol_sequences[i],
+                                                    wave_plate = wave_plate,
+                                                    base_aperture = p['APERTURE_RADIUS_FOR_PHOTOMETRY_IN_POLAR'],
+                                                    compute_k = compute_k,
+                                                    fit_zero = fit_zero,
+                                                    zero=zero)
+
+                pol_results = get_polarimetry_results(polarproduct,
+                                                      source_index=0,
+                                                      min_aperture=p['MIN_APERTURE_FOR_POLARIMETRY'],
+                                                      max_aperture=p['MAX_APERTURE_FOR_POLARIMETRY'],
+                                                      plot=plot,
+                                                      verbose=verbose)
+                p['PolarProducts'].append(polarproduct)
+
+
+            # create polar time series product
+            p['PolarTimeSeriesProduct'] = polar_time_series(p['PolarProducts'],
+                                                      reduce_dir=reduce_dir,
+                                                      ts_suffix=ts_suffix,
+                                                      aperture_radius=p['APERTURE_RADIUS_FOR_PHOTOMETRY_IN_POLAR'],
+                                                      min_aperture=p['MIN_APERTURE_FOR_POLARIMETRY'],
+                                                      max_aperture=p['MAX_APERTURE_FOR_POLARIMETRY'],
+                                                      force=force)
+        else :
+            print("ERROR: instrument mode not supported, exiting ... ")
+            exit()
+
+    return p
 
 
 def run_master_calibration(p, inputlist=[], output="", obstype='bias', data_dir="./", reduce_dir="./", normalize=False, force=False) :
@@ -383,7 +565,7 @@ def old_reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", forc
             p = select_files_for_stack_and_get_shifts(p, frames, obj_fg.files, sort_method=p['METHOD_TO_SELECT_FILES_FOR_STACK'])
 
             info['REFIMG'] = (p['REFERENCE_IMAGE'], "reference image for stack")
-            info['NIMGSTCK'] = (p['NFILES_FOR_STACK'], "number of images for stack")
+            info['NIMGSTCK'] = (p['FINAL_NFILES_FOR_STACK'], "number of images for stack")
 
             print('Registering science frames ... ')
             # Register images, generate global catalog and generate stack image
@@ -745,7 +927,7 @@ def stack_science_images(p, inputlist, reduce_dir="./", force=False, stack_suffi
             'FLATCORR': (True, 'flat corrected'),
             'FLATFILE': (p["master_flat"], 'flat file name'),
             'REFIMG': (p['REFERENCE_IMAGE'], 'reference image for stack'),
-            'NIMGSTCK': (p['NFILES_FOR_STACK'], 'number of images for stack')
+            'NIMGSTCK': (p['FINAL_NFILES_FOR_STACK'], 'number of images for stack')
             }
 
     print('Calibrating science frames (CR, gain, bias, flat) ... ')
@@ -760,7 +942,7 @@ def stack_science_images(p, inputlist, reduce_dir="./", force=False, stack_suffi
 
     print('Registering science frames and stacking them ... ')
 
-    p['SELECTED_FILE_INDICES_FOR_STACK'] = np.arange(p['NFILES_FOR_STACK'])
+    p['SELECTED_FILE_INDICES_FOR_STACK'] = np.arange(p['FINAL_NFILES_FOR_STACK'])
 
     # Register images, generate global catalog and generate stack image
     p = run_register_frames(p, frames, obj_fg.files, info, output_stack=output_stack, force=force, polarimetry=polarimetry)
@@ -827,8 +1009,9 @@ def select_files_for_stack(p, inputlist, saturation_limit=32768, imagehdu=0) :
     if len(sorted_files) > p['NFILES_FOR_STACK'] :
         p['SELECTED_FILES_FOR_STACK'] = sorted_files[:p['NFILES_FOR_STACK']]
         #p['SELECTED_FILE_INDICES_FOR_STACK'] = newsort[:p['NFILES_FOR_STACK']]
+        p['FINAL_NFILES_FOR_STACK'] = p['NFILES_FOR_STACK']
     else :
-        p['NFILES_FOR_STACK'] = len(sorted_files)
+        p['FINAL_NFILES_FOR_STACK'] = len(sorted_files)
         p['SELECTED_FILES_FOR_STACK'] = sorted_files
         #p['SELECTED_FILE_INDICES_FOR_STACK'] = newsort
 
@@ -997,6 +1180,7 @@ def select_files_for_stack_and_get_shifts(p, frames, obj_files, sort_method='MAX
     if len(sorted_files) > p['NFILES_FOR_STACK'] :
         p['SELECTED_FILES_FOR_STACK'] = sorted_files[:p['NFILES_FOR_STACK']]
         p['SELECTED_FILE_INDICES_FOR_STACK'] = newsort[:p['NFILES_FOR_STACK']]
+        p['FINAL_NFILES_FOR_STACK'] = p['NFILES_FOR_STACK']
         """
         if correct_shifts :
             # Correct shifts to match the new reference image for the catalog
@@ -1004,7 +1188,7 @@ def select_files_for_stack_and_get_shifts(p, frames, obj_files, sort_method='MAX
             p["YSHIFTS"] -= p["YSHIFTS"][newsort[0]]
             """
     else :
-        p['NFILES_FOR_STACK'] = len(sorted_files)
+        p['FINAL_NFILES_FOR_STACK'] = len(sorted_files)
         p['SELECTED_FILES_FOR_STACK'] = sorted_files
         p['SELECTED_FILE_INDICES_FOR_STACK'] = newsort
 
@@ -1054,10 +1238,10 @@ def run_register_frames(p, inframes, inobj_files, info, output_stack="", force=F
     #print(shift_list)
 
     # register frames
-    registered_frames = register_framedata_list(frames, algorithm=p['SHIFT_ALGORITHM'], ref_image=0, inplace=False)
+    registered_frames = register_framedata_list(frames, algorithm=p['SHIFT_ALGORITHM'], ref_image=0, inplace=False, skip_failure=True)
 
     # stack all object files
-    combined = imcombine(registered_frames, method=stack_method)
+    combined = imcombine(registered_frames, method=stack_method, sigma_clip=p['SCI_STACK_SIGMA_CLIP'], sigma_cen_func='median', sigma_dev_func='std')
 
     # get stack data
     img_data = np.array(combined.data, dtype=float)
@@ -1121,45 +1305,6 @@ def flux_to_magnitude(flux) :
         return np.nan
 
 
-def get_peaks_and_fwhms(data, x, y, box_size=10, model='gaussian') :
-    """ Pipeline tool to calculate peak fluxes and fwhms within boxes
-         around each point in a list of coordinates
-
-    Parameters
-    ----------
-    data : numpy.ndarray (n x m)
-        float array containing the image data
-    x : numpy.ndarray (N sources)
-        float array containing the list of x-coord data
-    y : numpy.ndarray (N sources)
-        float array containing the list of y-coord data
-    box_size : int (default: 10)
-        aresta of squared box around each source
-    model : str (default: 'gaussian')
-        model type for the calculation of FWHM
-    Returns
-    -------
-    peaks : numpy.ndarray (N sources)
-        peak fluxes for each source
-    fwhms : numpy.ndarray (N sources)
-        full width at half maximum (fwhm) for each source
-    """
-
-    indices = np.indices(data.shape)
-
-    rects = [trim_array(data, box_size, (xi, yi), indices=indices)
-             for xi, yi in zip(x, y)]
-
-    fwhms = [_fwhm_loop(model, d[0], d[1], d[2], xi, yi)
-            for d, xi, yi in zip(rects, x, y)]
-
-    peaks = np.array([])
-    for rec in rects :
-        peaks = np.append(peaks, np.nanmax(rec))
-
-    return peaks, fwhms
-
-
 def calculate_aperture_radius(p, data) :
     """ Pipeline tool to calculate aperture radius for photometry
 
@@ -1206,6 +1351,10 @@ def run_aperture_photometry(img_data, x, y, aperture_radius, r_ann, output_mag=T
         aperture radius within which to perform aperture photometry
     r_ann : tuple: (float,float)
         sky annulus inner and outer radii
+    output_mag : bool, optional
+        to convert output flux into magnitude
+    sortbyflux : bool, optional
+        to sort output data by flux (brightest first)
     Returns
         x, y, mag, mag_error, smag, smag_error, flags
     -------
@@ -1213,7 +1362,8 @@ def run_aperture_photometry(img_data, x, y, aperture_radius, r_ann, output_mag=T
     """
 
     # perform aperture photometry
-    ap_phot = aperture_photometry(img_data, x, y, r=aperture_radius, r_ann=r_ann)
+    ap_phot = aperture_photometry(img_data, x, y, r=aperture_radius, r_ann=r_ann, gain=1.0,
+                        readnoise=None, mask=None, sky_algorithm='mmm')
 
     # I cannot get round and sharp because they may not match master catalog data
     #ap_phot['round'], ap_phot['sharp'] = sources['round'], sources['sharp']
@@ -1390,10 +1540,8 @@ def generate_catalogs(p, data, sources, fwhm, catalogs=[], catalogs_label='', ap
                 # Solve astrometry
                 #p['WCS'] = solve_astrometry_xy(xs_for_astrometry, ys_for_astrometry, fluxes_for_astrometry, image_height=h, image_width=w, image_header=p['REF_OBJECT_HEADER'], image_params={'ra': p['RA_DEG'],'dec': p['DEC_DEG'],'pltscl': p['PLATE_SCALE']}, return_wcs=True)
                 #solution = solve_astrometry_xy(xs_for_astrometry, ys_for_astrometry, fluxes_for_astrometry, height=h, width=w, image_header=p['REF_OBJECT_HEADER'], options={'ra': p['RA_DEG'], 'dec': p['DEC_DEG'], 'radius': p['SEARCH_RADIUS'], 'scale-low': p['PLATE_SCALE']-0.02, 'scale-units': 'arcsecperpix', 'scale-high':p['PLATE_SCALE']+0.02, 'crpix-center': 1, 'tweak-order': p['TWEAK_ORDER']})
-                solution = solve_astrometry_xy(xs_for_astrometry, ys_for_astrometry, fluxes_for_astrometry, w, h, options={'ra': p['RA_DEG'],'dec':p['DEC_DEG'], 'radius': p['SEARCH_RADIUS'], 'scale-low': p['PLATE_SCALE']-0.02,'scale-high': p['PLATE_SCALE']+0.02,'scale-units': 'arcsecperpix','crpix-center': 1, 'tweak-order': p['TWEAK_ORDER']})
-
+                solution = solve_astrometry_xy(xs_for_astrometry, ys_for_astrometry, fluxes_for_astrometry, w, h, options={'ra': p['RA_DEG'],'dec':p['DEC_DEG'], 'radius': p['SEARCH_RADIUS'], 'scale-low': p['PLATE_SCALE']-0.02,'scale-high': p['PLATE_SCALE']+0.02,'scale-units': 'arcsecperpix','crpix-center': 1, 'tweak-order': p['TWEAK_ORDER'], 'add_path' : p['ASTROM_INDX_PATH']})
                 p['WCS'] = solution.wcs
-
                 p['WCS_HEADER'] = p['WCS'].to_header(relax=True)
 
             except :
@@ -1423,7 +1571,7 @@ def generate_catalogs(p, data, sources, fwhm, catalogs=[], catalogs_label='', ap
 
             try :
                 #image_header=p['REF_OBJECT_HEADER']
-                solution = solve_astrometry_xy(x, y, fluxes_for_astrometry, w, h, options={'ra': p['RA_DEG'],'dec':p['DEC_DEG'], 'radius': p['SEARCH_RADIUS'], 'scale-low': p['PLATE_SCALE']-0.02,'scale-high': p['PLATE_SCALE']+0.02,'scale-units': 'arcsecperpix','crpix-center': 1, 'tweak-order': p['TWEAK_ORDER']})
+                solution = solve_astrometry_xy(x, y, fluxes_for_astrometry, w, h, options={'ra': p['RA_DEG'],'dec':p['DEC_DEG'], 'radius': p['SEARCH_RADIUS'], 'scale-low': p['PLATE_SCALE']-0.02,'scale-high': p['PLATE_SCALE']+0.02,'scale-units': 'arcsecperpix','crpix-center': 1, 'tweak-order': p['TWEAK_ORDER'], 'add_path' : p['ASTROM_INDX_PATH']})
                 p['WCS'] = solution.wcs
                 p['WCS_HEADER'] = p['WCS'].to_header(relax=True)
             except :
@@ -1459,6 +1607,7 @@ def set_sky_aperture(p, aperture_radius) :
     r_ann = deepcopy(p['PHOT_FIXED_R_ANNULUS'])
 
     r_in_ann = r_ann[0]
+    
     if r_ann[0] < aperture_radius + p['PHOT_MIN_OFFSET_FOR_SKYINNERRADIUS'] :
         r_in_ann = aperture_radius + p['PHOT_MIN_OFFSET_FOR_SKYINNERRADIUS']
 
@@ -1547,7 +1696,7 @@ def build_catalogs(p, data, catalogs=[], xshift=0., yshift=0., solve_astrometry=
                 catalogs = generate_catalogs(p, data, sources, fwhm, catalogs, aperture_radius=aperture_radius, r_ann=r_ann, polarimetry=polarimetry, solve_astrometry=False)
     else :
 
-        print("Running aperture photometry for exiting catalogs offset by dx={} dy={}".format(xshift,yshift))
+        print("Running aperture photometry for catalogs with an offset by dx={} dy={}".format(xshift,yshift))
 
         for j in range(len(catalogs)) :
             # load coordinates from an input catalog
@@ -1585,9 +1734,9 @@ def phot_time_series(sci_list,
                     longitude=-45.5825,
                     latitude=-22.5344,
                     altitude=1864,
-                    ref_catalog_name="",
                     catalog_names=[],
-                    polarimetry=False,
+                    time_span_for_rms=5,
+                    best_apertures = True,
                     force=True) :
     """ Pipeline module to calculate photometry differential time series for a given list of sparc4 sci image products
 
@@ -1611,12 +1760,15 @@ def phot_time_series(sci_list,
         North geographic latitude [deg] of observatory; default is OPD latitude of -22.5344 degrees
     altitude : float (optional)
         Observatory elevation [m] above sea level. Default is OPD altitude of 1864 m
-    ref_catalog_name : str (optional)
-        reference catalog name. Time and coordinates data will be taken from this catalog only
     catalog_names : list (optional)
         list of catalog names to be included in the final data product. The less the faster. Default is [], which means all catalogs.
-    polarimetry : bool
-        whether or not polarimetry mode
+    time_span_for_rms : float, optional
+        Time span (in minutes) around a given observation to include other observations to
+        calculate running rms.
+    best_apertures : bool, optional
+        Boolean to include extension with best apertures
+    force : bool, optional
+        Boolean to decide whether or not to force reduction if a product already exists
 
     Returns
     -------
@@ -1641,36 +1793,14 @@ def phot_time_series(sci_list,
             if hdu.name != "PRIMARY" :
                 catalog_names.append(hdu.name)
 
-    # print list of catalogs
-    #print(catalog_names)
+    # get number of exposures in time series
+    nexps = len(sci_list)
 
-    # if reference catalog name is not given then assign first catalog as the reference
-    if ref_catalog_name == "" :
-        ref_catalog_name = catalog_names[0]
+    # bool to get time info only once:
+    has_time_info = False
 
-    # read catalog of base image to figure out number of sources
-    catdata = s4p.readPhotTimeSeriesData(sci_list,
-                                    catalog_key=ref_catalog_name,
-                                    longitude=longitude,
-                                    latitude=latitude,
-                                    altitude=altitude,
-                                    time_keyword=time_key,
-                                    time_format=time_format,
-                                    time_scale=time_scale,
-                                    gettimedata=True,
-                                    getcoordsdata=True,
-                                    getphotdata=False)
-    # get time data
-    tsdata["TIME"] = deepcopy(catdata["TIME"])
-
-    # get coords data
-    tsdata["X"] = deepcopy(catdata["X"])
-    tsdata["Y"] = deepcopy(catdata["Y"])
-    tsdata["RA"] = deepcopy(catdata["RA"])
-    tsdata["DEC"] = deepcopy(catdata["DEC"])
-    tsdata["FWHM"] = deepcopy(catdata["FWHM"])
-
-    del catdata
+    # apertures array
+    apertures = {}
 
     # loop below to get photometry data for all catalogs
     for key in catalog_names :
@@ -1685,16 +1815,24 @@ def phot_time_series(sci_list,
                                 time_keyword=time_key,
                                 time_format=time_format,
                                 time_scale=time_scale,
-                                gettimedata=False,
-                                getcoordsdata=False,
-                                getphotdata=True)
-        tsdata[key] = {}
-
-        tsdata[key]["MAG"] = deepcopy(catdata["MAG"])
-        tsdata[key]["EMAG"] = deepcopy(catdata["EMAG"])
-        tsdata[key]["SKYMAG"] = deepcopy(catdata["SKYMAG"])
-        tsdata[key]["ESKYMAG"] = deepcopy(catdata["ESKYMAG"])
-        tsdata[key]["FLAG"] = deepcopy(catdata["FLAG"])
+                                time_span_for_rms=5)
+        
+        apertures[key] = fits.getheader(sci_list[0],key)['APRADIUS']
+        
+        if not has_time_info :
+            # get time array
+            times = catdata[catdata["SRCINDEX"] == 0]["TIME"]
+            
+            # get first and last times
+            tstart = Time(times[0], format='jd', scale='utc')
+            tstop = Time(times[-1], format='jd', scale='utc')
+            
+            # get number of sources
+            nsources = fits.getheader(sci_list[0],key)['NOBJCAT']
+    
+            has_time_info = True
+        
+        tsdata[key] = catdata
 
         del catdata
 
@@ -1716,23 +1854,51 @@ def phot_time_series(sci_list,
     info['EQUINOX'] = (2000.0, 'equinox of celestial coordinate system')
     info['PHZEROP'] = (0., '[mag] photometric zero point')
     info['PHOTSYS'] = ("SPARC4", 'photometric system')
-    info['REFCAT'] = (ref_catalog_name, 'reference catalog key')
     info['TIMEKEY'] = (time_key, 'keyword used to extract times')
     info['TIMEFMT'] = (time_format, 'time format in img files')
     info['TIMESCL'] = (time_scale, 'time scale')
-    info['POLAR'] = (polarimetry, 'polarimetry mode')
+    info['POLAR'] = (False, 'polarimetry mode')
+    info['TSTART'] = (tstart.jd, 'observation start time in BJD')
+    info['TSTOP'] = (tstop.jd, 'observation stop time in BJD')
+    info['DATE-OBS'] = (tstart.isot, 'TSTART as UTC calendar date')
+    info['DATE-END'] = (tstop.isot, 'TSTOP as UTC calendar date')
+    info['NEXPS'] = (nexps, 'number of exposures')
+    info['NSOURCES'] = (nsources, 'number of sources')
 
-    #info['PHBAND'] = (hdr["FILTER"], 'photometric band pass')
-    #info['WAVELEN'] = (550., 'band pass central wavelength [nm]')
-    #info['BANDWIDT'] = (300., 'photometric band width [nm]')
+    if best_apertures :
+        minrms = np.arange(nsources)*0 + 1e20
+        selected_apertures = np.zeros_like(minrms)
+        selected_data = []
+        for i in range(nsources) :
+            selected_data.append(None)
 
+        # loop over each aperture container
+        for key in tsdata.keys() :
+        
+            # get aperture table data
+            tbl = tsdata[key]
+            
+            # save minimum rms for each source
+            for i in range(nsources) :
+                loc_tbl = tbl[tbl["SRCINDEX"] == i]
+                m_rms = np.nanmedian(loc_tbl['RMS'])
+                if m_rms < minrms[i] :
+                    minrms[i] = m_rms
+                    selected_apertures[i] = apertures[key]
+                    loc_tbl["APRADIUS"] = np.full_like(loc_tbl["MAG"],apertures[key])
+                    selected_data[i] = loc_tbl
+
+        # add selected data into data container
+        tsdata["BEST_APERTURES"] = vstack(selected_data)
+        apertures["BEST_APERTURES"] = np.nanmedian(selected_apertures)
+        
     # generate the photometric time series product
-    s4p.photTimeSeriesProduct(tsdata, catalog_names, info=info, filename=output)
+    s4p.photTimeSeriesProduct(tsdata, apertures, info=info, filename=output)
 
     return output
 
 
-def get_waveplate_angle(wppos) :
+def get_waveplate_angles(wppos) :
 
     """ Pipeline module to get position angles of the wave plate
     given the position index(es)
@@ -1795,7 +1961,7 @@ def load_list_of_sci_image_catalogs(sci_list, wppos_key="WPPOS", polarimetry=Fal
             hdulist = fits.open(sci_list[i])
 
             wppos = int(hdulist[0].header[wppos_key])
-            waveplate_angles = np.append(waveplate_angles, get_waveplate_angle(wppos-1))
+            waveplate_angles = np.append(waveplate_angles, get_waveplate_angles(wppos-1))
 
             phot1data, phot2data = [], []
 
@@ -1839,7 +2005,7 @@ def load_list_of_sci_image_catalogs(sci_list, wppos_key="WPPOS", polarimetry=Fal
 
 
 
-def get_qflux(beam, filename, aperture_index, source_index) :
+def get_qflux(beam, filename, aperture_index, source_index, magkey="MAG", emagkey="EMAG") :
 
     """ Pipeline module to get catalog fluxes into Qfloat
 
@@ -1853,6 +2019,10 @@ def get_qflux(beam, filename, aperture_index, source_index) :
         aperture index to select only data for a given aperture
     source_index : int
         source index to select only data for a given source
+    magkey : str
+        magnitude keyword
+    emagkey : str
+        magnitude error keyword
 
     Returns
     -------
@@ -1861,190 +2031,14 @@ def get_qflux(beam, filename, aperture_index, source_index) :
     """
 
 
-    umag = ufloat(beam[filename][aperture_index]["MAG"][source_index],
-                  beam[filename][aperture_index]["EMAG"][source_index])
+    umag = ufloat(beam[filename][aperture_index][magkey][source_index],
+                  beam[filename][aperture_index][emagkey][source_index])
 
     uflux = 10**(-0.4*umag)
 
     qflux = QFloat(uflux.nominal_value, uflux.std_dev)
 
     return qflux
-
-
-def run_polarimetry(p, sci_list, pos=[], output="", source_index=None, wave_plate='half_wave', use_perr=False, title_label=None, plot_snr=False, plot_aper=False, plot=False) :
-
-    # define output polarimetry product file name
-    output = sci_list[0].replace("_proc.fits","_polar.fits")
-
-    # get data from a list of science image products
-    beam1, beam2, waveplate_angles, apertures, nsources = load_list_of_sci_image_catalogs(sci_list, polarimetry=True)
-
-    # set initial and final source indexes
-    ini_src_idx, end_src_idx = 0, nsources
-
-    # if a source index is given, run polarimetry only for this target
-    if source_index != None :
-        ini_src_idx = source_index
-        end_src_idx = source_index + 1
-
-    print("Number of sources in catalog: {}".format(nsources))
-    print("Number of apertures: {}  varying from {} to {} in steps of {} pix".format(len(apertures),apertures[0],apertures[-1],np.abs(np.nanmedian(apertures[1:]-apertures[:-1]))))
-
-    if wave_plate == 'half_wave' :
-
-        # set number of free parameters in the fit
-        number_of_free_params = 4 #??
-
-        # initialize polarimetry fitter
-        pol = SLSDualBeamPolarimetry('halfwave', compute_k=True, zero=0)
-
-        min_merit_figure = 1e10
-        best_pol_result = None
-        best_aperture = np.nan
-        best_wp_angles = deepcopy(waveplate_angles)
-
-        # loop over each source in the catalog
-        #for j in range(nsources) :
-        for j in range(ini_src_idx,end_src_idx) :
-
-            err_p, chisqr = [], []
-
-            for i in range(len(apertures)):
-
-                n_fo, n_fe = [], []
-                en_fo, en_fe = [], []
-
-                for filename in sci_list :
-                    # get fluxes as qfloats
-                    fo = get_qflux(beam1, filename, i, j)
-                    fe = get_qflux(beam2, filename, i, j)
-                    #print(filename, i, j, fo, fe)
-                    n_fo.append(fo.nominal)
-                    n_fe.append(fe.nominal)
-                    en_fo.append(fo.std_dev)
-                    en_fe.append(fe.std_dev)
-
-                n_fo, n_fe = np.array(n_fo), np.array(n_fe)
-                en_fo, en_fe = np.array(en_fo), np.array(en_fe)
-
-                if plot_snr :
-                    plt.title("SNR for source index: {} and aperture radius: {} pixels".format(j,apertures[i]))
-                    plt.plot(waveplate_angles,n_fo/en_fo,label='N-beam')
-                    plt.plot(waveplate_angles,n_fe/en_fe,label='S-beam')
-                    plt.xlabel("Wave plate angle [deg]")
-                    plt.ylabel(r"signal-to-noise ratio")
-                    plt.legend()
-                    plt.show()
-
-                keep = np.isfinite(n_fo)
-                keep &= np.isfinite(n_fe)
-                keep &= (n_fo > np.nanmedian(en_fo)) & (n_fe > np.nanmedian(en_fe))
-                keep &= (en_fo > 0) & (en_fe > 0)
-
-                #print("Number of exposures removed: {}".format(len(n_fo[~keep])))
-
-                epi, chi2 = np.nan, np.nan
-                norm = None
-                try :
-                    norm = pol.compute(waveplate_angles[keep], n_fo[keep], n_fe[keep], f_ord_error=en_fo[keep], f_ext_error=en_fe[keep])
-                    observed_model = halfwave_model(waveplate_angles[keep], norm.q.nominal, norm.u.nominal, zero=None)
-                    epi = norm.p.std_dev
-                    n, m = len(observed_model), number_of_free_params
-                    chi2 = np.nansum(((observed_model - norm.zi.nominal)/norm.zi.std_dev)**2) / (n - m)
-                except :
-                    print("WARNING: could not calculate polarimetry for source_index={} and aperture={} pixels".format(j,apertures[i]))
-
-                err_p.append(epi)
-                chisqr.append(chi2)
-
-                merit_figure = chi2
-                if use_perr :
-                    merit_figure = epi
-
-                if np.isfinite(merit_figure) and merit_figure < min_merit_figure :
-                    best_pol_result = norm
-                    min_pol_err, min_pol_chi2 = epi, chi2
-                    min_merit_figure = merit_figure
-                    best_aperture = apertures[i]
-                    best_wp_angles = deepcopy(waveplate_angles[keep])
-
-            if plot_aper :
-                if use_perr :
-                    plt.plot(apertures, err_p, '-', label="Source {}".format(j))
-                    plt.vlines(best_aperture, 0, np.max(err_p), colors="r", linestyles='--', label="Best aperture: {} pix".format(best_aperture))
-                    plt.ylabel(r"$\sigma_p$")
-                else :
-                    plt.plot(apertures, chisqr, '-', label="Source {}".format(j))
-                    plt.vlines(best_aperture, 0, np.max(chisqr), colors="r", linestyles='--', label="Best aperture: {} pix".format(best_aperture))
-                    plt.ylabel(r"$\chi^2$")
-                plt.xlabel("Aperture radius [pixel]")
-                plt.legend()
-                plt.show()
-
-            # calculate residuals
-            resids = halfwave_model(best_wp_angles, best_pol_result.q.nominal, best_pol_result.u.nominal) - best_pol_result.zi.nominal
-
-            # calculate rms of residuals
-            sig_res = np.nanstd(resids)
-            n, m = len(resids), number_of_free_params
-            chi2 = np.nansum((resids/best_pol_result.zi.std_dev)**2) / (n - m)
-
-            # print results
-            print("Best aperture radius: {} pixels".format(best_aperture))
-            print("Polarization in Q: {}".format(best_pol_result.q))
-            print("Polarization in U: {}".format(best_pol_result.u))
-            print("Total linear polarization p: {}".format(best_pol_result.p))
-            print("Angle of polarization theta: {}".format(best_pol_result.theta))
-            print("Free constant k: {}".format(best_pol_result.k))
-            print("RMS of {} residuals: {:.5f}".format("zi", sig_res))
-            print("Reduced chi-square (n={}, DOF={}): {:.2f}".format(n,n-m,chi2))
-
-            if plot :
-                # plot best polarimetry results
-                fig, axes = plt.subplots(2, 1, figsize=(12, 6), sharex=True, sharey=False, gridspec_kw={'hspace': 0, 'height_ratios': [2, 1]})
-
-                if title_label != "":
-                    axes[0].set_title(title_label)
-
-                # define grid of position angle points for model
-                pos_model = np.arange(0, 360, p['POS_MODEL_SAMPLING'])*u.degree
-                # Plot the model
-                best_fit_model = halfwave_model(pos_model, best_pol_result.q.nominal, best_pol_result.u.nominal)
-                axes[0].plot(pos_model, best_fit_model,'r:', alpha=0.8, label='Best fit model')
-                #axes[0].fill_between(pos_model, pred_mean+pred_std, pred_mean-pred_std, color=color, alpha=0.3, edgecolor="none")
-
-                # Plot data
-                axes[0].errorbar(best_wp_angles, best_pol_result.zi.nominal, yerr=best_pol_result.zi.std_dev, fmt='ko', ms=2, capsize=2, lw=0.5, alpha=0.9, label='data')
-                axes[0].set_ylabel(r"$Z(\phi) = \frac{f_\parallel(\phi)-f_\perp(\phi)}{f_\parallel(\phi)+f_\perp(\phi)}$", fontsize=16)
-                axes[0].legend(fontsize=16)
-                axes[0].tick_params(axis='x', labelsize=14)
-                axes[0].tick_params(axis='y', labelsize=14)
-
-                # Print q, u, p and theta values
-                ylims = axes[0].get_ylim()
-                qlab = "q: {:.2f}+-{:.2f} %".format(100*best_pol_result.q.nominal,100*best_pol_result.q.std_dev)
-                ulab = "u: {:.2f}+-{:.2f} %".format(100*best_pol_result.u.nominal,100*best_pol_result.u.std_dev)
-                plab = "p: {:.2f}+-{:.2f} %".format(100*best_pol_result.p.nominal,100*best_pol_result.p.std_dev)
-                thetalab = r"$\theta$: {:.2f}+-{:.2f} deg".format(best_pol_result.theta.nominal,best_pol_result.theta.std_dev)
-                axes[0].text(-10, ylims[1]-0.06,'{}\n{}\n{}\n{}'.format(qlab, ulab, plab, thetalab), size=12)
-
-                # Plot residuals
-                axes[1].errorbar(best_wp_angles, resids, yerr=best_pol_result.zi.std_dev, fmt='ko', alpha=0.5, label='residuals')
-                axes[1].set_xlabel(r"waveplate position angle, $\phi$ [deg]", fontsize=16)
-                axes[1].hlines(0., 0, 360, color="k", linestyles=":", lw=0.6)
-                axes[1].set_ylim(-5*sig_res,+5*sig_res)
-                axes[1].set_ylabel(r"residuals", fontsize=16)
-                axes[1].tick_params(axis='x', labelsize=14)
-                axes[1].tick_params(axis='y', labelsize=14)
-                plt.show()
-
-    elif wave_plate == 'quarter_wave' :
-        pass
-    else :
-        print("Error: selected wave_plate not recognized, exiting ...")
-        exit()
-
-    return output
 
 
 def get_photometric_data_for_polar_catalog(beam1, beam2, sci_list, aperture_index=8, source_index=0) :
@@ -2077,17 +2071,28 @@ def get_photometric_data_for_polar_catalog(beam1, beam2, sci_list, aperture_inde
         float array containing the instrumental magnitude error data for all sources
     fwhm : float
         median full-width at half-maximum (pix)
+    skymag.nominal : numpy.ndarray (N sources)
+        float array containing the mean instrumental sky magnitude data for all sources
+    skymag.std_dev : numpy.ndarray (N sources)
+        float array containing the mean instrumental sky magnitude error data for all sources
+    flag : int
+        sum of photometric flags
+
     """
 
-    i, j = aperture_index, source_index
+    i, j = int(aperture_index), int(source_index)
 
     ra, dec = np.nan, np.nan
     x1, y1 = np.nan, np.nan
     x2, y2 = np.nan, np.nan
 
     flux1, flux2 = QFloat(0, 0), QFloat(0, 0)
+    skyflux1, skyflux2 = QFloat(0, 0), QFloat(0, 0)
+
     fwhms = np.array([])
 
+    flag1, flag2 = 0, 0
+    
     for k in range(len(sci_list)) :
 
         if k == 0 :
@@ -2095,8 +2100,14 @@ def get_photometric_data_for_polar_catalog(beam1, beam2, sci_list, aperture_inde
             x1, y1 = beam1[sci_list[0]][i]["X"][j], beam1[sci_list[0]][i]["Y"][j]
             x2, y2 = beam2[sci_list[0]][i]["X"][j], beam2[sci_list[0]][i]["Y"][j]
 
-        flux1 += get_qflux(beam1, sci_list[k], i, j) / (2 * len(sci_list))
-        flux2 += get_qflux(beam2, sci_list[k], i, j) / (2 * len(sci_list))
+        flux1 += get_qflux(beam1, sci_list[k], i, j)
+        flux2 += get_qflux(beam2, sci_list[k], i, j)
+
+        skyflux1 += get_qflux(beam1, sci_list[k], i, j, magkey="SKYMAG", emagkey="ESKYMAG")
+        skyflux2 += get_qflux(beam2, sci_list[k], i, j, magkey="SKYMAG", emagkey="ESKYMAG")
+
+        flag1 += beam1[sci_list[k]][i]["FLAG"][j]
+        flag2 += beam2[sci_list[k]][i]["FLAG"][j]
 
         fwhms = np.append(fwhms, beam1[sci_list[k]][i]["FWHMX"][j])
         fwhms = np.append(fwhms, beam1[sci_list[k]][i]["FWHMY"][j])
@@ -2108,7 +2119,12 @@ def get_photometric_data_for_polar_catalog(beam1, beam2, sci_list, aperture_inde
     flux = flux1 + flux2
     mag = -2.5 * np.log10(flux)
 
-    return ra, dec, x1, y1, x2, y2, mag.nominal, mag.std_dev, fwhm
+    skyflux = (skyflux1 + skyflux2) / (2 * len(sci_list))
+    skymag = -2.5 * np.log10(skyflux)
+
+    flag = flag1 + flag2
+    
+    return ra, dec, x1, y1, x2, y2, mag.nominal, mag.std_dev, fwhm, skymag.nominal, skymag.std_dev, flag
 
 
 def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_output=True, wave_plate='halfwave', compute_k=True, fit_zero=False, zero=0, base_aperture=8, force=False)  :
@@ -2165,9 +2181,6 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
     print("Number of sources in catalog: {}".format(nsources))
     print("Number of apertures: {}  varying from {} to {} in steps of {} pix".format(len(apertures),apertures[0],apertures[-1],np.abs(np.nanmedian(apertures[1:]-apertures[:-1]))))
 
-    # initialize list of catalogs
-    polar_catalogs, sources = [], []
-
     # set number of free parameters in the fit
     number_of_free_params = 4 # can we get this number from pol?
 
@@ -2185,24 +2198,45 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
     if compute_k :
         number_of_free_params += 1
 
-    pol = SLSDualBeamPolarimetry(wave_plate, compute_k=compute_k, zero=zero)
+    # initialize astropop SLSDualBeamPolarimetry object
+    pol = SLSDualBeamPolarimetry(wave_plate, compute_k=compute_k, zero=zero, iter_tolerance=1e-6)
 
-    # loop over each source in the catalog
-    for j in range(nsources) :
+    # create an empty dict to store polar catalogs
+    polar_catalogs = {}
 
-        print("Calculating {} polarimetry for source {} of {}".format(wave_plate,j+1,nsources))
+    # set names and data format for each column in the catalog table
+    variables=['APERINDEX', 'APER', 'SRCINDEX',
+               'RA', 'DEC', 'X1', 'Y1', 'X2', 'Y2',
+               'FWHM', 'MAG', 'EMAG',
+               'SKYMAG', 'ESKYMAG', 'PHOTFLAG',
+               'Q', 'EQ', 'U', 'EU', 'V', 'EV',
+               'P','EP', 'THETA', 'ETHETA',
+               'K', 'EK', 'ZERO', 'EZERO', 'NOBS', 'NPAR',
+               'CHI2', 'POLARFLAG']
 
-        # create an empty dict to store catalog of current aperture
-        catalog = {}
+    for i in range(len(sci_list)) :
+        variables.append('Z{:04d}'.format(i))
+        variables.append('EZ{:04d}'.format(i))
 
-        ra, dec, x1, y1, x2, y2, mag, mag_err, fwhm = get_photometric_data_for_polar_catalog(beam1, beam2, sci_list, aperture_index=base_aperture, source_index=j)
+    # Initialize container to store polarimetric data
+    aperture_keys = []
+    for i in range(len(apertures)):
+        key = "POLARIMETRY_AP{:03d}".format(int(apertures[i]))
+        aperture_keys.append(key)
+        polar_catalogs[key] = {}
+        for var in variables :
+            polar_catalogs[key][var] = np.array([])
 
-        sources_info = {"RA": ra, "DEC": dec, "X1": x1, "Y1": y1, "X2": x2, "Y2": y2, "MAG": mag, "EMAG": mag_err, "FWHM": fwhm}
+    # loop over each aperture
+    for i in range(len(apertures)):
 
-        sources.append(sources_info)
+        print("Calculating {} polarimetry for aperture {} of {}".format(wave_plate,i+1,len(apertures)))
 
-        # loop over each aperture
-        for i in range(len(apertures)):
+        # loop over each source in the catalog
+        for j in range(nsources) :
+
+            # retrieve photometric information in a pair of polar catalog
+            ra, dec, x1, y1, x2, y2, mag, mag_err, fwhm, skymag, skymag_err, photflag = get_photometric_data_for_polar_catalog(beam1, beam2, sci_list, aperture_index=i, source_index=j)
 
             n_fo, n_fe = [], []
             en_fo, en_fe = [], []
@@ -2244,21 +2278,22 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
             k_factor, k_factor_err = np.nan, np.nan
             zero_err = np.nan
 
-            norm = pol.compute(waveplate_angles[keep], n_fo[keep], n_fe[keep], f_ord_error=en_fo[keep], f_ext_error=en_fe[keep])
-
             observed_model = np.full_like(waveplate_angles[keep],np.nan)
 
-            if wave_plate == 'halfwave' :
-                observed_model = halfwave_model(waveplate_angles[keep], norm.q.nominal, norm.u.nominal)
-
-            elif wave_plate == 'quarterwave' :
-                observed_model = quarterwave_model(waveplate_angles[keep], norm.q.nominal, norm.u.nominal, norm.v.nominal, zero= norm.zero.nominal)
-
             try :
-                chi2 = np.nansum(((observed_model - norm.zi.nominal)/norm.zi.std_dev)**2) / (number_of_observations - number_of_free_params)
+                # compute polarimetry
+                norm = pol.compute(waveplate_angles[keep], n_fo[keep], n_fe[keep], f_ord_error=en_fo[keep], f_ext_error=en_fe[keep])
+
+                if wave_plate == 'halfwave' :
+                    observed_model = halfwave_model(waveplate_angles[keep], norm.q.nominal, norm.u.nominal)
+
+                elif wave_plate == 'quarterwave' :
+                    observed_model = quarterwave_model(waveplate_angles[keep], norm.q.nominal, norm.u.nominal, norm.v.nominal, zero= norm.zero.nominal)
 
                 zi[keep] = norm.zi.nominal
                 zi_err[keep] = norm.zi.std_dev
+
+                chi2 = np.nansum(((norm.zi.nominal - observed_model)/norm.zi.std_dev)**2) / (number_of_observations - number_of_free_params)
 
                 polar_flag = 0
 
@@ -2274,23 +2309,27 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
             except :
                 print("WARNING: could not calculate polarimetry for source_index={} and aperture={} pixels".format(j,apertures[i]))
 
-            catalog["{}".format(i)] = [i, apertures[i],
-                                         qpol, q_err,
-                                         upol, u_err,
-                                         vpol, v_err,
-                                         ptot, ptot_err,
-                                         theta, theta_err,
-                                         k_factor, k_factor_err,
-                                         zero, zero_err,
-                                         number_of_observations, number_of_free_params,
-                                         chi2, polar_flag]
+            var_values = [i, apertures[i], j,
+                          ra, dec, x1, y1, x2, y2,
+                          fwhm, mag, mag_err,
+                          skymag, skymag_err, photflag,
+                          qpol, q_err,
+                          upol, u_err,
+                          vpol, v_err,
+                          ptot, ptot_err,
+                          theta, theta_err,
+                          k_factor, k_factor_err,
+                          zero, zero_err,
+                          number_of_observations, number_of_free_params,
+                          chi2, polar_flag]
+                          
             for ii in range(len(zi)) :
-                catalog["{}".format(i)].append(zi[ii])
-                catalog["{}".format(i)].append(zi_err[ii])
+                var_values.append(zi[ii])
+                var_values.append(zi_err[ii])
 
-            catalog["{}".format(i)] = tuple(catalog["{}".format(i)])
+            for ii in range(len(variables)) :
+                polar_catalogs[aperture_keys[i]][variables[ii]] = np.append(polar_catalogs[aperture_keys[i]][variables[ii]],var_values[ii])
 
-        polar_catalogs.append(catalog)
 
     if save_output :
         info = {}
@@ -2330,6 +2369,7 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
         info['TSTOP'] = (tstop.jd, 'observation stop time in BJD')
         info['DATE-OBS'] = (tstart.isot, 'TSTART as UTC calendar date')
         info['DATE-END'] = (tstop.isot, 'TSTOP as UTC calendar date')
+        info['NSOURCES'] = (nsources, 'number of sources')
         info['NEXPS'] = (len(sci_list), 'number of exposures in sequence')
 
         for k in range(len(sci_list)) :
@@ -2341,13 +2381,12 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
             info["WANG{:04d}".format(k)] = (waveplate_angles[k], 'WP angle of exposure (deg)')
 
         print("Saving output {} polarimetry product: {}".format(wave_plate, output_filename))
-        output_hdul = s4p.polarProduct(sources, polar_catalogs, info=info, filename=output_filename)
+        output_hdul = s4p.polarProduct(polar_catalogs, info=info, filename=output_filename)
 
     return output_filename
 
 
-
-def get_polarimetry_results(filename, source_index=0, aperture_index=None, min_aperture=0, max_aperture=1024, plot=False, verbose=False) :
+def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_aperture=0, max_aperture=1024, plot=False, verbose=False) :
 
     """ Pipeline module to compute polarimetry for given polarimetric sequence and
         saves the polarimetry data into a FITS SPARC4 product
@@ -2358,8 +2397,8 @@ def get_polarimetry_results(filename, source_index=0, aperture_index=None, min_a
         file path for a polarimetry product
     source_index : int
         source index to select only data for a given source
-    aperture_index : int
-        aperture index to select a given aperture, if not provided
+    aperture_radius : float
+        to select a given aperture radius, if not provided
         then the minimum chi-square solution will be adopted
     min_aperture : float
         minimum aperture radius (pix)
@@ -2378,77 +2417,116 @@ def get_polarimetry_results(filename, source_index=0, aperture_index=None, min_a
     loc["POLAR_PRODUCT"] = filename
     loc["SOURCE_INDEX"] = source_index
 
-    # add 1 to skip the primary extension
-    source_index += 1
-
     # open polarimetry product FITS file
     hdul = fits.open(filename)
     wave_plate = hdul[0].header['POLTYPE']
 
-    # if an aperture index is not given, then consider the one with minimum chi2
-    if aperture_index == None :
-        ap_range = (hdul[source_index].data['APER']>min_aperture) & (hdul[source_index].data['APER']<max_aperture)
-        pickindex = np.nanargmin(hdul[source_index].data['CHI2'][ap_range])
-        aperture = hdul[source_index].data['APER'][ap_range][pickindex]
-        aperture_index = np.nanargmin(np.abs(hdul[source_index].data['APER']-aperture))
-    else :
-        # get aperture radius
-        aperture = hdul[source_index].data['APER'][aperture_index]
+    # initialize aperture index
+    aperture_index = 1
 
+    # if an aperture index is not given, then consider the one with minimum chi2
+    if aperture_radius == None :
+        minchi2 = 1e30
+        for i in range(len(hdul)) :
+            if hdul[i].name == 'PRIMARY' or hdul[i].header['APRADIUS'] < min_aperture or hdul[i].header['APRADIUS'] > max_aperture :
+                continue
+            curr_chi2 = hdul[i].data[hdul[i].data['SRCINDEX'] == source_index]['CHI2'][0]
+            if curr_chi2 < minchi2 :
+                minchi2 = curr_chi2
+                aperture_index = i
+    else :
+        minapdiff = 1e30
+        for i in range(len(hdul)) :
+            if hdul[i].name == 'PRIMARY' :
+                continue
+            curr_apdiff = np.abs(hdul[i].header['APRADIUS'] - aperture_radius)
+            if curr_apdiff < minapdiff :
+                minapdiff = curr_apdiff
+                aperture_index = i
+
+    # get selected aperture radius
+    aperture_radius = hdul[aperture_index].header['APRADIUS']
+    loc["APERTURE_INDEX"] = aperture_index
+    loc["APERTURE_RADIUS"] = aperture_radius
+    # isolate data for selected aperture and target
+    tbl = hdul[aperture_index].data[hdul[aperture_index].data['SRCINDEX'] == source_index]
+    
     # get number of exposure in the polarimetric sequence
     nexps = hdul[0].header['NEXPS']
+    loc["NEXPS"] = nexps
+
+    # get source magnitude
+    mag = QFloat(float(tbl["MAG"][0]),float(tbl["EMAG"][0]))
+    loc["MAG"] = mag
+
+    # get source coordinates
+    ra, dec = tbl["RA"][0], tbl["DEC"][0]
+
+    loc["RA"] = ra
+    loc["DEC"] = dec
+    loc["FWHM"] = tbl["FWHM"][0]
+    loc["X1"] = tbl["X1"][0]
+    loc["Y1"] = tbl["Y1"][0]
+    loc["X2"] = tbl["X2"][0]
+    loc["Y2"] = tbl["Y2"][0]
 
     # get polarization data and the WP position angles
     zis, zierrs, waveplate_angles = np.arange(nexps)*np.nan, np.arange(nexps)*np.nan, np.arange(nexps)*np.nan
     for ii in range(nexps) :
-        zis[ii] = hdul[source_index].data["Z{:04d}".format(ii)][aperture_index]
-        zierrs[ii] = hdul[source_index].data["EZ{:04d}".format(ii)][aperture_index]
+        zis[ii] = tbl["Z{:04d}".format(ii)]
+        zierrs[ii] = tbl["EZ{:04d}".format(ii)]
         waveplate_angles[ii] = hdul[0].header["WANG{:04d}".format(ii)]
 
     # filter out nan data
     keep = (np.isfinite(zis)) & (np.isfinite(zierrs))
 
     if len(zis[keep]) == 0 :
-        print("WARNING: no useful polarization data for Source index: {}  and aperture: {} pix ".format(source_index-1, aperture))
-        print("Chi-square: {} ".format(hdul[source_index].data['CHI2'][aperture_index]))
-        return aperture_index
+        print("WARNING: no useful polarization data for Source index: {}  and aperture: {} pix ".format(source_index, aperture_radius))
+        # get polarimetry results
+        qpol = QFloat(np.nan, np.nan)
+        upol = QFloat(np.nan, np.nan)
+        vpol = QFloat(np.nan, np.nan)
+        ppol = QFloat(np.nan, np.nan)
+        theta = QFloat(np.nan, np.nan)
+        kcte = QFloat(np.nan, np.nan)
+        zero = QFloat(np.nan, np.nan)
+        # cast zi data into QFloat
+        zi = QFloat(np.array([np.nan]), np.array([np.nan]))
+        n, m = 0, 0
+        sig_res = np.array([np.nan])
+        chi2 = np.nan
+        observed_model = zi
+    else :
+        # get polarimetry results
+        qpol = QFloat(tbl['Q'][0], tbl['EQ'][0])
+        upol = QFloat(tbl['U'][0], tbl['EU'][0])
+        vpol = QFloat(tbl['V'][0], tbl['EV'][0])
+        ppol = QFloat(tbl['P'][0], tbl['EP'][0])
+        theta = QFloat(tbl['THETA'][0], tbl['ETHETA'][0])
+        kcte = QFloat(tbl['K'][0], tbl['EK'][0])
+        zero = QFloat(tbl['ZERO'][0], tbl['EZERO'][0])
+        # cast zi data into QFloat
+        zi = QFloat(zis[keep], zierrs[keep])
 
-    # get source magnitude
-    mag = QFloat(float(hdul[source_index].header["MAG"]),float(hdul[source_index].header["EMAG"]))
+        # calculate polarimetry model and get statistical quantities
+        observed_model = np.full_like(waveplate_angles[keep],np.nan)
+        if wave_plate == "halfwave" :
+            observed_model = halfwave_model(waveplate_angles[keep], qpol.nominal, upol.nominal)
+        elif wave_plate == "quarterwave" :
+            observed_model = quarterwave_model(waveplate_angles[keep], qpol.nominal, upol.nominal, vpol.nominal, zero=zero.nominal)
 
-    # get source coordinates
-    ra, dec = hdul[source_index].header["RA"], hdul[source_index].header["DEC"]
-
-    # get polarimetry results
-    qpol = QFloat(hdul[source_index].data['Q'][aperture_index], hdul[source_index].data['EQ'][aperture_index])
-    upol = QFloat(hdul[source_index].data['U'][aperture_index], hdul[source_index].data['EU'][aperture_index])
-    vpol = QFloat(hdul[source_index].data['V'][aperture_index], hdul[source_index].data['EV'][aperture_index])
-    ppol = QFloat(hdul[source_index].data['P'][aperture_index], hdul[source_index].data['EP'][aperture_index])
-    theta = QFloat(hdul[source_index].data['THETA'][aperture_index], hdul[source_index].data['ETHETA'][aperture_index])
-    kcte = QFloat(hdul[source_index].data['K'][aperture_index], hdul[source_index].data['EK'][aperture_index])
-    zero = QFloat(hdul[source_index].data['ZERO'][aperture_index], hdul[source_index].data['EZERO'][aperture_index])
-    # cast zi data into QFloat
-    zi = QFloat(zis[keep], zierrs[keep])
-
-    # calculate polarimetry model and get statistical quantities
-    observed_model = np.full_like(waveplate_angles[keep],np.nan)
-    if wave_plate == "halfwave" :
-        observed_model = halfwave_model(waveplate_angles[keep], qpol.nominal, upol.nominal)
-    elif wave_plate == "quarterwave" :
-        observed_model = quarterwave_model(waveplate_angles[keep], qpol.nominal, upol.nominal, vpol.nominal, zero=zero.nominal)
-
-    n, m = hdul[source_index].data['NOBS'][aperture_index], hdul[source_index].data['NPAR'][aperture_index]
-    resids = observed_model - zi.nominal
-    sig_res = np.nanstd(resids)
-    chi2 = np.nansum((resids/zi.std_dev)**2) / (n - m)
+        n, m = tbl['NOBS'][0], tbl['NPAR'][0]
+        resids = zi.nominal - observed_model
+        sig_res = np.nanstd(resids)
+        chi2 = np.nansum((resids/zi.std_dev)**2) / (n - m)
 
     #print(waveplate_angles[keep], zi, qpol, upol, ppol, theta, kcte)
 
     # print results
     if verbose :
-        print("Source index: i={} ".format(source_index-1))
+        print("Source index: i={} ".format(source_index))
         print("Source RA={} Dec={} mag={}".format(ra, dec, mag))
-        print("Best aperture radius: {} pixels".format(aperture))
+        print("Best aperture radius: {} pixels".format(aperture_radius))
         print("Polarization in Q: {}".format(qpol))
         print("Polarization in U: {}".format(upol))
         print("Polarization in V: {}".format(vpol))
@@ -2459,9 +2537,6 @@ def get_polarimetry_results(filename, source_index=0, aperture_index=None, min_a
         print("RMS of {} residuals: {:.5f}".format("zi", sig_res))
         print("Reduced chi-square (n={}, DOF={}): {:.2f}".format(n,n-m,chi2))
 
-    loc["APERTURE_INDEX"] = aperture_index
-    loc["APERTURE_RADIUS"] = aperture
-    loc["NEXPS"] = nexps
     loc["WAVEPLATE_ANGLES"] = waveplate_angles[keep]
     loc["ZI"] = zi
     loc["OBSERVED_MODEL"] = observed_model
@@ -2480,7 +2555,7 @@ def get_polarimetry_results(filename, source_index=0, aperture_index=None, min_a
     # plot polarization data and best-fit model
     if plot :
         # set title to appear in the plot header
-        title_label = r"Source index: {}    aperture: {} pix    $\chi^2$: {:.2f}    RMS: {:.4f}".format(source_index-1, aperture, chi2, sig_res)
+        title_label = r"Source index: {}    aperture: {} pix    $\chi^2$: {:.2f}    RMS: {:.4f}".format(source_index, aperture_radius, chi2, sig_res)
 
         s4plt.plot_polarimetry_results(loc, title_label=title_label, wave_plate=wave_plate)
 
@@ -2650,8 +2725,6 @@ def psf_analysis(filename, aperture=10, half_windowsize=15, nsources=0, percenti
 
 
 def stack_and_reduce_sci_images(p, sci_list, reduce_dir, ref_img="", stack_suffix="", force=True, match_frames=True, polarimetry=False, verbose=False, plot=False) :
-
-
     """ Pipeline module to run stack and reduction of science images
 
     Parameters
@@ -2721,7 +2794,7 @@ def stack_and_reduce_sci_images(p, sci_list, reduce_dir, ref_img="", stack_suffi
                                   polarimetry=polarimetry)
 
     # reduce science data and calculate stack
-    #p = s4pipelib.old_reduce_science_images(p, p['objsInPolarL2data'][j][object], data_dir=data_dir, reduce_dir=reduce_dir, force=options.force, match_frames=match_frames, stack_suffix=stack_suffix, polarimetry=True)
+    #p = old_reduce_science_images(p, p['objsInPolarL2data'][j][object], data_dir=data_dir, reduce_dir=reduce_dir, force=options.force, match_frames=match_frames, stack_suffix=stack_suffix, polarimetry=True)
     if match_frames and plot :
         if polarimetry :
             s4plt.plot_sci_polar_frame(p['OBJECT_STACK'], percentile=99.5)
@@ -2734,7 +2807,7 @@ def stack_and_reduce_sci_images(p, sci_list, reduce_dir, ref_img="", stack_suffi
 def polar_time_series(sci_pol_list,
                     reduce_dir="./",
                     ts_suffix="",
-                    aperture_index=None,
+                    aperture_radius=None,
                     min_aperture=0,
                     max_aperture=1024,
                     force=True) :
@@ -2748,8 +2821,8 @@ def polar_time_series(sci_pol_list,
         time series suffix to add into the output file name
     reduce_dir : str (optional)
         path to the reduce directory
-    aperture_index : int (optional)
-        index to select aperture in catalog. Default is None and it will calculate best aperture
+    aperture_radius : float (optional)
+        select aperture radius. Default is None and it will calculate best aperture
     min_aperture : float
         minimum aperture radius (pix)
     max_aperture : float
@@ -2764,7 +2837,7 @@ def polar_time_series(sci_pol_list,
     """
 
     # set output light curve product file name
-    output = os.path.join(reduce_dir, "{}_polar_ts.fits".format(ts_suffix))
+    output = os.path.join(reduce_dir, "{}_ts.fits".format(ts_suffix))
     if os.path.exists(output) and not force:
         return output
 
@@ -2781,50 +2854,42 @@ def polar_time_series(sci_pol_list,
     # initialize data container as dict
     tsdata = {}
 
-    catalog_names=[]
-    ra, dec, src_idx = [], [], []
-    # get catalog names in the first sequence. Each catalog correspond to one source
-    for hdu in basehdul :
-        if hdu.name != "PRIMARY" :
-            catalog_names.append(hdu.name)
-            ra.append(hdu.header["RA"])
-            dec.append(hdu.header["DEC"])
-            src_idx.append(hdu.header["SRCINDEX"])
+    tsdata['TIME'] = np.array([])
+    tsdata['SRCINDEX'] = np.array([])
+    tsdata['RA'] = np.array([])
+    tsdata['DEC'] = np.array([])
+    tsdata['X1'] = np.array([])
+    tsdata['Y1'] = np.array([])
+    tsdata['X2'] = np.array([])
+    tsdata['Y2'] = np.array([])
+    tsdata['FWHM'] = np.array([])
+    tsdata['MAG'] = np.array([])
+    tsdata['EMAG'] = np.array([])
 
-            # initialize time series vector for each quantity
-            tsdata[hdu.name] = {}
-
-            tsdata[hdu.name]['TIME'] = np.array([])
-            tsdata[hdu.name]['MAG'] = np.array([])
-            tsdata[hdu.name]['EMAG'] = np.array([])
-            tsdata[hdu.name]['FWHM'] = np.array([])
-            tsdata[hdu.name]['X1'] = np.array([])
-            tsdata[hdu.name]['Y1'] = np.array([])
-            tsdata[hdu.name]['X2'] = np.array([])
-            tsdata[hdu.name]['Y2'] = np.array([])
-
-            tsdata[hdu.name]['Q'] = np.array([])
-            tsdata[hdu.name]['EQ'] = np.array([])
-            tsdata[hdu.name]['U'] = np.array([])
-            tsdata[hdu.name]['EU'] = np.array([])
-            tsdata[hdu.name]['V'] = np.array([])
-            tsdata[hdu.name]['EV'] = np.array([])
-            tsdata[hdu.name]['P'] = np.array([])
-            tsdata[hdu.name]['EP'] = np.array([])
-            tsdata[hdu.name]['THETA'] = np.array([])
-            tsdata[hdu.name]['ETHETA'] = np.array([])
-            tsdata[hdu.name]['K'] = np.array([])
-            tsdata[hdu.name]['EK'] = np.array([])
-            tsdata[hdu.name]['ZERO'] = np.array([])
-            tsdata[hdu.name]['EZERO'] = np.array([])
-            tsdata[hdu.name]['NOBS'] = np.array([])
-            tsdata[hdu.name]['NPAR'] = np.array([])
-            tsdata[hdu.name]['CHI2'] = np.array([])
+    tsdata['Q'] = np.array([])
+    tsdata['EQ'] = np.array([])
+    tsdata['U'] = np.array([])
+    tsdata['EU'] = np.array([])
+    tsdata['V'] = np.array([])
+    tsdata['EV'] = np.array([])
+    tsdata['P'] = np.array([])
+    tsdata['EP'] = np.array([])
+    tsdata['THETA'] = np.array([])
+    tsdata['ETHETA'] = np.array([])
+    tsdata['K'] = np.array([])
+    tsdata['EK'] = np.array([])
+    tsdata['ZERO'] = np.array([])
+    tsdata['EZERO'] = np.array([])
+    tsdata['NOBS'] = np.array([])
+    tsdata['NPAR'] = np.array([])
+    tsdata['CHI2'] = np.array([])
 
     ti, tf = 0, 0
 
     for i in range(len(sci_pol_list)) :
-
+        
+        print("Packing time series data for polar file {} of {}".format(i+1,len(sci_pol_list)))
+        
         hdul = fits.open(sci_pol_list[i])
         header = hdul[0].header
 
@@ -2835,43 +2900,45 @@ def polar_time_series(sci_pol_list,
         if i == len(sci_pol_list) - 1 :
             tf = header["TSTOP"]
 
-        for key in catalog_names :
-
-            hdr = hdul[key].header
-
-            tsdata[key]['TIME'] = np.append(tsdata[key]['TIME'],mid_bjd)
-            tsdata[key]['MAG'] = np.append(tsdata[key]['MAG'],hdr['MAG'])
-            tsdata[key]['EMAG'] = np.append(tsdata[key]['EMAG'],hdr['EMAG'])
-            tsdata[key]['FWHM'] = np.append(tsdata[key]['FWHM'],hdr['FWHM'])
-            tsdata[key]['X1'] = np.append(tsdata[key]['X1'],hdr['X1'])
-            tsdata[key]['Y1'] = np.append(tsdata[key]['Y1'] ,hdr['Y1'])
-            tsdata[key]['X2'] = np.append(tsdata[key]['X2'],hdr['X2'])
-            tsdata[key]['Y2'] = np.append(tsdata[key]['Y2'],hdr['Y2'])
+        for j in range(nsources) :
 
             # read polarimetry results for the base sequence in the time series
             polar = get_polarimetry_results(sci_pol_list[i],
-                                        source_index=hdr["SRCINDEX"],
-                                        aperture_index=aperture_index,
-                                        min_aperture=min_aperture,
-                                        max_aperture=max_aperture)
+                                            source_index=j,
+                                            aperture_radius=aperture_radius,
+                                            min_aperture=min_aperture,
+                                            max_aperture=max_aperture)
 
-            tsdata[key]['Q'] = np.append(tsdata[key]['Q'], polar['Q'].nominal)
-            tsdata[key]['EQ'] = np.append(tsdata[key]['EQ'], polar['Q'].std_dev)
-            tsdata[key]['U'] = np.append(tsdata[key]['U'], polar['U'].nominal)
-            tsdata[key]['EU'] = np.append(tsdata[key]['EU'], polar['U'].std_dev)
-            tsdata[key]['V'] = np.append(tsdata[key]['V'], polar['V'].nominal)
-            tsdata[key]['EV'] = np.append(tsdata[key]['EV'], polar['V'].std_dev)
-            tsdata[key]['P'] = np.append(tsdata[key]['P'], polar['P'].nominal)
-            tsdata[key]['EP'] = np.append(tsdata[key]['EP'], polar['P'].std_dev)
-            tsdata[key]['THETA'] = np.append(tsdata[key]['THETA'], polar['THETA'].nominal)
-            tsdata[key]['ETHETA'] = np.append(tsdata[key]['ETHETA'], polar['THETA'].std_dev)
-            tsdata[key]['K'] = np.append(tsdata[key]['K'], polar['K'].nominal)
-            tsdata[key]['EK'] = np.append(tsdata[key]['EK'], polar['K'].std_dev)
-            tsdata[key]['ZERO'] = np.append(tsdata[key]['ZERO'], polar['ZERO'].nominal)
-            tsdata[key]['EZERO'] = np.append(tsdata[key]['EZERO'] , polar['ZERO'].std_dev)
-            tsdata[key]['NOBS'] = np.append(tsdata[key]['NOBS'], polar['NOBS'])
-            tsdata[key]['NPAR'] = np.append(tsdata[key]['NPAR'], polar['NPAR'])
-            tsdata[key]['CHI2'] = np.append(tsdata[key]['CHI2'], polar['CHI2'])
+            tsdata['TIME'] = np.append(tsdata['TIME'],mid_bjd)
+            tsdata['SRCINDEX'] = np.append(tsdata['SRCINDEX'],j)
+
+            tsdata['RA'] = np.append(tsdata['RA'],polar['RA'])
+            tsdata['DEC'] = np.append(tsdata['DEC'],polar['DEC'])
+            tsdata['MAG'] = np.append(tsdata['MAG'],polar['MAG'].nominal)
+            tsdata['EMAG'] = np.append(tsdata['EMAG'],polar['MAG'].std_dev)
+            tsdata['FWHM'] = np.append(tsdata['FWHM'],polar['FWHM'])
+            tsdata['X1'] = np.append(tsdata['X1'],polar['X1'])
+            tsdata['Y1'] = np.append(tsdata['Y1'] ,polar['Y1'])
+            tsdata['X2'] = np.append(tsdata['X2'],polar['X2'])
+            tsdata['Y2'] = np.append(tsdata['Y2'],polar['Y2'])
+
+            tsdata['Q'] = np.append(tsdata['Q'], polar['Q'].nominal)
+            tsdata['EQ'] = np.append(tsdata['EQ'], polar['Q'].std_dev)
+            tsdata['U'] = np.append(tsdata['U'], polar['U'].nominal)
+            tsdata['EU'] = np.append(tsdata['EU'], polar['U'].std_dev)
+            tsdata['V'] = np.append(tsdata['V'], polar['V'].nominal)
+            tsdata['EV'] = np.append(tsdata['EV'], polar['V'].std_dev)
+            tsdata['P'] = np.append(tsdata['P'], polar['P'].nominal)
+            tsdata['EP'] = np.append(tsdata['EP'], polar['P'].std_dev)
+            tsdata['THETA'] = np.append(tsdata['THETA'], polar['THETA'].nominal)
+            tsdata['ETHETA'] = np.append(tsdata['ETHETA'], polar['THETA'].std_dev)
+            tsdata['K'] = np.append(tsdata['K'], polar['K'].nominal)
+            tsdata['EK'] = np.append(tsdata['EK'], polar['K'].std_dev)
+            tsdata['ZERO'] = np.append(tsdata['ZERO'], polar['ZERO'].nominal)
+            tsdata['EZERO'] = np.append(tsdata['EZERO'] , polar['ZERO'].std_dev)
+            tsdata['NOBS'] = np.append(tsdata['NOBS'], polar['NOBS'])
+            tsdata['NPAR'] = np.append(tsdata['NPAR'], polar['NPAR'])
+            tsdata['CHI2'] = np.append(tsdata['CHI2'], polar['CHI2'])
 
         hdul.close()
         del hdul
@@ -2889,7 +2956,6 @@ def polar_time_series(sci_pol_list,
     info['CHANNEL'] = (basehdr["CHANNEL"], 'Instrument channel')
     info['PHZEROP'] = (0., '[mag] photometric zero point')
     info['PHOTSYS'] = ("SPARC4", 'photometric system')
-    info['APINDX'] = (aperture_index, 'selected aperture index')
     info['POLTYPE'] = (basehdr["POLTYPE"], 'polarimetry type l/2 or l/4')
     info['NSOURCES'] = (basehdr["NSOURCES"], 'number of sources')
 
@@ -2902,6 +2968,70 @@ def polar_time_series(sci_pol_list,
     info['DATE-END'] = (tstop.isot, 'TSTOP as UTC calendar date')
 
     # generate the photometric time series product
-    s4p.polarTimeSeriesProduct(tsdata, catalog_names, info=info, filename=output)
+    s4p.polarTimeSeriesProduct(tsdata, info=info, filename=output)
 
     return output
+
+
+def select_best_phot_aperture_per_target(filename, plot=False) :
+    """ Pipeline module to get the best apertures per target
+
+    Parameters
+    ----------
+    filename : str
+        input light curves product (fits)
+    plot : bool
+        plots
+
+    Returns
+    -------
+    output : numpy array of floats
+        array of best aperture radii for all sources
+    """
+
+    # open time series fits file
+    hdul = fits.open(filename)
+
+    nsources = hdul[0].header['NSOURCES']
+    
+    minrms = np.arange(nsources)*0 + 1e20
+    selected_apertures = np.zeros_like(minrms)
+    mags, emags = np.full_like(minrms, np.nan),  np.full_like(minrms, np.nan)
+
+    # loop over each hdu
+    for hdu in hdul :
+        # skip primary hdu
+        if hdu.name == "PRIMARY" :
+            continue
+        
+        # get aperture table  data
+        tbl = hdul[hdu.name].data
+
+        # get aperture radius value
+        aperture_radius = hdu.header["APRADIUS"]
+
+        for i in range(nsources) :
+            loc_tbl = tbl[tbl["SRCINDEX"] == i]
+            m_rms = np.nanmedian(loc_tbl['RMS'])
+            if m_rms < minrms[i] :
+                minrms[i] = m_rms
+                selected_apertures[i] = aperture_radius
+                mags[i] = np.nanmedian(loc_tbl['MAG'])
+                emags[i] = np.nanmedian(loc_tbl['EMAG'])
+            if plot :
+                plt.plot([aperture_radius], [m_rms], '.')
+                
+    if plot :
+        for i in range(nsources) :
+            plt.plot([selected_apertures[i]], [minrms[i]], 'rx')
+
+        plt.ylabel("RMS [mag]")
+        plt.xlabel("Aperture radius [pix]")
+        plt.show()
+
+        plt.errorbar(selected_apertures,mags,yerr=emags,fmt='o')
+        plt.ylabel("Instrumental magnitude")
+        plt.xlabel("Aperture radius [pix]")
+        plt.show()
+
+    return selected_apertures

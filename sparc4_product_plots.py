@@ -307,7 +307,7 @@ def plot_diff_light_curve(filename, target=0, comps=[], output="", nsig=100, plo
     plt.show()
 
 
-def plot_light_curve(filename, target=0, comps=[], output="", nsig=10, plot_coords=True, plot_rawmags=True, plot_sum=True, plot_comps=True, catalog_name="CATALOG_PHOT_AP008") :
+def plot_light_curve(filename, target=0, comps=[], output="", nsig=10, plot_coords=True, plot_rawmags=True, plot_sum=True, plot_comps=True, catalog_name="BEST_APERTURES") :
 
     """ Plot light curve
 
@@ -324,10 +324,16 @@ def plot_light_curve(filename, target=0, comps=[], output="", nsig=10, plot_coor
     None
     """
 
+    # open time series fits file
     hdul = fits.open(filename)
-    # Below is a hack to avoid very high values of time in some bad data
+    
+    # get big table with data
+    tbl = hdul[catalog_name].data
 
-    time = hdul["TIME_COORDS"].data['TIME']
+    # get data target data
+    target_tbl = tbl[tbl["SRCINDEX"] == target]
+
+    time = target_tbl['TIME']
     mintime, maxtime = np.min(time), np.max(time)
 
     use_sky_coords = True
@@ -337,9 +343,9 @@ def plot_light_curve(filename, target=0, comps=[], output="", nsig=10, plot_coor
 
     pixoffset = 7*platescale
 
-    x = hdul["TIME_COORDS"].data['X{:08d}'.format(target)]
-    y = hdul["TIME_COORDS"].data['Y{:08d}'.format(target)]
-    fwhm = hdul["TIME_COORDS"].data['FWHM{:08d}'.format(target)]
+    x = target_tbl['X']
+    y = target_tbl['Y']
+    fwhm = target_tbl['FWHM']
     if plot_coords :
         #fig, axs = plt.subplots(4, 1, figsize=(12, 6), sharex=True, sharey=False, gridspec_kw={'hspace': 0, 'height_ratios': [1, 1, 1, 1]})
         plt.plot(time, (x-np.nanmedian(x))*platescale+pixoffset, '.', color='darkblue', label='x-offset')
@@ -353,17 +359,15 @@ def plot_light_curve(filename, target=0, comps=[], output="", nsig=10, plot_coor
 
 
     mag_offset=0.1
-    time = hdul[catalog_name].data['TIME']
-    mintime, maxtime = np.min(time), np.max(time)
-    m = hdul[catalog_name].data['MAG{:08d}'.format(target)]
-    em = hdul[catalog_name].data['EMAG{:08d}'.format(target)]
-    skym = hdul[catalog_name].data['SKYMAG{:08d}'.format(target)]
-    eskym = hdul[catalog_name].data['ESKYMAG{:08d}'.format(target)]
+    m = target_tbl['MAG']
+    em = target_tbl['EMAG']
+    skym = target_tbl['SKYMAG']
+    eskym = target_tbl['ESKYMAG']
     mmag = np.nanmedian(m)
     mskym = np.nanmedian(skym)
     if plot_rawmags :
         plt.errorbar(time, mmag - m - mag_offset, yerr=em, label='raw obj dmag, mean={:.4f}'.format(mmag))
-        plt.errorbar(time, mskym - skym + mag_offset, yerr=eskym, label='raw sky dmag, mean={:.4f}'.format(mskym))
+        plt.plot(time, mskym - skym + mag_offset, '-', label='raw sky dmag, mean={:.4f}'.format(mskym))
         plt.xlabel(r"time (BJD)", fontsize=16)
         plt.ylabel(r"$\Delta$mag", fontsize=16)
         plt.legend(fontsize=10)
@@ -372,8 +376,10 @@ def plot_light_curve(filename, target=0, comps=[], output="", nsig=10, plot_coor
     cm, ecm = [], []
     sumag = np.zeros_like(m)
     for i in range(len(comps)) :
-        cmag = hdul[catalog_name].data['MAG{:08d}'.format(comps[i])]
-        ecmag = hdul[catalog_name].data['EMAG{:08d}'.format(comps[i])]
+        comp_tbl = tbl[tbl["SRCINDEX"] == comps[i]]
+    
+        cmag = comp_tbl['MAG']
+        ecmag = comp_tbl['EMAG']
         cm.append(cmag)
         ecm.append(ecmag)
 
@@ -470,6 +476,9 @@ def plot_polarimetry_results(loc, pos_model_sampling=1, title_label="", wave_pla
     axes[0].legend(fontsize=16)
     axes[0].tick_params(axis='x', labelsize=14)
     axes[0].tick_params(axis='y', labelsize=14)
+    axes[0].minorticks_on()
+    axes[0].tick_params(which='minor', length=3, width=0.7, direction='in', bottom=True, top=True, left=True, right=True)
+    axes[0].tick_params(which='major', length=7, width=1.2, direction='in', bottom=True, top=True, left=True, right=True)
 
     # Print q, u, p and theta values
     ylims = axes[0].get_ylim()
@@ -482,7 +491,7 @@ def plot_polarimetry_results(loc, pos_model_sampling=1, title_label="", wave_pla
     elif wave_plate == 'quarterwave' :
         observed_model = quarterwave_model(waveplate_angles, qpol.nominal, upol.nominal, vpol.nominal, zero=zero.nominal)
 
-    resids = observed_model - zi.nominal
+    resids = zi.nominal - observed_model
     sig_res = np.nanstd(resids)
 
     axes[1].errorbar(waveplate_angles, resids, yerr=zi.std_dev, fmt='ko', alpha=0.5, label='residuals')
@@ -492,7 +501,10 @@ def plot_polarimetry_results(loc, pos_model_sampling=1, title_label="", wave_pla
     axes[1].set_ylabel(r"residuals", fontsize=16)
     axes[1].tick_params(axis='x', labelsize=14)
     axes[1].tick_params(axis='y', labelsize=14)
-
+    axes[1].minorticks_on()
+    axes[1].tick_params(which='minor', length=3, width=0.7, direction='in', bottom=True, top=True, left=True, right=True)
+    axes[1].tick_params(which='major', length=7, width=1.2, direction='in', bottom=True, top=True, left=True, right=True)
+    
     plt.show()
 
 

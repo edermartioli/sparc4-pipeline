@@ -11,6 +11,25 @@ CHANNELS: [1, 2, 3, 4]
 # define SPARC4 channel labels
 CHANNEL_LABELS: ['g','r','i','z']
 
+#### NIGHT DATA BASE #####
+# define SPARC4 keywords used to select reduction groups
+DB_KEYS: ["DATE-OBS", "EXPTIME",
+             "OBJECT", "OBSTYPE", "INSTMODE", "CHANNEL",
+             "VBIN", "HBIN", "INITLIN", "INITCOL", "FINALLIN", "FINALCOL",
+             "VSHIFT", "VCLKAMP", "CCDSERN",
+             "PREAMP", "READRATE", "EMMODE", "EMGAIN",
+             "WPPOS", "WPSEL", "CALW", "ASEL"]
+
+# list of header keywords to define a detector mode
+DETECTOR_MODE_KEYWORDS: ["PREAMP", "READRATE", "EMMODE", "EMGAIN"]
+
+# include image statistics in database (slower but more complete)
+INCLUDE_IMG_STATISTICS: False
+
+# include full frames only
+FULL_FRAMES_ONLY: True
+#-------------------------------------
+
 #### CALIBRATIONS #####
 # wild cards to identify calibration images
 CALIB_WILD_CARDS: ['*.fits']
@@ -35,6 +54,11 @@ INSTMODE_PHOTOMETRY_KEYVALUE: 'PHOT'
 # Value of INSTMODE keyword used to identify polarimetric instrument mode
 INSTMODE_POLARIMETRY_KEYVALUE: 'POLAR'
 
+# Value of WPSEL keyword used to identify polarimetric instrument mode
+POLARIMETRY_L2_KEYVALUE: 'L2'
+# Value of WPSEL keyword used to identify polarimetric instrument mode
+POLARIMETRY_L4_KEYVALUE: 'L4'
+
 # set maximum number of science frames for each reduction loop
 # it avoids memory issues for long lists
 MAX_NUMBER_OF_SCI_FRAMES_PER_LOOP: 100
@@ -56,9 +80,12 @@ SHIFT_ALGORITHM: 'asterism-matching'
 # method to select files for stack
 METHOD_TO_SELECT_FILES_FOR_STACK: 'MAX_FLUXES' # 'MAX_FLUXES' or 'MIN_SHIFTS'
 # stack method
-SCI_STACK_METHOD: 'median'
+#SCI_STACK_METHOD: 'median'
+SCI_STACK_METHOD: 'mean'
+SCI_STACK_SIGMA_CLIP: 10
+
 # define number of files for stack
-NFILES_FOR_STACK: 10
+NFILES_FOR_STACK: 16
 # define saturation limit
 SATURATION_LIMIT: 32000
 #-------------------------------------
@@ -75,7 +102,7 @@ PHOT_SKYOUTER_N_X_FWHM: 10.0
 # Define aperture size for a fixed aperture when required
 PHOT_FIXED_APERTURE: 10
 # Define a fixed sky annulus (inner radius, outer radius) in units of pixel
-PHOT_FIXED_R_ANNULUS: (25, 50)
+PHOT_FIXED_R_ANNULUS: [25,50]
 
 # Define minimum offset (in pixels) between source aperture radius and sky aperture inner radius
 PHOT_MIN_OFFSET_FOR_SKYINNERRADIUS: 2
@@ -86,7 +113,7 @@ PHOT_MIN_OFFSET_FOR_SKYOUTERRADIUS: 10
 PHOT_APERTURES: [2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50]
 
 # Threshold in number of sigmas to detect sources, where sigma = background error
-PHOT_THRESHOLD: 100
+PHOT_THRESHOLD: 30
 #-------------------------------------
 
 #### POLARIMETRY ####
@@ -102,20 +129,19 @@ MIN_APERTURE_FOR_POLARIMETRY: 4
 # set maximum aperture (pixels) to search for best polar results
 MAX_APERTURE_FOR_POLARIMETRY: 12
 
-# set aperture index (aperture radius = index + 2) to calculate photometry in polar data
-APERTURE_INDEX_FOR_PHOTOMETRY_IN_POLAR: 8
+# set aperture radius (in pixels) to calculate photometry in polar data
+APERTURE_RADIUS_FOR_PHOTOMETRY_IN_POLAR: 10
 
 # Set zero of polarimetry calibrated from standards
-ZERO_OF_WAVEPLATE: 90.5
-
-# Set maximum gap between image indices to break polar sequences
-MAX_INDEX_GAP_TO_BREAK_POL_SEQS: 1
-# Set maximum gap between image times to break polar sequences
-MAX_TIME_GAP_TO_BREAK_POL_SEQS: 0.04166
+ZERO_OF_WAVEPLATE: 108.7
 #-------------------------------------
 
 #### ASTROMETRY ####
 PLATE_SCALE: 0.335  # ARCSEC/PIXEL
+
+# directory path to the astrometric indices
+ASTROM_INDX_PATH : '/Volumes/Samsung_T5/sparc4-pipeline/astrometry_indexes/'
+
 #PLATE_SCALE: 0.18  # ARCSEC/PIXEL
 ASTROM_REF_IMGS: ['/Volumes/Samsung_T5/sparc4-pipeline/calibdb/20230503_s4c1_CR1_astrometryRef_stack.fits',
                   '/Volumes/Samsung_T5/sparc4-pipeline/calibdb/20230503_s4c2_CR1_astrometryRef_stack.fits',
@@ -131,18 +157,39 @@ SEARCH_RADIUS:  0.1  # radius to define the range of solutions in units of degre
 #TIME_FORMAT_IN_PROC: 'isot'
 TIME_KEYWORD_IN_PROC: 'BJD'
 TIME_FORMAT_IN_PROC: 'jd'
+# Time span to define window (in minutes) within wich to calculate running rms
+TIME_SPAN_FOR_RMS: 10.0
 
-# Set a list of catalogs to include in the time series or leave an empty list to include all (very slow)
+# Set a list of catalogs to include in the time series or leave an empty list to include all (slow)
 #PHOT_CATALOG_NAMES_TO_INCLUDE: []
-PHOT_CATALOG_NAMES_TO_INCLUDE: ["CATALOG_PHOT_AP006",
+PHOT_CATALOG_NAMES_TO_INCLUDE: ["CATALOG_PHOT_AP002",
+                                "CATALOG_PHOT_AP003",
+                                "CATALOG_PHOT_AP004",
+                                "CATALOG_PHOT_AP005",
+                                "CATALOG_PHOT_AP006",
+                                "CATALOG_PHOT_AP007",
                                 "CATALOG_PHOT_AP008",
+                                "CATALOG_PHOT_AP009",
                                 "CATALOG_PHOT_AP010",
+                                "CATALOG_PHOT_AP011",
                                 "CATALOG_PHOT_AP012",
+                                "CATALOG_PHOT_AP013",
                                 "CATALOG_PHOT_AP014",
-                                "CATALOG_PHOT_AP016"]
+                                "CATALOG_PHOT_AP015",
+                                "CATALOG_PHOT_AP016",
+                                "CATALOG_PHOT_AP017",
+                                "CATALOG_PHOT_AP018",
+                                "CATALOG_PHOT_AP019",
+                                "CATALOG_PHOT_AP020",
+                                "CATALOG_PHOT_AP021",
+                                "CATALOG_PHOT_AP022",
+                                "CATALOG_PHOT_AP023",
+                                "CATALOG_PHOT_AP024",
+                                "CATALOG_PHOT_AP025"]
 
 # Below are the catalog names to get coordinates from
-PHOT_REF_CATALOG_NAME: "CATALOG_PHOT_AP010"
+#PHOT_REF_CATALOG_NAME: "CATALOG_PHOT_AP010"
+PHOT_REF_CATALOG_NAME: "BEST_APERTURES"
 POLAR_REF_CATALOG_NAME: "CATALOG_POLAR_N_AP010"
 #-------------------------------------
 

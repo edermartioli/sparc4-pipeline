@@ -260,13 +260,16 @@ def scienceImageProduct(original_image, img_data=[], err_data=[], mask_data=[], 
             catdata.append(catalogs[j][key])
 
         # set names and data format for each column in the catalog table
-        dtype=[('INDEX', 'i4'), ('RA', 'f8'), ('DEC', 'f8'), ('X', 'f8'), ('Y', 'f8'), ('FWHMX', 'f8'), ('FWHMY', 'f8'), ('MAG', 'f8'), ('EMAG', 'f8'), ('SKYMAG', 'f8'), ('ESKYMAG', 'f8'), ('APER', 'i4'), ('FLAG', 'i4')]
+        dtype=[('SRCINDEX', 'i4'), ('RA', 'f8'), ('DEC', 'f8'), ('X', 'f8'), ('Y', 'f8'), ('FWHMX', 'f8'), ('FWHMY', 'f8'), ('MAG', 'f8'), ('EMAG', 'f8'), ('SKYMAG', 'f8'), ('ESKYMAG', 'f8'), ('APER', 'i4'), ('FLAG', 'i4')]
 
         # cast catalog data into numpy array
         catalog_array = np.array(catdata, dtype=dtype)
 
         # get photometry aperture value for the catalog label
         aperture_value = catalog_array[0][11]
+        
+        # add aperture value to catalog header
+        catalog_header.set("APRADIUS", aperture_value, "Aperture radius in pixels")
 
         cat_label = "UNLABELED_CATALOG"
 
@@ -451,13 +454,16 @@ def scienceImageLightProduct(original_image, img_data=[], info={}, catalogs=[], 
             catdata.append(catalogs[j][key])
 
         # set names and data format for each column in the catalog table
-        dtype=[('INDEX', 'i4'), ('RA', 'f8'), ('DEC', 'f8'), ('X', 'f8'), ('Y', 'f8'), ('FWHMX', 'f8'), ('FWHMY', 'f8'), ('MAG', 'f8'), ('EMAG', 'f8'), ('SKYMAG', 'f8'), ('ESKYMAG', 'f8'), ('APER', 'i4'), ('FLAG', 'i4')]
+        dtype=[('SRCINDEX', 'i4'), ('RA', 'f8'), ('DEC', 'f8'), ('X', 'f8'), ('Y', 'f8'), ('FWHMX', 'f8'), ('FWHMY', 'f8'), ('MAG', 'f8'), ('EMAG', 'f8'), ('SKYMAG', 'f8'), ('ESKYMAG', 'f8'), ('APER', 'i4'), ('FLAG', 'i4')]
 
         # cast catalog data into numpy array
         catalog_array = np.array(catdata, dtype=dtype)
 
         # get photometry aperture value for the catalog label
         aperture_value = catalog_array[0][11]
+
+        # add aperture value to catalog header
+        catalog_header.set("APRADIUS", aperture_value, "Aperture radius in pixels")
 
         cat_label = "UNLABELED_CATALOG"
 
@@ -555,15 +561,16 @@ def packTimeSeriesData(times, vars=[], labs=[]) :
     return tsarray
 
 
-def photTimeSeriesProduct(tsdata, catalog_names, info={}, filename="") :
+def photTimeSeriesProduct(tsdata, apertures, info={}, filename="") :
     """ Create a photometric time series FITS product
 
     Parameters
     ----------
     tsdata : dict
         time series data container
-    catalog_names : list
-        list of str with catalog names
+    apertures : dict
+        apertures radius in pixels for all existing extensions
+
     info : dict
         dictionary with additional header cards to include in the header of product
         The following format must be used:
@@ -578,26 +585,11 @@ def photTimeSeriesProduct(tsdata, catalog_names, info={}, filename="") :
         output hdu_list top-level FITS object.
     """
 
-    # get time array
-    times = tsdata["TIME"]
-    nexps = len(times)
-    nsources = np.shape(tsdata["X"])[1]
-
-    # get first and last times
-    tstart = Time(times[0], format='jd', scale='utc')
-    tstop = Time(times[-1], format='jd', scale='utc')
-
     # add information about data in the product
     info['ORIGIN'] = ('LNA/MCTI', 'institution responsible for creating this file')
     info['CREATOR'] = ("SPARC4-PIPELINE", 'pipeline job and program used to produc')
     info['FILEVER'] = ('1.0', 'file format version')
     info['DATE'] = (Time.now().iso, 'file creation date')
-    info['TSTART'] = (tstart.jd, 'observation start time in BJD')
-    info['TSTOP'] = (tstop.jd, 'observation stop time in BJD')
-    info['DATE-OBS'] = (tstart.isot, 'TSTART as UTC calendar date')
-    info['DATE-END'] = (tstop.isot, 'TSTOP as UTC calendar date')
-    info['NEXPS'] = (nexps, 'number of exposures')
-    info['NSOURCES'] = (nsources, 'number of sources')
 
     # create empty header
     header = fits.PrimaryHDU().header
@@ -612,32 +604,18 @@ def photTimeSeriesProduct(tsdata, catalog_names, info={}, filename="") :
     # initialize list of hdus with the primary hdu
     hdu_array = [primary_hdu]
 
-    # initialize big data table
-    coords_vars = [tsdata["X"],tsdata["Y"],tsdata["RA"],tsdata["DEC"],tsdata["FWHM"]]
-    coords_labs = ["X","Y","RA","DEC","FWHM"]
-    # set coords array
-    coords_array = packTimeSeriesData(tsdata["TIME"], vars=coords_vars, labs=coords_labs)
-    # create time+coords hdu
-    coords_hdu = fits.TableHDU(data=coords_array, name='TIME_COORDS')
-    # append time+coords hdu
-    hdu_array.append(coords_hdu)
-
     # loop over each key in the tsdata array to create a fits extension for each source
-    for key in catalog_names :
+    for catalog_key in tsdata.keys() :
 
-        catalog_phot_vars, catalog_phot_labs = [], []
+        # create empty header for catalog extension
+        catalog_header = fits.PrimaryHDU().header
 
-        catalog_data = tsdata[key]
-
-        for varkey in catalog_data.keys() :
-            catalog_phot_vars.append(tsdata[key][varkey])
-            catalog_phot_labs.append(varkey)
-
-        # set catalog photometry data array
-        catalog_phot_array = packTimeSeriesData(tsdata["TIME"], vars=catalog_phot_vars, labs=catalog_phot_labs)
+        # set aperture radius in header of extension
+        catalog_header.set("APRADIUS", apertures[catalog_key], "aperture radius in pixels")
 
         # create catalog photometry hdu
-        catalog_phot_hdu = fits.TableHDU(data=catalog_phot_array, name=key)
+        catalog_phot_hdu = fits.BinTableHDU(data=tsdata[catalog_key], header=catalog_header, name=catalog_key)
+        
         # append hdu
         hdu_array.append(catalog_phot_hdu)
 
@@ -652,8 +630,15 @@ def photTimeSeriesProduct(tsdata, catalog_names, info={}, filename="") :
     return hdu_list
 
 
-
-def readPhotTimeSeriesData(sci_list, catalog_key='CATALOG_PHOT_AP006', longitude=-45.5825, latitude=-22.5344, altitude=1864, time_keyword='DATE-OBS', time_format='isot', time_scale='utc', gettimedata=True, getcoordsdata=True, getphotdata=True) :
+def readPhotTimeSeriesData(sci_list,
+                          catalog_key='CATALOG_PHOT_AP006',
+                          longitude=-45.5825,
+                          latitude=-22.5344,
+                          altitude=1864,
+                          time_keyword='DATE-OBS',
+                          time_format='isot',
+                          time_scale='utc',
+                          time_span_for_rms=5) :
 
     """ Read photometric time series data from a list of images
 
@@ -661,27 +646,31 @@ def readPhotTimeSeriesData(sci_list, catalog_key='CATALOG_PHOT_AP006', longitude
     ----------
     sci_list : list
         list of file paths for the reduced science image products containing photometric data
-    catalog_key : str
+    catalog_key : str, optional
         keyword to identify catalog FITS extension
-    longitude : float
+    longitude : float, optional
         East geographic longitude [deg] of observatory; default is OPD longitude of -45.5825 degrees
-    latitude : float
+    latitude : float, optional
         North geographic latitude [deg] of observatory; default is OPD latitude of -22.5344 degrees
-    altitude : float
+    altitude : float, optional
         Observatory elevation [m] above sea level. Default is OPD altitude of 1864 m
-    time_keyword : str
+    time_keyword : str, optional
         Time keyword in fits header. Default is 'DATE-OBS'
-    time_format : str
+    time_format : str, optional
         Time format in fits header. Default is 'isot'
-    time_scale : str
+    time_scale : str, optional
         Time scale in fits header. Default is 'utc'
-
+    time_span_for_rms : float, optional
+        Time span (in minutes) around a given observation to include other observations to
+        calculate running rms.
     Returns
     -------
-    tsdata : dict
-        output dictionary container for the times series data.
-        The following keys are returned in this container:
-
+    tsdata : astropy.table.Table
+        output Table container for the times series data.
+        The following keys are returned in this table:
+        
+        tsdata["SRCINDEX"] : numpy.ndarray (N)
+            source index array
         tsdata["TIME"] : numpy.ndarray (N)
             float array containing the N times in BJD
         tsdata["X"] : numpy.ndarray (N x M)
@@ -694,40 +683,31 @@ def readPhotTimeSeriesData(sci_list, catalog_key='CATALOG_PHOT_AP006', longitude
             float array containing the N declinations for M sources in the catalog
         tsdata["FWHM"] : numpy.ndarray (N x M)
             float array containing the N full widths at half maximum for M sources in the catalog
-        tsdata["CATALOG*"] : dict
-            dict container to save photometry data for each catalog extension
-        tsdata["CATALOG*"]["MAG"] : numpy.ndarray (N x M)
+        tsdata["MAG"] : numpy.ndarray (N x M)
             float array containing the N magnitudes for M sources in the catalog
-        tsdata["CATALOG*"]["EMAG"] : numpy.ndarray (N x M)
+        tsdata["EMAG"] : numpy.ndarray (N x M)
             float array containing the N magnitude uncertainties for M sources in the catalog
-        tsdata["CATALOG*"]["SKYMAG"] : numpy.ndarray (N x M)
+        tsdata[["SKYMAG"] : numpy.ndarray (N x M)
             float array containing the N sky magnitudes for M sources in the catalog
-        tsdata["CATALOG*"]["ESKYMAG"] : numpy.ndarray (N x M)
+        tsdata["ESKYMAG"] : numpy.ndarray (N x M)
             float array containing the N sky magnitude uncertainties for M sources in the catalog
-        tsdata["CATALOG*"]["FLAG"] : numpy.ndarray (N x M)
+        tsdata["FLAG"] : numpy.ndarray (N x M)
             uint array containing the N flags for M sources in the catalog
-            flag (int):
-                0 : single star, all aperture pixels used, no issues in the photometry
-                1 : single star, part of pixels in aperture have been rejected, no issues in the photometry
-                2 : single star, issues in the photometry
-                3 : blended star, all aperture pixels used, no issues in the photometry
-                4 : blended star, part of pixels in aperture have been rejected, no issues in the photometry
-                5 : blended star, issues in the photometry
-                6 : not a star, all aperture pixels used, no issues in the photometry
-                7 : not a star, part of pixels in aperture have been rejected, no issues in the photometry
-                8 : not a star, issues in the photometry
+        tsdata["RMS"] : numpy.ndarray (N x M)
+            float array containing the N running rms for M sources in the catalog
     """
 
     altitude = altitude*u.m
     observ_location = EarthLocation.from_geodetic(lat=latitude, lon=longitude, height=altitude)
 
-    times = []
-    xs, ys = [], []
-    ras, decs = [], []
-    fwhms = []
-    mags, emags = [], []
-    smags, esmags = [], []
-    flags = []
+    srcindex = np.array([])
+    times = np.array([])
+    xs, ys = np.array([]), np.array([])
+    ras, decs = np.array([]), np.array([])
+    fwhms = np.array([])
+    mags, emags = np.array([]), np.array([])
+    smags, esmags = np.array([]), np.array([])
+    flags = np.array([])
 
     for i in range(len(sci_list)) :
         #print("image {} of {} -> {}".format(i+1,len(sci_list),sci_list[i]))
@@ -735,74 +715,86 @@ def readPhotTimeSeriesData(sci_list, catalog_key='CATALOG_PHOT_AP006', longitude
         hdu_list = fits.open(sci_list[i])
         hdr = deepcopy(hdu_list[0].header)
 
+        # open catalog data
         try :
             catalog = deepcopy(hdu_list[catalog_key].data)
         except :
             print("WARNING: could not open catalog extension: {} in FITS image: {}, skipping ...".format(catalog_key,sci_list[i]))
             continue
 
-        if gettimedata :
-            # set obstime
-            obstime=Time(hdr[time_keyword], format=time_format, scale=time_scale, location=observ_location)
-            # append JD  to time series
-            times.append(obstime.jd)
-            # open catalog data
+        # append source index information
+        srcindex = np.append(srcindex,catalog['SRCINDEX'])
 
-        if getcoordsdata :
-            # append all other quantities to time series
-            xs.append(catalog['X'])
-            ys.append(catalog['Y'])
-            ras.append(catalog['RA'])
-            decs.append(catalog['DEC'])
-            fwhms.append(np.sqrt(catalog['FWHMX']*catalog['FWHMX'] + catalog['FWHMY']*catalog['FWHMY']))
+        # set obstime
+        obstime=Time(hdr[time_keyword], format=time_format, scale=time_scale, location=observ_location)
+        # append JD  to time series
+        times = np.append(times, np.full_like(catalog['SRCINDEX'], obstime.jd, dtype=float))
 
-        if getphotdata :
-            mags.append(catalog['MAG'])
-            emags.append(catalog['EMAG'])
-            smags.append(catalog['SKYMAG'])
-            esmags.append(catalog['ESKYMAG'])
-            flags.append(catalog['FLAG'])
+        # append coordinates information
+        ras = np.append(ras, catalog['RA'])
+        decs = np.append(decs, catalog['DEC'])
+        xs = np.append(xs, catalog['X'])
+        ys = np.append(ys, catalog['Y'])
+
+        # append fwhms
+        fwhms = np.append(fwhms, np.sqrt(catalog['FWHMX']*catalog['FWHMX'] + catalog['FWHMY']*catalog['FWHMY']))
+
+        # append photometric information
+        mags = np.append(mags, catalog['MAG'])
+        emags = np.append(emags, catalog['EMAG'])
+        smags = np.append(smags, catalog['SKYMAG'])
+        esmags = np.append(esmags, catalog['ESKYMAG'])
+        flags = np.append(flags, catalog['FLAG'])
 
         hdu_list.close()
         del catalog
         del hdu_list
 
     tsdata = {}
+    
+    tsdata["TIME"] = times
+    tsdata["SRCINDEX"] = srcindex
+    tsdata["RA"] = ras
+    tsdata["DEC"] = decs
+    tsdata["X"] = xs
+    tsdata["Y"] = ys
+    tsdata["FWHM"] = fwhms
+    tsdata["MAG"] = mags
+    tsdata["EMAG"] = emags
+    tsdata["SKYMAG"] = smags
+    tsdata["ESKYMAG"] = esmags
+    tsdata["FLAG"] = flags
+    tsdata["RMS"] = np.full_like(tsdata["TIME"],np.nan)
+    
+    # Below we calculate a running rms for each source's data
+    # get number of targets from header of first image
+    nsrc = fits.getheader(sci_list[0],1)['NOBJCAT']
 
-    if gettimedata :
+    # convert time span from minutes to days
+    time_span_for_rms_d = time_span_for_rms/(60*24)
 
-        times = np.array(times, dtype='f8')
-        tsdata["TIME"] = times
+    # populate rms data
+    for i in range(nsrc) :
+        keep = srcindex == i
+        t = times[keep]
+        mag, emag = mags[keep], emags[keep]
+        
+        for j in range(len(t)) :
+        
+            weights = 1/(emag*emag)
 
-    if getcoordsdata :
+            keep_for_rms = (t > t[j] - time_span_for_rms_d/2) & (t < t[j] + time_span_for_rms_d/2)
 
-        xs = np.array(xs, dtype='f8')
-        ys = np.array(ys, dtype='f8')
-        ras = np.array(ras, dtype='f8')
-        decs = np.array(decs, dtype='f8')
-        fwhms = np.array(fwhms, dtype='f8')
-
-        tsdata["X"] = xs
-        tsdata["Y"] = ys
-        tsdata["RA"] = ras
-        tsdata["DEC"] = decs
-        tsdata["FWHM"] = fwhms
-
-    if getphotdata :
-
-        mags = np.array(mags, dtype='f8')
-        emags = np.array(emags, dtype='f8')
-        smags = np.array(smags, dtype='f8')
-        esmags = np.array(esmags, dtype='f8')
-        flags = np.array(flags, dtype='i4')
-
-        tsdata["MAG"] = mags
-        tsdata["EMAG"] = emags
-        tsdata["SKYMAG"] = smags
-        tsdata["ESKYMAG"] = esmags
-        tsdata["FLAG"] = flags
-
-    return tsdata
+            keep_for_rms &= np.isfinite(mag)
+            keep_for_rms &= np.isfinite(weights)
+            
+            if len(mag[keep_for_rms]) > 1 :
+                rms = np.sqrt(np.cov(mag[keep_for_rms], aweights=weights[keep_for_rms]))
+                tsdata["RMS"][i+nsrc*j] = rms
+            elif len(mag[keep_for_rms]) == 1 :
+                tsdata["RMS"][i+nsrc*j] = tsdata["EMAG"][i+nsrc*j]
+                
+    return Table(tsdata)
 
 
 def nan_proof_keyword(value) :
@@ -813,7 +805,8 @@ def nan_proof_keyword(value) :
     else :
         return value
 
-def polarProduct(sources, polar_catalogs, info={}, filename="") :
+
+def polarProduct(polar_catalogs, info={}, filename="") :
     """ Create a polarimetry FITS product
 
     Parameters
@@ -838,19 +831,11 @@ def polarProduct(sources, polar_catalogs, info={}, filename="") :
         output hdu_list top-level FITS object.
     """
 
-    nsources = len(sources)
-
-    #tstart = Time(times[0], format='jd', scale='utc')
-    #tstop = Time(times[-1], format='jd', scale='utc')
-
     # add information about data in the product
     info['ORIGIN'] = ('LNA/MCTI', 'institution responsible for creating this file')
     info['CREATOR'] = ("SPARC4-PIPELINE", 'pipeline job and program used to produc')
     info['FILEVER'] = ('1.0', 'file format version')
     info['DATE'] = (Time.now().iso, 'file creation date')
-    info['NSOURCES'] = (nsources, 'number of sources')
-    #info['CHANNEL'] = (nsources, 'number of sources')
-    #info['BAND'] = (nsources, 'number of sources')
 
     # create empty header
     header = fits.PrimaryHDU().header
@@ -861,54 +846,23 @@ def polarProduct(sources, polar_catalogs, info={}, filename="") :
 
     # create primary hdu
     primary_hdu = fits.PrimaryHDU(header = header)
-
+    
+    # add primary hdu into a list of hdus
     hdus = [primary_hdu]
 
-    for j in range(nsources) :
-
+    for aperture_key in polar_catalogs.keys() :
+    
         # create empty header for catalog extension
         catalog_header = fits.PrimaryHDU().header
 
-        src = sources[j]
+        # set aperture radius in header of extension
+        catalog_header.set("APRADIUS", polar_catalogs[aperture_key]["APER"][0], "aperture radius in pixels")
 
-        catalog_header.set("SRCINDEX", j, "Source index")
-        catalog_header.set("RA", nan_proof_keyword(src['RA']), "right ascension [deg]")
-        catalog_header.set("DEC", nan_proof_keyword(src['DEC']), "declination [deg]")
+        # cast polar catalog dictionary into a astropy Table
+        tbl_catalog = Table(polar_catalogs[aperture_key])
 
-        catalog_header.set("X1", nan_proof_keyword(src['X1']), "x-position of North beam [pix]")
-        catalog_header.set("Y1", nan_proof_keyword(src['Y1']), "y-position of North beam [pix]")
-        catalog_header.set("X2", nan_proof_keyword(src['X2']), "x-position of South beam [pix]")
-        catalog_header.set("Y2", nan_proof_keyword(src['Y2']), "y-position of South beam [pix]")
-        catalog_header.set("MAG", nan_proof_keyword(src['MAG']), "magnitude")
-        catalog_header.set("EMAG", nan_proof_keyword(src['EMAG']), "magnitude error")
-        catalog_header.set("FWHM", nan_proof_keyword(src['FWHM']), "full width at half maximum [pix]")
-
-        # add number of apertures in catalog table
-        catalog_header.set("NAPER", len(polar_catalogs), "Number of apertures")
-
-        # collect catalog data
-        catdata = []
-
-        for key in polar_catalogs[j].keys() :
-            catdata.append(polar_catalogs[j][key])
-
-        # set names and data format for each column in the catalog table
-        dtype=[('INDEX', 'i4'), ('APER', 'i4'),
-                   ('Q', 'f8'), ('EQ', 'f8'), ('U', 'f8'), ('EU', 'f8'), ('V', 'f8'), ('EV', 'f8'),
-                   ('P', 'f8'), ('EP', 'f8'), ('THETA', 'f8'), ('ETHETA', 'f8'),
-                   ('K', 'f8'), ('EK', 'f8'), ('ZERO', 'f8'), ('EZERO', 'f8'), ('NOBS', 'i4'), ('NPAR', 'i4'),
-                   ('CHI2', 'f8'), ('FLAG', 'i4')]
-
-        for ii in range(header['NEXPS']) :
-            dtype.append(("Z{:04d}".format(ii), 'f8'))
-            dtype.append(("EZ{:04d}".format(ii), 'f8'))
-
-        # cast catalog data into numpy array
-        catalog_array = np.array(catdata, dtype=dtype)
-
-        cat_label = "CATALOG_POLAR_{:05d}".format(j)
-
-        hdu_catalog = fits.TableHDU(data=catalog_array, header=catalog_header, name=cat_label)
+        # stare in a catalog hdu
+        hdu_catalog = fits.BinTableHDU(data=tbl_catalog, header=catalog_header, name=aperture_key)
 
         # append catalog hdu to hdulist
         hdus.append(hdu_catalog)
@@ -924,15 +878,13 @@ def polarProduct(sources, polar_catalogs, info={}, filename="") :
     return hdu_list
 
 
-def polarTimeSeriesProduct(tsdata, catalog_names, info={}, filename="") :
+def polarTimeSeriesProduct(tsdata, info={}, filename="") :
     """ Create a polarimetric time series FITS product
 
     Parameters
     ----------
     tsdata : dict
         time series data container
-    catalog_names : list
-        list of str with source catalog names
     info : dict
         dictionary with additional header cards to include in the header of product
         The following format must be used:
@@ -948,7 +900,7 @@ def polarTimeSeriesProduct(tsdata, catalog_names, info={}, filename="") :
     """
 
     # get time array
-    times = tsdata[catalog_names[0]]["TIME"]
+    times = tsdata["TIME"][tsdata["SRCINDEX"] == 0]
     # get number of polar measurements in the time series
     npolmeas = len(times)
 
@@ -972,16 +924,11 @@ def polarTimeSeriesProduct(tsdata, catalog_names, info={}, filename="") :
     # initialize list of hdus with the primary hdu
     hdu_array = [primary_hdu]
 
-    # loop over each key in the tsdata array to create a fits extension for each source
-    for key in catalog_names :
+    # create catalog polarimetry hdu for current source
+    catalog_polar_hdu = fits.BinTableHDU(data=Table(tsdata), name="POLAR_TIMESERIES")
 
-        tstbl = Table(tsdata[key])
-
-        # create catalog polarimetry hdu for current source
-        catalog_polar_hdu = fits.BinTableHDU(data=tstbl, name=key.replace("CATALOG_POLAR","POLAR_TIMESERIES"))
-
-        # append hdu
-        hdu_array.append(catalog_polar_hdu)
+    # append hdu
+    hdu_array.append(catalog_polar_hdu)
 
     # create hdu list
     hdu_list = fits.HDUList(hdu_array)

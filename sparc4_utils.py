@@ -24,6 +24,7 @@ from astropy.io import fits
 import numpy as np
 import matplotlib.pyplot as plt
 
+from copy import deepcopy
 import glob
 
 def set_timecoords_keys(hdr, timezone=-3, timetype="", ra="", dec="", set_airmass=True, time_key='DATE-OBS') :
@@ -387,68 +388,63 @@ def identify_files (p, night, print_report=True) :
 
 
 
-def select_polar_sequences (list_of_files, max_index_gap=1, max_time_gap=0.04166) :
+def select_polar_sequences(list_of_files, sortlist=True, verbose=False) :
 
     """ Pipeline module to select polarimetric sequences
     Parameters
     ----------
     list_of_files : list
         list of files
-    max_index_gap : int, optional
-        maximum gap between indices to accept files within the same sequence
-    max_time_gap : float, optional
-        maximum gap between times to accept files within the same sequence
+    sortlist : bool
+        sort input list of files
+    verbose : bool
+        turn on verbose
 
     Returns
     -------
-    sequences, wppositions : (list, list)
-        it returns two lists:
-            sequences: list of sequences, where each sequence is a list of files
-            wppositions: list of wppositions, where each lists waveplate positions
-            respective to the files in the sequences
-
+    sequences : list
+        list of sequences, where each sequence is a list of files
     """
 
-    sequences, wppositions = [], []
+    sortedlist = deepcopy(list_of_files)
+    if sortlist :
+        # make sure the input list is sorted
+        sortedlist = sorted(sortedlist)
+    
+    # initialize list of sequences
+    sequences = []
+    
+    # run only for a non-empty list
+    if len(sortedlist) :
+    
+        # save WPPOS of first image
+        prev_pos = fits.getheader(sortedlist[0])['WPPOS']
+        # init current sequence list
+        seq = []
 
-    seq, wppos = [], []
+        for i in range(len(sortedlist)) :
 
-    previous_jd = None
-    previous_index = None
-    previous_wppos = None
-
-    first_pos = fits.getheader(list_of_files[0])['WPPOS']
-
-    for i in range(len(list_of_files)) :
-
-        basename = os.path.basename(list_of_files[i])
-        index = int(basename.split("_")[-3])
-        hdr = fits.getheader(list_of_files[i])
-        #print("{}/{} -> {} {} {} {} {} {} {} {}".format(i+1,len(list_of_files),basename,index,hdr['WPPOS'],hdr['NCYCLES'],hdr['CYCLIND'],hdr['NFRAMES'],hdr['FRAMEIND'],hdr['EXPTIME']))
-
-        # From second exposure start comparing with previous one
-        if i > 0 :
-            # Criteria to stop a given sequence and start a new one
-            if (hdr['WPPOS'] == first_pos and previous_wppos != first_pos) or (index - previous_index) > max_index_gap or (hdr['JD'] - previous_jd) > max_time_gap :
+            # get current WPPOS from header
+            current_pos = fits.getheader(sortedlist[i])["WPPOS"]
+            
+            # if current pos is lower than previous it means a new
+            # sequence started -> increment sequences and reset seq
+            if current_pos < prev_pos :
                 sequences.append(seq)
-                wppositions.append(wppos)
-                if i < len(list_of_files)-1 :
-                    first_pos  = fits.getheader(list_of_files[i+1])['WPPOS']
-                seq, wppos = [], []
+                if verbose :
+                    print("Adding seq {} of {} files".format(len(sequences),len(seq)))
 
-        # append file to the current sequence
-        seq.append(list_of_files[i])
-        # append wave plate position of exposure
-        wppos.append(hdr['WPPOS'])
+                seq = []
 
-        # retain previous jd, index and wppos to compare with the next exposure
-        previous_jd = hdr['JD']
-        previous_index = index
-        previous_wppos = hdr['WPPOS']
+            # append file to current seq
+            seq.append(sortedlist[i])
+            # save current position as previous position
+            prev_pos = current_pos
+            
+            # Reached last file, add seq to sequences
+            if i == len(sortedlist) - 1 :
+                sequences.append(seq)
+                if verbose :
+                    print("Adding seq {} of {} files".format(len(sequences),len(seq)))
 
-        # if reached the end of list just append the seq and wppos to the list of sequences
-        if i == len(list_of_files)-1 :
-            sequences.append(seq)
-            wppositions.append(wppos)
-
-    return sequences, wppositions
+    return sequences
