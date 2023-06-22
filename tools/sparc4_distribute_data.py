@@ -65,14 +65,10 @@ parser.add_option("-r", "--reducedir", dest="reducedir", help="Reduced data dire
 parser.add_option("-c", "--channels", dest="channels", help="SPARC4 channels: e.g '1,3,4' ",type='string',default="1,2,3,4")
 parser.add_option("-a", "--nightdir", dest="nightdir", help="Name of night directory common to all channels",type='string',default="")
 parser.add_option("-o", "--objects", dest="objects", help="List of objects to get data",type='string',default="")
-parser.add_option("-i", "--instmode", dest="instmode", help="Instrument mode to get data",type='string',default="")
-parser.add_option("-l", "--polarmode", dest="polarmode", help="Polar mode to get data",type='string',default="")
-parser.add_option("-t", "--detector_mode", dest="detector_mode", help="Detector mode to get data",type='string',default="")
 parser.add_option("-e", "--destdir", dest="destdir", help="Destination data directory",type='string',default="")
 parser.add_option("-1", action="store_true", dest="checkdata", help="checkdata", default=False)
 parser.add_option("-k", action="store_true", dest="symboliclinks", help="symboliclinks", default=False)
 parser.add_option("-b", action="store_true", dest="onlycalibration", help="onlycalibration", default=False)
-parser.add_option("-f", action="store_true", dest="onlyfullframe", help="onlyfullframe", default=False)
 parser.add_option("-p", action="store_true", dest="plot", help="plot", default=False)
 parser.add_option("-v", action="store_true", dest="verbose", help="verbose", default=False)
 
@@ -140,7 +136,7 @@ if options.checkdata :
             else :
                 strlist += '{},'.format(obj)
         print(strlist)
-        exit()
+    exit()
         
         
 in_objs = options.objects.split(",")
