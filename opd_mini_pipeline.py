@@ -160,8 +160,7 @@ phot_ts_product = s4pipelib.phot_time_series(p['OBJECT_REDUCED_IMAGES'][1:],
                                              reduce_dir=options.reducedir,
                                              time_key=p['TIME_KEYWORD_IN_PROC'],
                                              time_format=p['TIME_FORMAT_IN_PROC'],
-                                             ref_catalog_name=p['PHOT_REF_CATALOG_NAME'],
-                                             catalog_names=[p['PHOT_REF_CATALOG_NAME']],
+                                             catalog_names=p['PHOT_CATALOG_NAMES_TO_INCLUDE'],
                                              force=options.force)
 
 target = 0
