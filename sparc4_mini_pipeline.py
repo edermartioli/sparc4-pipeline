@@ -90,7 +90,7 @@ for channel in p['SELECTED_CHANNELS'] :
         if len(skyflat_list) :
             # calculate master sky flat
             p["master_skyflat"] = "{}/{}_s4c{}{}_MasterSkyFlat.fits".format(reduce_dir,options.nightdir,p['CHANNELS'][j],key)
-            p = s4pipelib.run_master_calibration(p, inputlist=skyflat_list, output=p["master_skyflat"], obstype='flat', data_dir=data_dir, reduce_dir=reduce_dir, normalize=True, force=options.force)
+            p = s4pipelib.run_master_calibration(p, inputlist=p["master_skyflat"], output=master_skyflat, obstype='flat', data_dir=data_dir, reduce_dir=reduce_dir, normalize=True, force=options.force)
 
         # create a list of flats for current detector mode
         flat_list = s4db.get_file_list(db, obstype=p['FLAT_OBSTYPE_KEYVALUE'], detector_mode=detector_modes[key])

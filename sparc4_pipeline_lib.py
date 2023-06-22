@@ -107,8 +107,8 @@ def init_s4_p(nightdir, datadir="", reducedir="", channels="", print_report=Fals
         os.mkdir(p['ROOTREDUCEDIR'])
 
     #organize files to be reduced
-    
-    p = s4utils.identify_files(p, nightdir, print_report=print_report)
+    if print_report :
+        p = s4utils.identify_files(p, nightdir, print_report=print_report)
 
     p['data_directories'] = []
     p['ch_reduce_directories'] = []

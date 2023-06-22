@@ -73,13 +73,17 @@ def set_timecoords_keys(hdr, timezone=-3, timetype="", ra="", dec="", set_airmas
     equinox="J{:.1f}".format(2000.)
     if 'EQUINOX' in hdr.keys() :
         equinox="J{:.1f}".format(hdr['EQUINOX'])
-
-    if ra == "" :
-        ra = hdr['RA']
-    if dec == "" :
-        dec = hdr['DEC']
-    # set source observed
-    source = SkyCoord(ra, dec, unit=(u.hourangle, u.deg), frame='icrs', equinox=equinox)
+    
+    try :
+        if ra == "" :
+            ra = hdr['RA']
+        if dec == "" :
+            dec = hdr['DEC']
+        # set source observed
+        source = SkyCoord(ra, dec, unit=(u.hourangle, u.deg), frame='icrs', equinox=equinox)
+    except :
+        print("WARNING: could not set coordinates RA: {}  DEC: {}. Setting RA=0 Dec=0.".format(ra, dec))
+        source = SkyCoord(0, 0, unit="deg")
 
     radeg, decdeg = source.ra.value, source.dec.value
     #hdr.set("RA_DEG",radeg,"Requested Right Ascension (deg)")
