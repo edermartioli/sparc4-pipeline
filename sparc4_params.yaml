@@ -138,25 +138,34 @@ ZERO_OF_WAVEPLATE: 108.7
 
 #### ASTROMETRY ####
 PLATE_SCALE: 0.335  # ARCSEC/PIXEL
+#PLATE_SCALE: 0.18  # ARCSEC/PIXEL
+
+# order of polynomial to fit astrometry solution
+TWEAK_ORDER: 3
+
+# radius to define the range of solutions in units of degree
+SEARCH_RADIUS:  0.1
 
 # directory path to the astrometric indices
 ASTROM_INDX_PATH : '/Volumes/Samsung_T5/sparc4-pipeline/astrometry_indexes/'
 
-#PLATE_SCALE: 0.18  # ARCSEC/PIXEL
-ASTROM_REF_IMGS: ['/Volumes/Samsung_T5/sparc4-pipeline/calibdb/20230503_s4c1_CR1_astrometryRef_stack.fits',
-                  '/Volumes/Samsung_T5/sparc4-pipeline/calibdb/20230503_s4c2_CR1_astrometryRef_stack.fits',
-                  '/Volumes/Samsung_T5/sparc4-pipeline/calibdb/20230503_s4c3_CR1_astrometryRef_stack.fits',
-                  '/Volumes/Samsung_T5/sparc4-pipeline/calibdb/20230503_s4c4_CR1_astrometryRef_stack.fits']
-TWEAK_ORDER: 3  # order of polynomial to fit astrometry solution
-SEARCH_RADIUS:  0.1  # radius to define the range of solutions in units of degree
+# paths to the astrometric reference images in the 4-channels
+ASTROM_REF_IMGS: ['20230503_s4c1_CR1_astrometryRef_stack.fits',
+                  '20230503_s4c2_CR1_astrometryRef_stack.fits',
+                  '20230503_s4c3_CR1_astrometryRef_stack.fits',
+                  '20230503_s4c4_CR1_astrometryRef_stack.fits']
 #-------------------------------------
 
 
 #### TIME SERIES ####
+# set header keyword to get time
 #TIME_KEYWORD_IN_PROC: 'DATE-OBS'
-#TIME_FORMAT_IN_PROC: 'isot'
 TIME_KEYWORD_IN_PROC: 'BJD'
+
+# set time format that appears in the header
+#TIME_FORMAT_IN_PROC: 'isot'
 TIME_FORMAT_IN_PROC: 'jd'
+
 # Time span to define window (in minutes) within wich to calculate running rms
 TIME_SPAN_FOR_RMS: 10.0
 

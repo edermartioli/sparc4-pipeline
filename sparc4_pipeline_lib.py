@@ -14,12 +14,6 @@ __copyright__ = """
     Copyright (c) ...  All rights reserved.
     """
 
-__version__ = "1.0"
-
-__copyright__ = """
-    Copyright (c) ...  All rights reserved.
-    """
-
 import os,sys
 
 import sparc4_products as s4p
@@ -63,7 +57,6 @@ from astropy.wcs import WCS
 from astropy.wcs.utils import proj_plane_pixel_scales
 
 from scipy import signal
-
 
 def init_s4_p(nightdir, datadir="", reducedir="", channels="", print_report=False) :
     """ Pipeline module to initialize SPARC4 parameters
@@ -2181,21 +2174,21 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
     print("Number of sources in catalog: {}".format(nsources))
     print("Number of apertures: {}  varying from {} to {} in steps of {} pix".format(len(apertures),apertures[0],apertures[-1],np.abs(np.nanmedian(apertures[1:]-apertures[:-1]))))
 
-    # set number of free parameters in the fit
-    number_of_free_params = 4 # can we get this number from pol?
+    # set number of free parameters equals 2: u and q
+    number_of_free_params = 2
 
     if wave_plate == 'halfwave' :
         zero = 0
 
+    # add one parameter: v
     if wave_plate == 'quarterwave' :
         number_of_free_params += 1
 
+    # if zero is free, then add another parameter
     if fit_zero :
         zero = None
         # we do not fit zero and k simultaneously
         compute_k = False
-
-    if compute_k :
         number_of_free_params += 1
 
     # initialize astropop SLSDualBeamPolarimetry object
@@ -2215,8 +2208,10 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
                'CHI2', 'POLARFLAG']
 
     for i in range(len(sci_list)) :
-        variables.append('Z{:04d}'.format(i))
-        variables.append('EZ{:04d}'.format(i))
+        variables.append('FO{:04d}'.format(i))
+        variables.append('EFO{:04d}'.format(i))
+        variables.append('FE{:04d}'.format(i))
+        variables.append('EFE{:04d}'.format(i))
 
     # Initialize container to store polarimetric data
     aperture_keys = []
@@ -2322,10 +2317,12 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
                           zero, zero_err,
                           number_of_observations, number_of_free_params,
                           chi2, polar_flag]
-                          
-            for ii in range(len(zi)) :
-                var_values.append(zi[ii])
-                var_values.append(zi_err[ii])
+
+            for ii in range(len(n_fo)) :
+                var_values.append(n_fo[ii])
+                var_values.append(en_fo[ii])
+                var_values.append(n_fe[ii])
+                var_values.append(en_fe[ii])
 
             for ii in range(len(variables)) :
                 polar_catalogs[aperture_keys[i]][variables[ii]] = np.append(polar_catalogs[aperture_keys[i]][variables[ii]],var_values[ii])
@@ -2471,16 +2468,23 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
     loc["Y2"] = tbl["Y2"][0]
 
     # get polarization data and the WP position angles
-    zis, zierrs, waveplate_angles = np.arange(nexps)*np.nan, np.arange(nexps)*np.nan, np.arange(nexps)*np.nan
+    fos, efos = np.arange(nexps)*np.nan, np.arange(nexps)*np.nan
+    fes, efes = np.arange(nexps)*np.nan, np.arange(nexps)*np.nan
+    zis, zierrs = np.arange(nexps)*np.nan, np.arange(nexps)*np.nan
+    waveplate_angles = np.arange(nexps)*np.nan
+    
     for ii in range(nexps) :
-        zis[ii] = tbl["Z{:04d}".format(ii)]
-        zierrs[ii] = tbl["EZ{:04d}".format(ii)]
+        fos[ii] = tbl["FO{:04d}".format(ii)]
+        efos[ii] = tbl["EFO{:04d}".format(ii)]
+        fes[ii] = tbl["FE{:04d}".format(ii)]
+        efes[ii] = tbl["EFE{:04d}".format(ii)]
         waveplate_angles[ii] = hdul[0].header["WANG{:04d}".format(ii)]
 
     # filter out nan data
-    keep = (np.isfinite(zis)) & (np.isfinite(zierrs))
+    keep = (np.isfinite(fos)) & (np.isfinite(fes))
+    keep &= (np.isfinite(efos)) & (np.isfinite(efes))
 
-    if len(zis[keep]) == 0 :
+    if len(fos[keep]) == 0 or  len(fes[keep]) == 0 :
         print("WARNING: no useful polarization data for Source index: {}  and aperture: {} pix ".format(source_index, aperture_radius))
         # get polarimetry results
         qpol = QFloat(np.nan, np.nan)
@@ -2491,6 +2495,8 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
         kcte = QFloat(np.nan, np.nan)
         zero = QFloat(np.nan, np.nan)
         # cast zi data into QFloat
+        fo = QFloat(np.array([np.nan]), np.array([np.nan]))
+        fe = QFloat(np.array([np.nan]), np.array([np.nan]))
         zi = QFloat(np.array([np.nan]), np.array([np.nan]))
         n, m = 0, 0
         sig_res = np.array([np.nan])
@@ -2505,15 +2511,31 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
         theta = QFloat(tbl['THETA'][0], tbl['ETHETA'][0])
         kcte = QFloat(tbl['K'][0], tbl['EK'][0])
         zero = QFloat(tbl['ZERO'][0], tbl['EZERO'][0])
+        
         # cast zi data into QFloat
-        zi = QFloat(zis[keep], zierrs[keep])
-
+        fo = QFloat(fos[keep], efos[keep])
+        fe = QFloat(fes[keep], efes[keep])
+        
         # calculate polarimetry model and get statistical quantities
         observed_model = np.full_like(waveplate_angles[keep],np.nan)
         if wave_plate == "halfwave" :
+            # initialize astropop SLSDualBeamPolarimetry object
+            pol = SLSDualBeamPolarimetry(wave_plate, compute_k=True, zero=0)
             observed_model = halfwave_model(waveplate_angles[keep], qpol.nominal, upol.nominal)
+            
         elif wave_plate == "quarterwave" :
+            # initialize astropop SLSDualBeamPolarimetry object
+            pol = SLSDualBeamPolarimetry(wave_plate, compute_k=False, zero=zero.nominal)
             observed_model = quarterwave_model(waveplate_angles[keep], qpol.nominal, upol.nominal, vpol.nominal, zero=zero.nominal)
+
+        # compute polarimetry
+        norm = pol.compute(waveplate_angles[keep], fos[keep], fes[keep], f_ord_error=efos[keep], f_ext_error=efes[keep])
+
+        zis[keep] = norm.zi.nominal
+        zierrs[keep] = norm.zi.std_dev
+        
+        # cast zi data into QFloat
+        zi = QFloat(zis[keep], zierrs[keep])
 
         n, m = tbl['NOBS'][0], tbl['NPAR'][0]
         resids = zi.nominal - observed_model
@@ -2539,6 +2561,8 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
 
     loc["WAVEPLATE_ANGLES"] = waveplate_angles[keep]
     loc["ZI"] = zi
+    loc["FO"] = fo
+    loc["FE"] = fe
     loc["OBSERVED_MODEL"] = observed_model
     loc["Q"] = qpol
     loc["U"] = upol

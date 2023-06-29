@@ -124,7 +124,7 @@ p = s4pipelib.stack_science_images(p,
 
 if options.plot :
     # plot phot stack product
-    s4plt.plot_sci_frame(p['OBJECT_STACK'], nstars=10)
+    s4plt.plot_sci_frame(p['OBJECT_STACK'], nstars=10, use_sky_coords=True)
 
 # set number of loops to reduce science data. Each loop must contain a
 # given maximum number of frames to avoid memory issues.

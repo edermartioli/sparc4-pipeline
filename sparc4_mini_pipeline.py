@@ -12,6 +12,8 @@
     python sparc4_mini_pipeline.py --nightdir=20230503 -vp
 
     python sparc4_mini_pipeline.py --nightdir=20230604 --datadir=/Volumes/Samsung_T5/Data/SPARC4/comissioning_jun23/ --reducedir=/Volumes/Samsung_T5/Data/SPARC4/comissioning_jun23/reduced -v
+    
+    python sparc4_mini_pipeline.py --nightdir=20230606 --datadir=/Volumes/Samsung_T5/Data/SPARC4/standards --reducedir=/Volumes/Samsung_T5/Data/SPARC4/standards/reduced -v
     """
 
 __version__ = "1.0"
@@ -31,6 +33,7 @@ import sparc4_db as s4db
 import numpy as np
 
 sparc4_pipeline_dir = os.path.dirname(__file__)
+calibdb_dir = os.path.join(sparc4_pipeline_dir,"calibdb/")
 
 parser = OptionParser()
 parser.add_option("-d", "--datadir", dest="datadir", help="data directory",type='string',default="")
@@ -99,7 +102,7 @@ for channel in p['SELECTED_CHANNELS'] :
         p = s4pipelib.run_master_calibration(p, inputlist=flat_list, output=p["master_flat"], obstype='flat', data_dir=data_dir, reduce_dir=reduce_dir, normalize=True, force=options.force)
 
         # set astrometry ref image as the one for this channel
-        p["ASTROM_REF_IMG"] = p["ASTROM_REF_IMGS"][j]
+        p["ASTROM_REF_IMG"] = os.path.join(calibdb_dir,p["ASTROM_REF_IMGS"][j])
 
         try :
             # reduce science data in photometric mode
