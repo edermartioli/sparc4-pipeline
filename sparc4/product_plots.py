@@ -8,19 +8,17 @@
     Laboratório Nacional de Astrofísica - LNA/MCTI
     """
 
-import numpy as np
-import matplotlib.pyplot as plt
-from astropy.coordinates import Angle, SkyCoord
-from regions import CircleSkyRegion
-
-import astropy.io.fits as fits
-from astropy.wcs import WCS
-from astropy.wcs.utils import proj_plane_pixel_scales
-
 import warnings
 
+import matplotlib.pyplot as plt
+import numpy as np
 from astropop.math.physical import QFloat
-from astropop.polarimetry import quarterwave_model, halfwave_model
+from astropop.polarimetry import halfwave_model, quarterwave_model
+from astropy.coordinates import Angle, SkyCoord
+from astropy.io import fits
+from astropy.wcs import WCS
+from astropy.wcs.utils import proj_plane_pixel_scales
+from regions import CircleSkyRegion
 
 
 def plot_cal_frame(filename, output="", percentile=99.5, xcut=512, ycut=512,

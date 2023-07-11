@@ -8,14 +8,13 @@
     Laboratório Nacional de Astrofísica - LNA/MCTI
     """
 
-from astropy.time import Time, TimeDelta
-import astropy.units as u
-from astropy.coordinates import SkyCoord, EarthLocation, AltAz
-
-from astropy.io import fits
-
-from copy import deepcopy
 import glob
+from copy import deepcopy
+
+from astropy import units as u
+from astropy.coordinates import AltAz, EarthLocation, SkyCoord
+from astropy.io import fits
+from astropy.time import Time, TimeDelta
 
 
 def set_timecoords_keys(hdr, timezone=-3, timetype="", ra="", dec="",

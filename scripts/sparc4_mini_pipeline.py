@@ -20,10 +20,10 @@ import os
 import sys
 from optparse import OptionParser
 
-# import sparc4.product_plots as s4plt
-import sparc4.pipeline_lib as s4pipelib
 # import sparc4.utils as s4utils
 import sparc4.db as s4db
+# import sparc4.product_plots as s4plt
+import sparc4.pipeline_lib as s4pipelib
 
 sparc4_pipeline_dir = os.path.dirname(__file__)
 calibdb_dir = os.path.join(sparc4_pipeline_dir, "calibdb/")
