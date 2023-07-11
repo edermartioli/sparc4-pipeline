@@ -1,6 +1,9 @@
 # IDE
 .vscode
 
+# dynamic versioning
+sparc4/version.py
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
