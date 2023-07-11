@@ -21,8 +21,13 @@ from astropy.io import fits
 from astropy.table import Table
 
 
-def create_db_from_observations(filelist, dbkeys=[], include_img_statistics=True, include_only_fullframe=True, output=""):
-    """ SPARC4 pipeline module to create a database of observations
+def create_db_from_observations(filelist: list,
+                                dbkeys: list = None,
+                                include_img_statistics: bool = True,
+                                include_only_fullframe: bool = True,
+                                output: str = "") -> Table:
+    """Create a database of observations.
+
     Parameters
     ----------
     filelist : list
@@ -39,8 +44,10 @@ def create_db_from_observations(filelist, dbkeys=[], include_img_statistics=True
     tbl : astropy.table
         data base in astropy table format
     """
-    tbldata = {}
+    # Avoid security issues with mutable default arguments
+    dbkeys = dbkeys or []
 
+    tbldata = {}
     tbldata["FILE"] = []
 
     if include_img_statistics:
@@ -63,7 +70,7 @@ def create_db_from_observations(filelist, dbkeys=[], include_img_statistics=True
             if include_only_fullframe:
                 if hdr["NAXIS1"] != 1024 or hdr["NAXIS2"] != 1024:
                     continue
-        except:
+        except Exception:
             print("Skipping image file {}".format(filelist[i]))
             continue
 
@@ -90,8 +97,9 @@ def create_db_from_observations(filelist, dbkeys=[], include_img_statistics=True
     return tbl
 
 
-def create_db_from_file(db_filename):
-    """ SPARC4 pipeline module to create a database from an input db file
+def create_db_from_file(db_filename: str) -> Table:
+    """Create a database from an input db file.
+
     Parameters
     ----------
     db_filename : str
@@ -106,8 +114,13 @@ def create_db_from_file(db_filename):
     return tbl
 
 
-def get_targets_observed(tbl, inst_mode=None, polar_mode=None, calwheel_mode=None, detector_mode=None):
-    """ SPARC4 pipeline module to get targets observed
+def get_targets_observed(tbl: Table,
+                         inst_mode: str = None,
+                         polar_mode: str = None,
+                         calwheel_mode: str = None,
+                         detector_mode: str = None) -> Table:
+    """Get targets observed.
+
     Parameters
     ----------
     tbl : tbl : astropy.table
@@ -128,17 +141,17 @@ def get_targets_observed(tbl, inst_mode=None, polar_mode=None, calwheel_mode=Non
     """
     tbl = tbl[tbl["OBSTYPE"] == "OBJECT"]
 
-    if detector_mode != None:
+    if detector_mode is not None:
         for key in detector_mode.keys():
             tbl = tbl[tbl[key] == detector_mode[key]]
 
-    if polar_mode != None:
+    if polar_mode is not None:
         tbl = tbl[tbl['WPSEL'] == polar_mode]
 
-    if inst_mode != None:
+    if inst_mode is not None:
         tbl = tbl[tbl['INSTMODE'] == inst_mode]
 
-    if calwheel_mode != None:
+    if calwheel_mode is not None:
         tbl = tbl[tbl['CALW'] == calwheel_mode]
 
     targets = tbl.group_by("OBJECT").groups.keys
@@ -146,8 +159,11 @@ def get_targets_observed(tbl, inst_mode=None, polar_mode=None, calwheel_mode=Non
     return targets
 
 
-def get_detector_modes_observed(tbl, science_only=True, detector_keys=None):
-    """ SPARC4 pipeline module to get detector modes observed
+def get_detector_modes_observed(tbl: Table,
+                                science_only: bool = True,
+                                detector_keys: list = None) -> dict:
+    """Get detector modes observed.
+
     Parameters
     ----------
     tbl : tbl : astropy.table
@@ -163,7 +179,9 @@ def get_detector_modes_observed(tbl, science_only=True, detector_keys=None):
         dictionary with detector mdes detected in database
     """
 
-    # detector_keys = ["VBIN", "HBIN", "INITLIN", "INITCOL", "FINALLIN", "FINALCOL", "VCLKAMP", "CCDSERN", "VSHIFT", "PREAMP", "READRATE", "EMMODE", "EMGAIN"]
+    # detector_keys = ["VBIN", "HBIN", "INITLIN", "INITCOL", "FINALLIN",
+    #                  "FINALCOL", "VCLKAMP", "CCDSERN", "VSHIFT", "PREAMP",
+    #                  "READRATE", "EMMODE", "EMGAIN"]
 
     modes = {}
 
@@ -181,8 +199,10 @@ def get_detector_modes_observed(tbl, science_only=True, detector_keys=None):
     return modes
 
 
-def get_inst_modes_observed(tbl, science_only=True):
-    """ SPARC4 pipeline module to get instrument modes observed
+def get_inst_modes_observed(tbl: Table,
+                            science_only: bool = True) -> Table:
+    """Get instrument modes observed.
+
     Parameters
     ----------
     tbl : tbl : astropy.table
@@ -203,14 +223,17 @@ def get_inst_modes_observed(tbl, science_only=True):
     return inst_modes
 
 
-def get_polar_modes_observed(tbl, science_only=True):
-    """ SPARC4 pipeline module to get polarimetry modes observed
+def get_polar_modes_observed(tbl: Table,
+                             science_only: bool = True) -> Table:
+    """Get polarimetry modes observed.
+
     Parameters
     ----------
     tbl : tbl : astropy.table
         input database table
     science_only : bool, optional
         to consider only science data in mode selection
+
     Returns
     -------
     polar_modes : astropy.table
@@ -218,7 +241,8 @@ def get_polar_modes_observed(tbl, science_only=True):
     """
 
     if science_only:
-        tbl = tbl[(tbl["OBSTYPE"] == "OBJECT") & (tbl["INSTMODE"] == "POLAR")]
+        tbl = tbl[np.logical_and(tbl["OBSTYPE"] == "OBJECT",
+                                 tbl["INSTMODE"] == "POLAR")]
     else:
         tbl = tbl[tbl["INSTMODE"] == "POLAR"]
 
@@ -227,8 +251,11 @@ def get_polar_modes_observed(tbl, science_only=True):
     return polar_modes
 
 
-def get_calib_wheel_modes(tbl, science_only=True, polar_only=True):
-    """ SPARC4 pipeline module to get calibration wheel modes observed
+def get_calib_wheel_modes(tbl: Table,
+                          science_only: bool = True,
+                          polar_only: bool = True) -> Table:
+    """Get calibration wheel modes observed.
+
     Parameters
     ----------
     tbl : tbl : astropy.table
@@ -255,8 +282,16 @@ def get_calib_wheel_modes(tbl, science_only=True, polar_only=True):
     return calwheel_modes
 
 
-def get_file_list(tbl, object_id=None, inst_mode=None, polar_mode=None, obstype=None, calwheel_mode=None, detector_mode=None, skyflat=False):
-    """ SPARC4 pipeline module to get a list of files selected from database
+def get_file_list(tbl: Table,
+                  object_id: str = None,
+                  inst_mode: str = None,
+                  polar_mode: str = None,
+                  obstype: str = None,
+                  calwheel_mode: str = None,
+                  detector_mode: dict = None,
+                  skyflat: bool = False) -> list:
+    """Get a list of files selected from database.
+
     Parameters
     ----------
     tbl : tbl : astropy.table
@@ -275,35 +310,34 @@ def get_file_list(tbl, object_id=None, inst_mode=None, polar_mode=None, obstype=
         to select observations of a given detector mode
     skyflat : bool, optional
         special case for sky flats
+
     Returns
     -------
     outlist : list
         list of selected files from database
     """
 
-    # tbl, inst_mode="PHOT", polar_mode="NONE", obstype="ZERO", detector_mode={"PREAMP": "Gain 2","READRATE": 1,"EMMODE": 'Conventional',"EMGAIN": 2}
-
-    if object_id != None:
+    if object_id is not None:
         tbl = tbl[tbl["OBJECT"] == object_id]
 
     if skyflat:
-        tbl = tbl[(tbl["OBSTYPE"] == 'SFLAT') | (tbl["OBSTYPE"] == 'SKYFLAT') | (
-            tbl["OBJECT"] == 'SFLAT') | (tbl["OBJECT"] == 'SKYFLAT')]
+        tbl = tbl[(tbl["OBSTYPE"] == 'SFLAT') | (tbl["OBSTYPE"] == 'SKYFLAT') |
+                  (tbl["OBJECT"] == 'SFLAT') | (tbl["OBJECT"] == 'SKYFLAT')]
 
-    if (obstype != None) and (obstype in ["ZERO", "FLAT", "OBJECT"]):
+    if obstype in ["ZERO", "FLAT", "OBJECT"]:  # already ensured not None
         tbl = tbl[tbl["OBSTYPE"] == obstype]
 
-    if detector_mode != None:
+    if detector_mode is not None:
         for key in detector_mode.keys():
             tbl = tbl[tbl[key] == detector_mode[key]]
 
-    if polar_mode != None:
+    if polar_mode is not None:
         tbl = tbl[tbl['WPSEL'] == polar_mode]
 
-    if inst_mode != None:
+    if inst_mode is not None:
         tbl = tbl[tbl['INSTMODE'] == inst_mode]
 
-    if calwheel_mode != None:
+    if calwheel_mode is not None:
         tbl = tbl[tbl['CALW'] == calwheel_mode]
 
     outlist = []
@@ -313,8 +347,13 @@ def get_file_list(tbl, object_id=None, inst_mode=None, polar_mode=None, obstype=
     return outlist
 
 
-def get_polar_sequences(tbl, object_id, detector_mode, polar_mode, calwheel_mode=None):
-    """ SPARC4 pipeline module to get polar sequences within a given mode
+def get_polar_sequences(tbl: Table,
+                        object_id: str,
+                        detector_mode: dict,
+                        polar_mode: str,
+                        calwheel_mode: str = None) -> list:
+    """Get polar sequences within a given mode.
+
     Parameters
     ----------
     tbl : tbl : astropy.table
@@ -356,9 +395,7 @@ def get_polar_sequences(tbl, object_id, detector_mode, polar_mode, calwheel_mode
 
         for i in range(len(tbl)):
             current_pos = tbl["WPPOS"][i]
-
             # print(i, tbl["FILE"][i], tbl["WPPOS"][i], current_pos, prev_pos)
-
             if current_pos < prev_pos:
                 sequences.append(seq)
                 seq = []
