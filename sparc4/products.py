@@ -9,20 +9,18 @@
     """
 
 import os
-import numpy as np
-import astropy.io.fits as fits
+from copy import deepcopy
 from typing import Collection, Union
-from astropy import units as u
-from astropop.framedata import FrameData
 
+import numpy as np
+from astropop.framedata import FrameData
+from astropy import units as u
 from astropy.coordinates import EarthLocation
+from astropy.io import fits
+from astropy.table import Table
 from astropy.time import Time
 
 import sparc4.utils as s4utils
-
-from copy import deepcopy
-
-from astropy.table import Table
 
 ExtensionHDU = Union[fits.ImageHDU, fits.BinTableHDU]
 HDU = Union[fits.PrimaryHDU, ExtensionHDU]

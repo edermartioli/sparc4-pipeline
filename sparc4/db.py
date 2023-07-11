@@ -8,10 +8,11 @@
     Laboratório Nacional de Astrofísica - LNA/MCTI
     """
 
-from astropy.table import Table
-from astropy.io import fits
-import numpy as np
 from copy import deepcopy
+
+import numpy as np
+from astropy.io import fits
+from astropy.table import Table
 
 
 def create_db_from_observations(filelist, dbkeys=[], include_img_statistics=True, include_only_fullframe=True, output=""):

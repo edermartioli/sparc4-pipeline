@@ -8,55 +8,40 @@
     Laboratório Nacional de Astrofísica - LNA/MCTI
     """
 
-__version__ = "1.0"
-
-__copyright__ = """
-    Copyright (c) ...  All rights reserved.
-    """
-
-import os
-
-import sparc4.products as s4p
-import sparc4.product_plots as s4plt
-import sparc4.params as params
-import sparc4.utils as s4utils
-import sparc4.db as s4db
-
 import glob
-
-from astropy import units as u
-from astropy.io import fits
-from astropy.coordinates import SkyCoord
-from astropy.table import vstack, Table
-from astropy.time import Time
-from astropy.modeling import models, fitting
-
-from astropop.file_collection import FitsFileGroup
-# astropop used modules
-from astropop.image import imcombine, processing, imarith
-from astropop.photometry import background, starfind
-from astropop.photometry.detection import _fwhm_loop
-from astropop.math.array import trim_array, xy2r
-from astropop.math.physical import QFloat
-
-import numpy as np
-import matplotlib.pyplot as plt
-
-from astropop.image.register import register_framedata_list, compute_shift_list
-from astropop.photometry import aperture_photometry
-
-from astropop.polarimetry import match_pairs, estimate_dxdy, SLSDualBeamPolarimetry, quarterwave_model, halfwave_model
-
-from uncertainties import ufloat, umath
-
+import os
 from copy import deepcopy
 
-from astropy.coordinates import SkyCoord
+import matplotlib.pyplot as plt
+import numpy as np
+
 from astropop.astrometry import solve_astrometry_xy
+from astropop.file_collection import FitsFileGroup
+from astropop.image import imarith, imcombine, processing
+from astropop.image.register import compute_shift_list, register_framedata_list
+from astropop.math.array import trim_array
+from astropop.math.physical import QFloat
+from astropop.photometry import aperture_photometry, background, starfind
+from astropop.photometry.detection import _fwhm_loop
+from astropop.polarimetry import (SLSDualBeamPolarimetry, estimate_dxdy,
+                                  halfwave_model, match_pairs,
+                                  quarterwave_model)
+
+from astropy import units as u
+from astropy.coordinates import SkyCoord
+from astropy.io import fits
+from astropy.modeling import fitting, models
+from astropy.table import Table, vstack
+from astropy.time import Time
 from astropy.wcs import WCS
 from astropy.wcs.utils import proj_plane_pixel_scales
+from uncertainties import ufloat, umath
 
-from scipy import signal
+import sparc4.db as s4db
+import sparc4.params as params
+import sparc4.product_plots as s4plt
+import sparc4.products as s4p
+import sparc4.utils as s4utils
 
 
 def init_s4_p(nightdir, datadir="", reducedir="", channels="", print_report=False):

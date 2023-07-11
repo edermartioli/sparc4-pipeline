@@ -17,18 +17,17 @@
     python -W"ignore" /Volumes/Samsung_T5/sparc4-pipeline/opd_mini_pipeline.py --bias=/Volumes/Samsung_T5/Data/OPD/WASP-108/bias*.fits --flat=/Volumes/Samsung_T5/Data/OPD/WASP-108/flat*.fits --science=/Volumes/Samsung_T5/Data/OPD/WASP-108/wasp108b*.fits --reducedir=/Volumes/Samsung_T5/Data/OPD/WASP-108/reduced/ --time_key="DATE-OBS" --object="WASP-108" -vp
     """
 
+import glob
 import os
 import sys
 from optparse import OptionParser
 
-import sparc4.product_plots as s4plt
-import sparc4.pipeline_lib as s4pipelib
-# import sparc4.utils as s4utils
-import sparc4.params
-
 import numpy as np
 
-import glob
+# import sparc4.utils as s4utils
+import sparc4.params as s4params
+import sparc4.pipeline_lib as s4pipelib
+import sparc4.product_plots as s4plt
 
 sparc4_pipeline_dir = os.path.dirname(__file__)
 
@@ -64,7 +63,7 @@ except:
     sys.exit(1)
 
 # load pipeline parameters
-p = sparc4_params.load_sparc4_parameters()
+p = s4params.load_sparc4_parameters()
 
 # if reduced dir doesn't exist create one
 if not os.path.exists(options.reducedir):
@@ -165,13 +164,14 @@ for j in range(nloops):
 ts_suffix = "{}".format(object_id.replace(" ", ""))
 
 # run photometric time series
-phot_ts_product = s4pipelib.phot_time_series(p['OBJECT_REDUCED_IMAGES'][1:],
-                                             ts_suffix=ts_suffix,
-                                             reduce_dir=options.reducedir,
-                                             time_key=p['TIME_KEYWORD_IN_PROC'],
-                                             time_format=p['TIME_FORMAT_IN_PROC'],
-                                             catalog_names=p['PHOT_CATALOG_NAMES_TO_INCLUDE'],
-                                             force=options.force)
+phot_ts_product = s4pipelib.phot_time_series(
+    p['OBJECT_REDUCED_IMAGES'][1:],
+    ts_suffix=ts_suffix,
+    reduce_dir=options.reducedir,
+    time_key=p['TIME_KEYWORD_IN_PROC'],
+    time_format=p['TIME_FORMAT_IN_PROC'],
+    catalog_names=p['PHOT_CATALOG_NAMES_TO_INCLUDE'],
+    force=options.force)
 
 target = 0
 comps = [1, 2, 3]

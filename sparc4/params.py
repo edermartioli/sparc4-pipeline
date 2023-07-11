@@ -1,5 +1,6 @@
-import yaml
 import os
+
+import yaml
 
 
 def load_sparc4_parameters(config_file=None):
