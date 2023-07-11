@@ -14,13 +14,14 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
+"""TODO: Add module level documentation."""
 
 import os
 
 import yaml
 
 
-def load_sparc4_parameters(config_file=None):
+def load_sparc4_parameters(config_file: str = None) -> dict:
     """Load SPARC4 pipeline parameters from a yaml file.
 
     Parameters
