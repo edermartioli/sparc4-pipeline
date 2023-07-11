@@ -19,6 +19,7 @@ dependencies = [
     "astropop",
     "numpy",
     "matplotlib",
+    "pyyaml",
     "regions",
     "scipy",
     "uncertainties",
