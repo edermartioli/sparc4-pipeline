@@ -21,5 +21,5 @@ def load_sparc4_parameters(config_file=None):
         config_file = os.path.join(os.path.dirname(__file__),
                                    'sparc4_params.yaml')
     with open(config_file, 'r') as f:
-        params = yaml.safe_load(f, Loader=yaml.FullLoader)
+        params = yaml.safe_load(f)
     return params

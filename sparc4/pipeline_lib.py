@@ -82,8 +82,7 @@ def init_s4_p(nightdir, datadir="", reducedir="", channels="", print_report=Fals
             p['SELECTED_CHANNELS'].append(int(ch))
 
     # if reduced dir doesn't exist create one
-    if not os.path.exists(p['ROOTREDUCEDIR']):
-        os.mkdir(p['ROOTREDUCEDIR'])
+    os.makedirs(p['ROOTREDUCEDIR'], exist_ok=True)
 
     # organize files to be reduced
     if print_report:
@@ -112,12 +111,10 @@ def init_s4_p(nightdir, datadir="", reducedir="", channels="", print_report=Fals
         p['data_directories'].append(ch_night_data_dir)
 
         # if reduced dir doesn't exist create one
-        if not os.path.exists(ch_reduce_dir):
-            os.mkdir(ch_reduce_dir)
+        os.makedirs(ch_reduce_dir, exist_ok=True)
 
         # if reduced dir doesn't exist create one
-        if not os.path.exists(reduce_dir):
-            os.mkdir(reduce_dir)
+        os.makedirs(reduce_dir, exist_ok=True)
 
         db_file = '{}/{}/{}_sparc4acs{}_db.fits'.format(
             ch_reduce_dir, nightdir, nightdir, p['CHANNELS'][j])
