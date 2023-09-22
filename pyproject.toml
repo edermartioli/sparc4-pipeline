@@ -1,0 +1,34 @@
+[project]
+name = "sparc4-pipeline"
+authors = [
+    {name = "Eder Martioli", email = "martioli@lna.br"},
+    {name = "Julio Campagnolo", email = "julio.campagnolo@cefet-rj.br"},
+]
+description = ""
+readme = "README.md"
+requires-python = ">=3.8"
+keywords = ["astronomy", "pipeline", "data reduction", "photometry",
+            "polarimetry", "image processing", "astrometry"]
+license = {text = "GPL-3.0-or-later"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+]
+dependencies = [
+    'importlib-metadata; python_version<"3.8"',
+    "astropy",
+    "astropop",
+    "numpy",
+    "matplotlib",
+    "pyyaml",
+    "regions",
+    "scipy",
+    "uncertainties",
+]
+dynamic = ["version"]
+
+[tool.setuptools]
+packages = ['sparc4']
+
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
