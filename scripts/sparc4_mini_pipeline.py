@@ -9,11 +9,11 @@
 
     Simple usage example:
 
-    python sparc4_mini_pipeline.py --nightdir=20230503 -vp
+    python -W ignore sparc4_mini_pipeline.py --nightdir=20230604 -vp
 
-    python sparc4_mini_pipeline.py --nightdir=20230604 --datadir=/Volumes/Samsung_T5/Data/SPARC4/comissioning_jun23/ --reducedir=/Volumes/Samsung_T5/Data/SPARC4/comissioning_jun23/reduced -v
+    python -W ignore sparc4_mini_pipeline.py --nightdir=20230604 --datadir=/Volumes/Samsung_T5/Data/SPARC4/comissioning_jun23/ --reducedir=/Volumes/Samsung_T5/Data/SPARC4/comissioning_jun23/reduced -v
 
-    python sparc4_mini_pipeline.py --nightdir=20230606 --datadir=/Volumes/Samsung_T5/Data/SPARC4/standards --reducedir=/Volumes/Samsung_T5/Data/SPARC4/standards/reduced -v
+    python -W ignore sparc4_mini_pipeline.py --nightdir=20230606 --datadir=/Volumes/Samsung_T5/Data/SPARC4/standards --reducedir=/Volumes/Samsung_T5/Data/SPARC4/standards/reduced -v
     """
 
 import os
@@ -25,26 +25,14 @@ import sparc4.db as s4db
 # import sparc4.product_plots as s4plt
 import sparc4.pipeline_lib as s4pipelib
 
-sparc4_pipeline_dir = os.path.dirname(__file__)
-calibdb_dir = os.path.join(sparc4_pipeline_dir, "calibdb/")
-
 parser = OptionParser()
-parser.add_option("-d", "--datadir", dest="datadir",
-                  help="data directory", type='string', default="")
-parser.add_option("-r", "--reducedir", dest="reducedir",
-                  help="Reduced data directory", type='string', default="")
-parser.add_option("-c", "--channels", dest="channels",
-                  help="SPARC4 channels: e.g '1,3,4' ", type='string',
-                  default="1,2,3,4")
-parser.add_option("-a", "--nightdir", dest="nightdir",
-                  help="Name of night directory common to all channels",
-                  type='string', default="")
-parser.add_option("-f", action="store_true", dest="force",
-                  help="Force reduction", default=False)
-parser.add_option("-p", action="store_true", dest="plot",
-                  help="plot", default=False)
-parser.add_option("-v", action="store_true", dest="verbose",
-                  help="verbose", default=False)
+parser.add_option("-d", "--datadir", dest="datadir",help="data directory", type='string', default="")
+parser.add_option("-r", "--reducedir", dest="reducedir",help="Reduced data directory", type='string', default="")
+parser.add_option("-c", "--channels", dest="channels",help="SPARC4 channels: e.g '1,3,4' ", type='string',default="1,2,3,4")
+parser.add_option("-a", "--nightdir", dest="nightdir",help="Name of night directory common to all channels",type='string', default="")
+parser.add_option("-f", action="store_true", dest="force",help="Force reduction", default=False)
+parser.add_option("-p", action="store_true", dest="plot",help="plot", default=False)
+parser.add_option("-v", action="store_true", dest="verbose",help="verbose", default=False)
 
 try:
     options, args = parser.parse_args(sys.argv[1:])
@@ -62,9 +50,11 @@ p = s4pipelib.init_s4_p(options.nightdir,
                         options.channels,
                         print_report=options.verbose)
 
+# define path to default calibration directory
+calibdb_dir = os.path.join(p["SPARC4_PIPELINE_PARENT_DIR"], "calibdb/")
+
 # Run full reduction for selected channels
 for channel in p['SELECTED_CHANNELS']:
-    # for j in range(1,2) :
 
     # set zero based index of current channel
     j = channel - 1
@@ -75,69 +65,52 @@ for channel in p['SELECTED_CHANNELS']:
 
     # if db doesn't exist create one
     if not os.path.exists(p['s4db_files'][j]) or options.force:
-        db = s4db.create_db_from_observations(p['filelists'][j], p['DB_KEYS'], include_img_statistics=p["INCLUDE_IMG_STATISTICS"],
-                                              include_only_fullframe=p["FULL_FRAMES_ONLY"], output=p['s4db_files'][j])
+        db = s4db.create_db_from_observations(p['filelists'][j], p['DB_KEYS'], include_img_statistics=p["INCLUDE_IMG_STATISTICS"],include_only_fullframe=p["FULL_FRAMES_ONLY"], output=p['s4db_files'][j])
     else:
         db = s4db.create_db_from_file(p['s4db_files'][j])
 
     # detect all detector modes
-    detector_modes = s4db.get_detector_modes_observed(
-        db, science_only=True, detector_keys=p["DETECTOR_MODE_KEYWORDS"])
+    detector_modes = s4db.get_detector_modes_observed(db, science_only=True, detector_keys=p["DETECTOR_MODE_KEYWORDS"])
 
     for key in detector_modes.keys():
 
         # create a list of zeros for current detector mode
-        zero_list = s4db.get_file_list(
-            db, obstype=p['BIAS_OBSTYPE_KEYVALUE'], detector_mode=detector_modes[key])
+        zero_list = s4db.get_file_list(db, obstype=p['BIAS_OBSTYPE_KEYVALUE'], detector_mode=detector_modes[key])
         # calculate master bias
-        p["master_bias"] = "{}/{}_s4c{}{}_MasterZero.fits".format(
-            reduce_dir, options.nightdir, p['CHANNELS'][j], key)
-        p = s4pipelib.run_master_calibration(
-            p, inputlist=zero_list, output=p["master_bias"], obstype='bias', data_dir=data_dir, reduce_dir=reduce_dir, force=options.force)
+        p["master_bias"] = "{}/{}_s4c{}{}_MasterZero.fits".format(reduce_dir, options.nightdir, p['CHANNELS'][j], key)
+        p = s4pipelib.run_master_calibration(p, inputlist=zero_list, output=p["master_bias"], obstype='bias', data_dir=data_dir, reduce_dir=reduce_dir, force=options.force)
 
         # create a list of sky flats
         skyflat_list = s4db.get_file_list(
             db, detector_mode=detector_modes[key], skyflat=True)
         if len(skyflat_list):
             # calculate master sky flat
-            p["master_skyflat"] = "{}/{}_s4c{}{}_MasterSkyFlat.fits".format(
-                reduce_dir, options.nightdir, p['CHANNELS'][j], key)
-            p = s4pipelib.run_master_calibration(p, inputlist=p["master_skyflat"], output=master_skyflat,
-                                                 obstype='flat', data_dir=data_dir, reduce_dir=reduce_dir, normalize=True, force=options.force)
+            p["master_skyflat"] = "{}/{}_s4c{}{}_MasterSkyFlat.fits".format(reduce_dir, options.nightdir, p['CHANNELS'][j], key)
+            p = s4pipelib.run_master_calibration(p, inputlist=p["master_skyflat"], output=master_skyflat, obstype='flat', data_dir=data_dir, reduce_dir=reduce_dir, normalize=True, force=options.force)
 
         # create a list of flats for current detector mode
-        flat_list = s4db.get_file_list(
-            db, obstype=p['FLAT_OBSTYPE_KEYVALUE'], detector_mode=detector_modes[key])
+        flat_list = s4db.get_file_list(db, obstype=p['FLAT_OBSTYPE_KEYVALUE'], detector_mode=detector_modes[key])
         # calculate master dome flat
-        p["master_flat"] = "{}/{}_s4c{}{}_MasterDomeFlat.fits".format(
-            reduce_dir, options.nightdir, p['CHANNELS'][j], key)
-        p = s4pipelib.run_master_calibration(
-            p, inputlist=flat_list, output=p["master_flat"], obstype='flat', data_dir=data_dir, reduce_dir=reduce_dir, normalize=True, force=options.force)
+        p["master_flat"] = "{}/{}_s4c{}{}_MasterDomeFlat.fits".format(reduce_dir, options.nightdir, p['CHANNELS'][j], key)
+        p = s4pipelib.run_master_calibration( p, inputlist=flat_list, output=p["master_flat"], obstype='flat', data_dir=data_dir, reduce_dir=reduce_dir, normalize=True, force=options.force)
 
         # set astrometry ref image as the one for this channel
-        p["ASTROM_REF_IMG"] = os.path.join(
-            calibdb_dir, p["ASTROM_REF_IMGS"][j])
+        p["ASTROM_REF_IMG"] = os.path.join(calibdb_dir, p["ASTROM_REF_IMGS"][j])
 
         try:
             # reduce science data in photometric mode
-            p = s4pipelib.reduce_sci_data(db, p, j, p['INSTMODE_PHOTOMETRY_KEYVALUE'], detector_modes[key], options.nightdir, reduce_dir, polar_mode=None,
-                                          fit_zero=False, detector_mode_key=key, match_frames=match_frames, force=options.force, verbose=options.verbose, plot=options.plot)
+            p = s4pipelib.reduce_sci_data(db, p, j, p['INSTMODE_PHOTOMETRY_KEYVALUE'], detector_modes[key], options.nightdir, reduce_dir, polar_mode=None, fit_zero=False, detector_mode_key=key, match_frames=match_frames, force=options.force, verbose=options.verbose, plot=options.plot)
         except:
-            print("WARNING: Could not reduce {} mode detector mode {} ".format(
-                p['INSTMODE_PHOTOMETRY_KEYVALUE'], key))
+            print("WARNING: Could not reduce {} mode detector mode {} ".format(p['INSTMODE_PHOTOMETRY_KEYVALUE'], key))
 
         try:
             # reduce science data in polarimetric L2 mode
-            p = s4pipelib.reduce_sci_data(db, p, j, p['INSTMODE_POLARIMETRY_KEYVALUE'], detector_modes[key], options.nightdir, reduce_dir, polar_mode=p['POLARIMETRY_L2_KEYVALUE'],
-                                          fit_zero=False, detector_mode_key=key, match_frames=match_frames, force=options.force, verbose=options.verbose, plot=options.plot)
+            p = s4pipelib.reduce_sci_data(db, p, j, p['INSTMODE_POLARIMETRY_KEYVALUE'], detector_modes[key], options.nightdir, reduce_dir, polar_mode=p['POLARIMETRY_L2_KEYVALUE'], fit_zero=False, detector_mode_key=key, match_frames=match_frames, force=options.force, verbose=options.verbose, plot=options.plot)
         except:
-            print("WARNING: Could not reduce {}-{} mode detector mode {} ".format(
-                p['INSTMODE_POLARIMETRY_KEYVALUE'], p['POLARIMETRY_L4_KEYVALUE'], key))
+            print("WARNING: Could not reduce {}-{} mode detector mode {} ".format(p['INSTMODE_POLARIMETRY_KEYVALUE'], p['POLARIMETRY_L4_KEYVALUE'], key))
 
         try:
             # reduce science data in  polarimetric L4 mode
-            p = s4pipelib.reduce_sci_data(db, p, j, p['INSTMODE_POLARIMETRY_KEYVALUE'], detector_modes[key], options.nightdir, reduce_dir, polar_mode=p['POLARIMETRY_L4_KEYVALUE'],
-                                          fit_zero=fit_zero_of_wppos, detector_mode_key=key, match_frames=match_frames, force=options.force, verbose=options.verbose, plot=options.plot)
+            p = s4pipelib.reduce_sci_data(db, p, j, p['INSTMODE_POLARIMETRY_KEYVALUE'], detector_modes[key], options.nightdir, reduce_dir, polar_mode=p['POLARIMETRY_L4_KEYVALUE'], fit_zero=fit_zero_of_wppos, detector_mode_key=key, match_frames=match_frames, force=options.force, verbose=options.verbose, plot=options.plot)
         except:
-            print("WARNING: Could not reduce {}-{} mode detector mode {} ".format(
-                p['INSTMODE_POLARIMETRY_KEYVALUE'], p['POLARIMETRY_L4_KEYVALUE'], key))
+            print("WARNING: Could not reduce {}-{} mode detector mode {} ".format(p['INSTMODE_POLARIMETRY_KEYVALUE'], p['POLARIMETRY_L4_KEYVALUE'], key))
