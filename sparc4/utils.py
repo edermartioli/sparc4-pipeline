@@ -8,6 +8,7 @@
     Laboratório Nacional de Astrofísica - LNA/MCTI
     """
 
+import os, sys
 import glob
 from copy import deepcopy
 
@@ -18,7 +19,7 @@ from astropy.time import Time, TimeDelta
 
 
 def set_timecoords_keys(hdr, timezone=-3, timetype="", ra="", dec="",
-                        set_airmass=True, time_key='DATE-OBS'):
+                        set_airmass=True, time_key='DATE-OBS', exptimekey='EXPTIME'):
     """ Pipeline module to set time and coordinates keywords
     Parameters
     ----------
@@ -37,6 +38,8 @@ def set_timecoords_keys(hdr, timezone=-3, timetype="", ra="", dec="",
         Calculate airmass and write it to the header
     time_key : str, optional
         string to point to the main date keyword in FITS header
+    exptimekey : str, optional
+        string to point to the exposure time (in units of s) keyword in FITS header
 
     Returns
     -------
@@ -114,12 +117,21 @@ def set_timecoords_keys(hdr, timezone=-3, timetype="", ra="", dec="",
     hjd = obstime.tdb.jd + ltt_helio
 
     hdr.set("UTDATE", obstime.isot, "UT date at start of exposure ISOT")
-    hdr.set("LTDATE", (obstime+timeZone).isot,
-            "LT date at start of exposure ISOT")
+    hdr.set("LTDATE", (obstime+timeZone).isot,"LT date at start of exposure ISOT")
     hdr.set("JD", jd, "Julian date at start of exposure")
     hdr.set("MJD", mjd, "Modified Julian date at start of exposure")
     hdr.set("BJD", bjd.value, "Barycentric Julian date at start of exposure")
     hdr.set("HJD", hjd.value, "Heliocentric Julian date at start of exposure")
+
+    exptime = TimeDelta(float(hdr[exptimekey]), format='sec')
+    
+    midjd = (obstime+exptime/2).jd
+    midmjd = (obstime+exptime/2).mjd
+
+    hdr.set("MIDJD", midjd, "Julian date at middle of exposure")
+    hdr.set("MIDMJD", midmjd, "Modified Julian date at middle of exposure")
+    hdr.set("MIDBJD", (bjd+exptime/2).value, "Barycentric Julian date at middle of exposure")
+    hdr.set("MIDHJD", (hjd+exptime/2).value, "Heliocentric Julian date at middle of exposure")
 
     # sidereal = obstime.sidereal_time('apparent')
     # hdr.set("ST",sidereal,"Sidereal time")
@@ -410,7 +422,7 @@ def identify_files(p, night, print_report=True):
     return p
 
 
-def select_polar_sequences(list_of_files, sortlist=True, verbose=False):
+def select_polar_sequences(list_of_files, sortlist=True, npos_in_seq=16, rolling_seq=False, verbose=False):
     """ Pipeline module to select polarimetric sequences
     Parameters
     ----------
@@ -418,6 +430,10 @@ def select_polar_sequences(list_of_files, sortlist=True, verbose=False):
         list of files
     sortlist : bool
         sort input list of files
+    npos_in_seq : int
+        to set number of waveplate positions in each sequence
+    rolling_seq : bool
+        switch to create rolling polar sequences, e.g. seqs[1234,2345,3456,4567,...]
     verbose : bool
         turn on verbose
 
@@ -443,20 +459,34 @@ def select_polar_sequences(list_of_files, sortlist=True, verbose=False):
         # init current sequence list
         seq = []
 
-        for i in range(len(sortedlist)):
-
+        seq_index = 0
+        base_i_in_2nd_pos = 0
+        
+        i = 0
+        while i < len(sortedlist):
             # get current WPPOS from header
             current_pos = fits.getheader(sortedlist[i])["WPPOS"]
 
+            if current_pos != prev_pos :
+                if seq_index == 0 :
+                    base_i_in_2nd_pos = i
+                seq_index += 1
+
             # if current pos is lower than previous it means a new
             # sequence started -> increment sequences and reset seq
-            if current_pos < prev_pos:
+            if current_pos < prev_pos or seq_index == npos_in_seq :
                 sequences.append(seq)
                 if verbose:
                     print("Adding seq {} of {} files".format(
                         len(sequences), len(seq)))
 
+                seq_index = 0
                 seq = []
+
+                if rolling_seq :
+                    i = base_i_in_2nd_pos
+                    # save current position as the one from base i in 2nd previous pos
+                    current_pos = fits.getheader(sortedlist[i])["WPPOS"]
 
             # append file to current seq
             seq.append(sortedlist[i])
@@ -469,5 +499,39 @@ def select_polar_sequences(list_of_files, sortlist=True, verbose=False):
                 if verbose:
                     print("Adding seq {} of {} files".format(
                         len(sequences), len(seq)))
-
+            i += 1
+            
     return sequences
+
+
+
+def select_fits_files_with_keyword(list_of_files, keyword, value):
+
+    """ Pipeline tool to select FITS files matching a given keyword value
+    Parameters
+    ----------
+    list_of_files : list
+        input list of files
+    keyword : str
+        FITS keyword to match
+    value : *
+        keyword value to compare and match selected files
+
+    Returns
+    -------
+    matching_files : list
+        list of files
+    """
+
+    matching_files = []
+    
+    for i in range(len(list_of_files)):
+        if list_of_files[i].endswith(".fits"):
+            # Open the FITS file and read the header
+            with fits.open(list_of_files[i]) as hdul:
+                header = hdul[0].header
+                # Check if the keyword exists and matches the desired value
+                if keyword in header and header[keyword] == value:
+                    matching_files.append(list_of_files[i])
+    
+    return matching_files

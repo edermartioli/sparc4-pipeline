@@ -111,7 +111,7 @@ def plot_cal_frame(filename, output="", percentile=99.5, xcut=512, ycut=512,
     plt.show()
 
 
-def plot_sci_frame(filename, cat_ext=9, nstars=5, output="", percentile=98,
+def plot_sci_frame(filename, cat_ext=3, nstars=5, output="", percentile=98,
                    use_sky_coords=False):
     """ Plot science frame
 

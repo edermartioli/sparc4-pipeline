@@ -100,11 +100,11 @@ def create_db_from_file(db_filename):
     return tbl
 
 
-def get_targets_observed(tbl, inst_mode=None, polar_mode=None, calwheel_mode=None, detector_mode=None):
+def get_targets_observed(intbl, inst_mode=None, polar_mode=None, calwheel_mode=None, detector_mode=None):
     """ SPARC4 pipeline module to get targets observed
     Parameters
     ----------
-    tbl : tbl : astropy.table
+    intbl : astropy.table
         input database table
     inst_mode : str, optional
         to select observations of a given instrument mode
@@ -120,6 +120,8 @@ def get_targets_observed(tbl, inst_mode=None, polar_mode=None, calwheel_mode=Non
     targets : astropy.table
         objects observed detected in database
     """
+    tbl = deepcopy(intbl)
+    
     tbl = tbl[tbl["OBSTYPE"] == "OBJECT"]
 
     if detector_mode != None:
@@ -135,8 +137,12 @@ def get_targets_observed(tbl, inst_mode=None, polar_mode=None, calwheel_mode=Non
     if calwheel_mode != None:
         tbl = tbl[tbl['CALW'] == calwheel_mode]
 
-    targets = tbl.group_by("OBJECT").groups.keys
-
+    targets = Table()
+    try :
+        targets = tbl.group_by("OBJECT").groups.keys
+    except :
+        print("WARNING: could not group table by 'OBJECT' keyword")
+        
     return targets
 
 

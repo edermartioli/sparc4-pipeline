@@ -17,9 +17,15 @@ def load_sparc4_parameters(config_file=None):
     params : dict
         Dictionary containing pipeline parameters.
     """
+    
+    current_directory = os.path.dirname(os.path.abspath(__file__))
+    sp4_parent_dir = os.path.abspath(os.path.join(current_directory, os.pardir))
+
     if config_file is None:
-        config_file = os.path.join(os.path.dirname(__file__),
+        config_file = os.path.join(current_directory,
                                    'sparc4_params.yaml')
     with open(config_file, 'r') as f:
         params = yaml.safe_load(f)
+        params["SPARC4_PIPELINE_PARENT_DIR"] = sp4_parent_dir
+
     return params

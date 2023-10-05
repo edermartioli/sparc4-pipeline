@@ -175,8 +175,7 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
         polsuffix = "_{}_{}".format(inst_mode, polar_mode)
 
     # get list of objects observed in photometric mode
-    objs = s4db.get_targets_observed(
-        db, inst_mode=inst_mode, polar_mode=polar_mode, detector_mode=detector_mode)
+    objs = s4db.get_targets_observed(db, inst_mode=inst_mode, polar_mode=polar_mode, detector_mode=detector_mode)
 
     if obj != None:
         objs = objs[objs['OBJECT'] == obj]
@@ -186,11 +185,9 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
         obj = objs[k][0]
 
         # set suffix for output stack filename
-        stack_suffix = "{}_s4c{}{}_{}{}".format(
-            nightdir, p['CHANNELS'][channel_index], detector_mode_key, obj.replace(" ", ""), polsuffix)
+        stack_suffix = "{}_s4c{}{}_{}{}".format(nightdir, p['CHANNELS'][channel_index], detector_mode_key, obj.replace(" ", ""), polsuffix)
 
-        sci_list = s4db.get_file_list(db, object_id=obj, inst_mode=inst_mode, polar_mode=polar_mode,
-                                      obstype=p['OBJECT_OBSTYPE_KEYVALUE'], calwheel_mode=None, detector_mode=detector_mode)
+        sci_list = s4db.get_file_list(db, object_id=obj, inst_mode=inst_mode, polar_mode=polar_mode,obstype=p['OBJECT_OBSTYPE_KEYVALUE'], calwheel_mode=None, detector_mode=detector_mode)
 
         # run stack and reduce individual science images (produce *_proc.fits)
         p = stack_and_reduce_sci_images(p,
@@ -251,7 +248,7 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
 
             # divide input list into a many sequences
             pol_sequences = s4utils.select_polar_sequences(
-                p['OBJECT_REDUCED_IMAGES'], sortlist=True, verbose=verbose)
+                p['OBJECT_REDUCED_IMAGES'], sortlist=True, npos_in_seq=p["MAX_NUMBER_OF_WPPOS_IN_SEQUENCE"], rolling_seq=p["ROLLING_POLAR_SEQUENCE"], verbose=verbose)
 
             p['PolarProducts'] = []
 
@@ -261,8 +258,7 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
                     continue
 
                 if verbose:
-                    print("Running {} polarimetry for sequence: {} of {}".format(
-                        wave_plate, i+1, len(pol_sequences)))
+                    print("Running {} polarimetry for sequence: {} of {}".format(wave_plate, i+1, len(pol_sequences)))
                 polarproduct = compute_polarimetry(pol_sequences[i],
                                                    wave_plate=wave_plate,
                                                    base_aperture=p['APERTURE_RADIUS_FOR_PHOTOMETRY_IN_POLAR'],
@@ -414,7 +410,8 @@ def run_master_calibration(p, inputlist=[], output="", obstype='bias', data_dir=
 
     # call function masteZero from sparc4_products to generate final product
     mastercal = s4p.masterCalibration(filter_fg.files, img_data=img_data,
-                                      err_data=err_data, mask_data=mask_data, info=info, filename=output)
+                                      err_data=err_data, mask_data=mask_data,
+                                      info=info, filename=output)
 
     return p
 
@@ -556,18 +553,14 @@ def old_reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", forc
         if match_frames:
             print('Calculating offsets and selecting images for stack ... ')
             # run routine to select files that will be used for stack
-            p = select_files_for_stack_and_get_shifts(
-                p, frames, obj_fg.files, sort_method=p['METHOD_TO_SELECT_FILES_FOR_STACK'])
+            p = select_files_for_stack_and_get_shifts(p, frames, obj_fg.files, sort_method=p['METHOD_TO_SELECT_FILES_FOR_STACK'])
 
-            info['REFIMG'] = (p['REFERENCE_IMAGE'],
-                              "reference image for stack")
-            info['NIMGSTCK'] = (p['FINAL_NFILES_FOR_STACK'],
-                                "number of images for stack")
+            info['REFIMG'] = (p['REFERENCE_IMAGE'],"reference image for stack")
+            info['NIMGSTCK'] = (p['FINAL_NFILES_FOR_STACK'],"number of images for stack")
 
             print('Registering science frames ... ')
             # Register images, generate global catalog and generate stack image
-            p = run_register_frames(p, frames, obj_fg.files, info,
-                                    output_stack=output_stack, force=force, polarimetry=polarimetry)
+            p = run_register_frames(p, frames, obj_fg.files, info,output_stack=output_stack, force=force, polarimetry=polarimetry)
 
         # Perform aperture photometry and store reduced data into products
         for i, frame in enumerate(frames):
@@ -578,14 +571,12 @@ def old_reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", forc
             info['YSHIFTST'] = ("OK", "y shift status")
             if match_frames:
                 if np.isfinite(p["XSHIFTS"][i]):
-                    info['XSHIFT'] = (
-                        p["XSHIFTS"][i], "register x shift (pixel)")
+                    info['XSHIFT'] = (p["XSHIFTS"][i], "register x shift (pixel)")
                 else:
                     info['XSHIFTST'] = ("UNDEFINED", "x shift status")
 
                 if np.isfinite(p["YSHIFTS"][i]):
-                    info['YSHIFT'] = (
-                        p["YSHIFTS"][i], "register y shift (pixel)")
+                    info['YSHIFT'] = (p["YSHIFTS"][i], "register y shift (pixel)")
                 else:
                     info['YSHIFTST'] = ("UNDEFINED", "y shift status")
 
@@ -595,14 +586,17 @@ def old_reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", forc
                 err_data = np.array(frame.get_uncertainty())
                 mask_data = np.array(frame.mask)
 
+                exptime = 1.0
+                try :
+                    exptime = float(frames[0].header[p["EXPTIMEKEY"]])
+                except :
+                    print("WARNING: exposure time could not be retrieved from header keyword {}".format(p["EXPTIMEKEY"]))
                 try:
                     # make catalog
                     if match_frames:
-                        p, frame_catalogs = build_catalogs(p, img_data, deepcopy(
-                            p["CATALOGS"]), xshift=p["XSHIFTS"][i], yshift=p["YSHIFTS"][i], polarimetry=polarimetry)
+                        p, frame_catalogs = build_catalogs(p, img_data, deepcopy(p["CATALOGS"]), xshift=p["XSHIFTS"][i], yshift=p["YSHIFTS"][i], polarimetry=polarimetry, exptime=exptime)
                     else:
-                        p, frame_catalogs = build_catalogs(
-                            p, img_data, polarimetry=polarimetry)
+                        p, frame_catalogs = build_catalogs(p, img_data, polarimetry=polarimetry, exptime=exptime)
                 except:
                     print("WARNING: could not build frame catalog")
                     # set local
@@ -797,14 +791,18 @@ def reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", match_fr
             if not obj_red_status[i] or force:
                 # get data arrays
                 img_data = np.array(frame.data)
+                
+                exptime = 1.0
+                try :
+                    exptime = float(frames[0].header[p["EXPTIMEKEY"]])
+                except :
+                    print("WARNING: exposure time could not be retrieved from header keyword {}".format(p["EXPTIMEKEY"]))
                 try:
                     # make catalog
                     if match_frames and "CATALOGS" in p.keys():
-                        p, frame_catalogs = build_catalogs(p, img_data, deepcopy(
-                            p["CATALOGS"]), xshift=p["XSHIFTS"][i], yshift=p["YSHIFTS"][i], polarimetry=polarimetry)
+                        p, frame_catalogs = build_catalogs(p, img_data, deepcopy(p["CATALOGS"]), xshift=p["XSHIFTS"][i], yshift=p["YSHIFTS"][i], polarimetry=polarimetry, exptime=exptime)
                     else:
-                        p, frame_catalogs = build_catalogs(
-                            p, img_data, polarimetry=polarimetry)
+                        p, frame_catalogs = build_catalogs(p, img_data, polarimetry=polarimetry, exptime=exptime)
                 except:
                     print("WARNING: could not build frame catalog.")
                     # set local
@@ -824,8 +822,7 @@ def reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", match_fr
 
                 # call function to generate final product
                 # for light products
-                s4p.scienceImageLightProduct(obj_fg.files[i], img_data=img_data, info=info, catalogs=frame_catalogs, polarimetry=polarimetry,
-                                             filename=obj_red_images[i], catalog_beam_ids=p['CATALOG_BEAM_IDS'], wcs_header=frame_wcs_header, time_key=p["TIME_KEY"], ra=ra, dec=dec)
+                s4p.scienceImageLightProduct(obj_fg.files[i], img_data=img_data, info=info, catalogs=frame_catalogs, polarimetry=polarimetry,filename=obj_red_images[i], catalog_beam_ids=p['CATALOG_BEAM_IDS'], wcs_header=frame_wcs_header, time_key=p["TIME_KEY"], ra=ra, dec=dec)
 
     if 'OBJECT_REDUCED_IMAGES' not in p.keys():
         p['OBJECT_REDUCED_IMAGES'] = obj_red_images
@@ -969,7 +966,8 @@ def stack_science_images(p, inputlist, reduce_dir="./", force=False, stack_suffi
 
     # Register images, generate global catalog and generate stack image
     p = run_register_frames(p, frames, obj_fg.files, info,
-                            output_stack=output_stack, force=force, polarimetry=polarimetry)
+                            output_stack=output_stack, force=force,
+                            polarimetry=polarimetry)
 
     return p
 
@@ -1080,8 +1078,10 @@ def compute_offsets(p, frames, obj_files, auto_ref_selection=False):
         p['REF_IMAGE_INDEX'], obj_files[p['REF_IMAGE_INDEX']]))
 
     # get x and y shifts of all images with respect to the first image
-    shift_list = compute_shift_list(
-        frames, algorithm=p['SHIFT_ALGORITHM'], ref_image=p['REF_IMAGE_INDEX'], skip_failure=True)
+    if p['SHIFT_ALGORITHM'] == 'cross-correlation':
+        shift_list = compute_shift_list(frames, algorithm=p['SHIFT_ALGORITHM'], ref_image=p['REF_IMAGE_INDEX'], skip_failure=True, upsample_factor=p['UPSAMPLEFACTOR'])
+    else :
+        shift_list = compute_shift_list(frames, algorithm=p['SHIFT_ALGORITHM'], ref_image=p['REF_IMAGE_INDEX'], skip_failure=True)
 
     # store shifts in x and y np arrays
     x, y = np.array([]), np.array([])
@@ -1148,8 +1148,10 @@ def select_files_for_stack_and_get_shifts(p, frames, obj_files, sort_method='MAX
     print(p['REF_IMAGE_INDEX'], "Reference image: {}".format(p['REFERENCE_IMAGE']))
 
     # get x and y shifts of all images with respect to the first image
-    shift_list = compute_shift_list(
-        frames, algorithm=p['SHIFT_ALGORITHM'], ref_image=p['REF_IMAGE_INDEX'], skip_failure=True)
+    if p['SHIFT_ALGORITHM'] == 'cross-correlation':
+        shift_list = compute_shift_list(frames, algorithm=p['SHIFT_ALGORITHM'], ref_image=p['REF_IMAGE_INDEX'], skip_failure=True, upsample_factor=p['UPSAMPLEFACTOR'])
+    else :
+        shift_list = compute_shift_list(frames, algorithm=p['SHIFT_ALGORITHM'], ref_image=p['REF_IMAGE_INDEX'], skip_failure=True)
 
     # store shifts in x and y np arrays
     x, y = np.array([]), np.array([])
@@ -1256,23 +1258,33 @@ def run_register_frames(p, inframes, inobj_files, info, output_stack="", force=F
     """
 
     frames, obj_files = [], []
+    meanexptime = 0
     for i in p['SELECTED_FILE_INDICES_FOR_STACK']:
         print(i, inobj_files[i])
         frames.append(deepcopy(inframes[i]))
         obj_files.append(inobj_files[i])
-
+        exptime = 1.0
+        try :
+            exptime = float(frames[0].header[p["EXPTIMEKEY"]])
+        except :
+            print("WARNING: exposure time could not be retrieved from header keyword {}".format(p["EXPTIMEKEY"]))
+        meanexptime += exptime
+    
+    meanexptime /= len(p['SELECTED_FILE_INDICES_FOR_STACK'])
+    
     stack_method = p['SCI_STACK_METHOD']
 
     # shift_list = compute_shift_list(frames, algorithm='asterism-matching', ref_image=0)
     # print(shift_list)
 
     # register frames
-    registered_frames = register_framedata_list(
-        frames, algorithm=p['SHIFT_ALGORITHM'], ref_image=0, inplace=False, skip_failure=True)
+    if p['SHIFT_ALGORITHM'] == 'cross-correlation':
+        registered_frames = register_framedata_list(frames, algorithm=p['SHIFT_ALGORITHM'], ref_image=0, inplace=False, skip_failure=True, upsample_factor=p['UPSAMPLEFACTOR'])
+    else :
+        registered_frames = register_framedata_list(frames, algorithm=p['SHIFT_ALGORITHM'], ref_image=0, inplace=False, skip_failure=True)
 
     # stack all object files
-    combined = imcombine(registered_frames, method=stack_method,
-                         sigma_clip=p['SCI_STACK_SIGMA_CLIP'], sigma_cen_func='median', sigma_dev_func='std')
+    combined = imcombine(registered_frames, method=stack_method, sigma_clip=p['SCI_STACK_SIGMA_CLIP'], sigma_cen_func='median', sigma_dev_func='std')
 
     # get stack data
     img_data = np.array(combined.data, dtype=float)
@@ -1283,8 +1295,7 @@ def run_register_frames(p, inframes, inobj_files, info, output_stack="", force=F
     p = calculate_aperture_radius(p, img_data)
 
     # generate catalog
-    p, stack_catalogs = build_catalogs(
-        p, img_data, maxnsources=maxnsources, polarimetry=polarimetry, stackmode=True)
+    p, stack_catalogs = build_catalogs(p, img_data, maxnsources=maxnsources, polarimetry=polarimetry, stackmode=True, exptime=meanexptime)
 
     # set master catalogs
     p["CATALOGS"] = stack_catalogs
@@ -1293,8 +1304,7 @@ def run_register_frames(p, inframes, inobj_files, info, output_stack="", force=F
     if output_stack != "":
         if not os.path.exists(output_stack) or force:
             # for light products
-            s4p.scienceImageLightProduct(obj_files[0], img_data=img_data, info=info, catalogs=p["CATALOGS"], polarimetry=polarimetry,
-                                         filename=output_stack, catalog_beam_ids=p['CATALOG_BEAM_IDS'], wcs_header=p['WCS_HEADER'], time_key=p["TIME_KEY"])
+            s4p.scienceImageLightProduct(obj_files[0], img_data=img_data, info=info, catalogs=p["CATALOGS"], polarimetry=polarimetry,filename=output_stack, catalog_beam_ids=p['CATALOG_BEAM_IDS'], wcs_header=p['WCS_HEADER'], time_key=p["TIME_KEY"])
             # for more complete products with an error and mask extensions
             # s4p.scienceImageProduct(obj_files[0], img_data=img_data, err_data=err_data, mask_data=mask_data, info=info, catalogs=p["CATALOGS"], polarimetry=polarimetry, filename=output_stack, catalog_beam_ids=p['CATALOG_BEAM_IDS'], wcs_header=p['WCS_HEADER'], time_key=p["TIME_KEY"])
     return p
@@ -1372,7 +1382,7 @@ def calculate_aperture_radius(p, data):
     return p
 
 
-def run_aperture_photometry(img_data, x, y, aperture_radius, r_ann, output_mag=True, sortbyflux=True):
+def run_aperture_photometry(img_data, x, y, aperture_radius, r_ann, output_mag=True, sortbyflux=True, exptime=1.0, recenter=False):
     """ Pipeline module to run aperture photometry of sources in an image
     Parameters
     ----------
@@ -1390,31 +1400,49 @@ def run_aperture_photometry(img_data, x, y, aperture_radius, r_ann, output_mag=T
         to convert output flux into magnitude
     sortbyflux : bool, optional
         to sort output data by flux (brightest first)
+    exptime : float, optional
+        set exposure time for flux calculation
+    recenter : bool, optional
+        to recenter sources
+
     Returns
-        x, y, mag, mag_error, smag, smag_error, flags
+        x, y, mag, mag_error, smag, smag_error, fwhm, flags
     -------
      :
     """
 
+
+    """
+    #E. Martioli 28 Sep 2023: The code below is commented because it was writen
+    to be compatible with the new version of astropop, but the photometry turned out
+    to be very slow, so we backed out to the previous version, but left this one heer
+    for future implementation.
+    
+    recenter_method, recenter_limit = None, None
+    if recenter :
+        recenter_method='com' # com: center of mass method
+        recenter_limit=5 # recenter accepted up to 5 pixels
+
     # perform aperture photometry
-    ap_phot = aperture_photometry(img_data, x, y, r=aperture_radius, r_ann=r_ann, gain=1.0,
-                                  readnoise=None, mask=None, sky_algorithm='mmm')
+    ap_phot = aperture_photometry(img_data, x, y, r=aperture_radius, r_ann=r_ann, gain=1.0, bkg_method='mmm', recenter_method=recenter_method, recenter_limit=recenter_limit)
+    sky = np.array(ap_phot['bkg'])/exptime
+    sky_error = np.array(ap_phot['bkg_stddev'])/exptime
+    fwhm = np.array(ap_phot['fwhm'])
+    """
 
-    # I cannot get round and sharp because they may not match master catalog data
-    # ap_phot['round'], ap_phot['sharp'] = sources['round'], sources['sharp']
+    ap_phot = aperture_photometry(img_data, x, y, r=aperture_radius, r_ann=r_ann, gain=1.0)
 
-    # sort table in flux
     if sortbyflux:
+        # sort table by flux
         ap_phot.sort('flux')
         # reverse, to start with the highest flux
         ap_phot.reverse()
 
     x, y = np.array(ap_phot['x']), np.array(ap_phot['y'])
-    flux, flux_error = np.array(
-        ap_phot['flux']), np.array(ap_phot['flux_error'])
-    sky = np.array(ap_phot['sky'])
-    # round = np.array(ap_phot['round'])
-    # sharp = np.array(ap_phot['sharp'])
+    flux, flux_error = np.array(ap_phot['flux'])/exptime, np.array(ap_phot['flux_error'])/exptime
+    sky = np.array(ap_phot['sky'])/exptime
+    sky_error = np.array(ap_phot['sky_error'])/exptime
+    fwhm = np.zeros_like(x)
     flags = np.array(ap_phot['flags'])
 
     if output_mag:
@@ -1424,16 +1452,12 @@ def run_aperture_photometry(img_data, x, y, aperture_radius, r_ann, output_mag=T
         for i in range(len(flux)):
             umag = uflux_to_magnitude(ufloat(flux[i], flux_error[i]))
             mag[i], mag_error[i] = umag.nominal_value, umag.std_dev
-            # detnoise = np.sqrt(flux_error[i] * flux_error[i] - flux[i])
-            # uskymag = uflux_to_magnitude(ufloat(sky[i],np.sqrt(sky[i]+detnoise*detnoise)))
-            uskymag = uflux_to_magnitude(ufloat(sky[i], np.sqrt(sky[i])))
+            uskymag = uflux_to_magnitude(ufloat(sky[i], sky_error[i]))
             smag[i], smag_error[i] = uskymag.nominal_value, uskymag.std_dev
 
-        return x, y, mag, mag_error, smag, smag_error, flags
-
+        return x, y, mag, mag_error, smag, smag_error, fwhm, flags
     else:
-
-        return x, y, flux, flux_error, sky, np.sqrt(sky), flags
+        return x, y, flux, flux_error, sky, sky_error, fwhm, flags
 
 
 def read_catalog_coords(catalog):
@@ -1504,7 +1528,7 @@ def set_wcs(p):
     return p
 
 
-def generate_catalogs(p, data, sources, fwhm, catalogs=[], catalogs_label='', aperture_radius=10, r_ann=(25, 50), sortbyflux=True, maxnsources=0, polarimetry=False, use_e_beam_for_astrometry=False, solve_astrometry=False):
+def generate_catalogs(p, data, sources, fwhm, catalogs=[], catalogs_label='', aperture_radius=10, r_ann=(25, 50), sortbyflux=True, maxnsources=0, polarimetry=False, use_e_beam_for_astrometry=False, solve_astrometry=False, exptime=1.0):
     """ Pipeline module to generate new catalogs and append it
     to a given list of catalogs
     Parameters
@@ -1526,8 +1550,7 @@ def generate_catalogs(p, data, sources, fwhm, catalogs=[], catalogs_label='', ap
 
         # no input catalogs, then create new ones
         dx, dy = estimate_dxdy(sources['x'], sources['y'])
-        pairs = match_pairs(sources['x'], sources['y'],
-                            dx, dy, tolerance=p["MATCH_PAIRS_TOLERANCE"])
+        pairs = match_pairs(sources['x'], sources['y'], dx, dy, tolerance=p["MATCH_PAIRS_TOLERANCE"])
 
         sources_table = Table()
 
@@ -1541,27 +1564,25 @@ def generate_catalogs(p, data, sources, fwhm, catalogs=[], catalogs_label='', ap
         # print("sources:\n",sources)
         # print("\n\nsources_table:\n",sources_table)
 
-        xo, yo, mago, mago_error, smago, smago_error, flagso = run_aperture_photometry(
-            data, sources_table['x_o'], sources_table['y_o'], aperture_radius, r_ann, output_mag=True, sortbyflux=False)
+        xo, yo, mago, mago_error, smago, smago_error, fwhmso, flagso = run_aperture_photometry(data, sources_table['x_o'], sources_table['y_o'], aperture_radius, r_ann, output_mag=True, sortbyflux=False, exptime=exptime, recenter=p["RECENTER_APER_FOR_PHOTOMETRY"])
 
         sorted = np.full_like(xo, True, dtype=bool)
         if sortbyflux:
             sorted = np.argsort(mago)
 
-        xe, ye, mage, mage_error, smage, smage_error, flagse = run_aperture_photometry(
-            data, sources_table['x_e'], sources_table['y_e'], aperture_radius, r_ann, output_mag=True, sortbyflux=False)
+        xe, ye, mage, mage_error, smage, smage_error, fwhmse, flagse = run_aperture_photometry(data, sources_table['x_e'], sources_table['y_e'], aperture_radius, r_ann, output_mag=True, sortbyflux=False, exptime=exptime, recenter=p["RECENTER_APER_FOR_PHOTOMETRY"])
 
         xo, yo = xo[sorted], yo[sorted]
         mago, mago_error = mago[sorted], mago_error[sorted]
         smago, smago_error = smago[sorted], smago_error[sorted]
+        fwhmso = fwhmso[sorted]
         flagso = flagso[sorted]
 
         xe, ye = xe[sorted], ye[sorted]
         mage, mage_error = mage[sorted], mage_error[sorted]
         smage, smage_error = smage[sorted], smage_error[sorted]
+        fwhmse = fwhmse[sorted]
         flagse = flagse[sorted]
-
-        fwhmso, fwhmse = np.full_like(mago, fwhm), np.full_like(mage, fwhm)
 
         if use_e_beam_for_astrometry:
             xs_for_astrometry = xo
@@ -1601,18 +1622,13 @@ def generate_catalogs(p, data, sources, fwhm, catalogs=[], catalogs_label='', ap
 
         # save photometry data into the catalogs
         for i in range(nsources):
-            catalogs[current_catalogs_len]["{}".format(i)] = (
-                i, ras[i], decs[i], xo[i], yo[i], fwhmso[i], fwhmso[i], mago[i], mago_error[i], smago[i], smago_error[i], aperture_radius, flagso[i])
-            catalogs[current_catalogs_len+1]["{}".format(i)] = (i, ras[i], decs[i], xe[i], ye[i], fwhmse[i],
-                                                                fwhmse[i], mage[i], mage_error[i], smage[i], smage_error[i], aperture_radius, flagse[i])
+            catalogs[current_catalogs_len]["{}".format(i)] = (i, ras[i], decs[i], xo[i], yo[i], fwhmso[i], fwhmso[i], mago[i], mago_error[i], smago[i], smago_error[i], aperture_radius, flagso[i])
+            catalogs[current_catalogs_len+1]["{}".format(i)] = (i, ras[i], decs[i], xe[i], ye[i], fwhmse[i], fwhmse[i], mage[i], mage_error[i], smage[i], smage_error[i], aperture_radius, flagse[i])
     else:
         catalogs.append({})
 
         # x, y = np.array(sources['x']), np.array(sources['y'])
-        x, y, mag, mag_error, smag, smag_error, flags = run_aperture_photometry(
-            data, sources['x'], sources['y'], aperture_radius, r_ann, output_mag=True, sortbyflux=sortbyflux)
-
-        fwhms = np.full_like(mag, fwhm)
+        x, y, mag, mag_error, smag, smag_error, fwhms, flags = run_aperture_photometry(data, sources['x'], sources['y'], aperture_radius, r_ann, output_mag=True, sortbyflux=sortbyflux, exptime=exptime, recenter=p["RECENTER_APER_FOR_PHOTOMETRY"])
 
         if solve_astrometry:
             fluxes_for_astrometry = 10**(-0.4*mag)
@@ -1620,8 +1636,7 @@ def generate_catalogs(p, data, sources, fwhm, catalogs=[], catalogs_label='', ap
 
             try:
                 # image_header=p['REF_OBJECT_HEADER']
-                solution = solve_astrometry_xy(x, y, fluxes_for_astrometry, w, h, options={'ra': p['RA_DEG'], 'dec': p['DEC_DEG'], 'radius': p['SEARCH_RADIUS'], 'scale-low': p['PLATE_SCALE'] -
-                                               0.02, 'scale-high': p['PLATE_SCALE']+0.02, 'scale-units': 'arcsecperpix', 'crpix-center': 1, 'tweak-order': p['TWEAK_ORDER'], 'add_path': p['ASTROM_INDX_PATH']})
+                solution = solve_astrometry_xy(x, y, fluxes_for_astrometry, w, h, options={'ra': p['RA_DEG'], 'dec': p['DEC_DEG'], 'radius': p['SEARCH_RADIUS'], 'scale-low': p['PLATE_SCALE'] - 0.02, 'scale-high': p['PLATE_SCALE']+0.02, 'scale-units': 'arcsecperpix', 'crpix-center': 1, 'tweak-order': p['TWEAK_ORDER'], 'add_path': p['ASTROM_INDX_PATH']})
                 p['WCS'] = solution.wcs
                 p['WCS_HEADER'] = p['WCS'].to_header(relax=True)
             except:
@@ -1635,8 +1650,7 @@ def generate_catalogs(p, data, sources, fwhm, catalogs=[], catalogs_label='', ap
 
         # save photometry data into the catalog
         for i in range(nsources):
-            catalogs[current_catalogs_len]["{}".format(i)] = (
-                i, ras[i], decs[i], x[i], y[i], fwhms[i], fwhms[i], mag[i], mag_error[i], smag[i], smag_error[i], aperture_radius, flags[i])
+            catalogs[current_catalogs_len]["{}".format(i)] = (i, ras[i], decs[i], x[i], y[i], fwhms[i], fwhms[i], mag[i], mag_error[i], smag[i], smag_error[i], aperture_radius, flags[i])
 
     return catalogs
 
@@ -1671,7 +1685,7 @@ def set_sky_aperture(p, aperture_radius):
     return r_ann
 
 
-def build_catalogs(p, data, catalogs=[], xshift=0., yshift=0., solve_astrometry=True, maxnsources=0, polarimetry=False, stackmode=False):
+def build_catalogs(p, data, catalogs=[], xshift=0., yshift=0., solve_astrometry=True, maxnsources=0, polarimetry=False, stackmode=False, exptime=1.0):
     """ Pipeline module to generate the catalogs of sources from an image
         This module will perform the following tasks:
         1. Calculate background in the input image
@@ -1697,6 +1711,9 @@ def build_catalogs(p, data, catalogs=[], xshift=0., yshift=0., solve_astrometry=
         for maxnsources=0 it will include all detected sources
     polarimetry : bool, default=False
         whether or not input data is a dual beam polarimetric image with duplicated sources
+    exptime : float, optional
+        exposure time in units of seconds
+
     Returns
     -------
     p : dict
@@ -1712,8 +1729,7 @@ def build_catalogs(p, data, catalogs=[], xshift=0., yshift=0., solve_astrometry=
     bkg, rms = background(data, global_bkg=False)
 
     # detect sources
-    sources = starfind(
-        data, threshold=p["PHOT_THRESHOLD"], background=bkg, noise=rms)
+    sources = starfind(data, threshold=p["PHOT_THRESHOLD"], background=bkg, noise=rms)
 
     # get fwhm
     fwhm = sources.meta['astropop fwhm']
@@ -1732,22 +1748,21 @@ def build_catalogs(p, data, catalogs=[], xshift=0., yshift=0., solve_astrometry=
         catalogs = []
 
     if catalogs == []:
-        print("Creating new catalog of detected sources:".format(xshift, yshift))
-
-        # print sources table
-        # print(sources)
+        print("Creating new catalog of detected sources:")
 
         # print("Running aperture photometry with aperture_radius={} r_ann={}".format(aperture_radius,r_ann))
-        catalogs = generate_catalogs(p, data, sources, fwhm, catalogs, aperture_radius=aperture_radius,
-                                     r_ann=r_ann, polarimetry=polarimetry, solve_astrometry=True)
+        catalogs = generate_catalogs(p, data, sources, fwhm, catalogs, aperture_radius=aperture_radius, r_ann=r_ann, polarimetry=polarimetry, solve_astrometry=p["SOLVE_ASTROMETRY_IN_STACK"], exptime=exptime)
 
         if p['MULTI_APERTURES']:
+            print("Running photometry for multiple apertures:")
+
             for i in range(len(p['PHOT_APERTURES'])):
                 aperture_radius = p['PHOT_APERTURES'][i]
+                print("Aperture radius of {} pixels: {} of {} :".format(aperture_radius,i+1,len(p['PHOT_APERTURES'])))
+
                 r_ann = set_sky_aperture(p, aperture_radius)
                 # print("Running aperture photometry with aperture_radius={} r_ann={}".format(aperture_radius,r_ann))
-                catalogs = generate_catalogs(p, data, sources, fwhm, catalogs, aperture_radius=aperture_radius,
-                                             r_ann=r_ann, polarimetry=polarimetry, solve_astrometry=False)
+                catalogs = generate_catalogs(p, data, sources, fwhm, catalogs, aperture_radius=aperture_radius, r_ann=r_ann, polarimetry=polarimetry, solve_astrometry=p["SOLVE_ASTROMETRY_IN_INDIVIDUAL_FRAMES"], exptime=exptime)
     else:
 
         print("Running aperture photometry for catalogs with an offset by dx={} dy={}".format(
@@ -1769,14 +1784,11 @@ def build_catalogs(p, data, catalogs=[], xshift=0., yshift=0., solve_astrometry=
             # print("Running aperture photometry for catalog={} xshift={} yshift={} with aperture_radius={} r_ann={}".format(j,xshift,yshift,aperture_radius,r_ann))
 
             # run aperture photometry
-            x, y, mag, mag_error, smag, smag_error, flags = run_aperture_photometry(
-                data, x, y, aperture_radius, r_ann, output_mag=True, sortbyflux=False)
-            fwhms = np.full_like(mag, fwhm)
+            x, y, mag, mag_error, smag, smag_error, fwhms, flags = run_aperture_photometry(data, x, y, aperture_radius, r_ann, output_mag=True, sortbyflux=False, exptime=exptime, recenter=p["RECENTER_APER_FOR_PHOTOMETRY"])
 
             # save data back into the catalog
             for i in range(len(mag)):
-                catalogs[j]["{}".format(i)] = (i, ras[i], decs[i], x[i], y[i], fwhms[i], fwhms[i],
-                                               mag[i], mag_error[i], smag[i], smag_error[i], aperture_radius, flags[i])
+                catalogs[j]["{}".format(i)] = (i, ras[i], decs[i], x[i], y[i], fwhms[i], fwhms[i], mag[i], mag_error[i], smag[i], smag_error[i], aperture_radius, flags[i])
 
     return p, catalogs
 
@@ -2187,6 +2199,7 @@ def get_photometric_data_for_polar_catalog(beam1, beam2, sci_list, aperture_inde
 
 
 def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_output=True, wave_plate='halfwave', compute_k=True, fit_zero=False, zero=0, base_aperture=8, force=False):
+
     """ Pipeline module to compute polarimetry for given polarimetric sequence and
         saves the polarimetry data into a FITS SPARC4 product
 
@@ -2440,11 +2453,11 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
                 exptime = exptime.replace(",", ".")
             exptime = float(exptime)
 
-        tstop = Time(hdr_end["BJD"]+exptime/(24*60*60),
-                     format='jd', scale='utc')
+        tstop = Time(hdr_end["BJD"]+exptime/(24*60*60),format='jd', scale='utc')
 
         info['TSTART'] = (tstart.jd, 'observation start time in BJD')
         info['TSTOP'] = (tstop.jd, 'observation stop time in BJD')
+        info['MEANBJD'] = ((tstop.jd + tstart.jd)/2, 'observation mean time in BJD')
         info['DATE-OBS'] = (tstart.isot, 'TSTART as UTC calendar date')
         info['DATE-END'] = (tstop.isot, 'TSTOP as UTC calendar date')
         info['NSOURCES'] = (nsources, 'number of sources')
@@ -2452,20 +2465,16 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
 
         for k in range(len(sci_list)):
             hdr = fits.getheader(sci_list[k])
-            info["FILE{:04d}".format(k)] = (
-                os.path.basename(sci_list[k]), 'file name of exposure')
+            info["FILE{:04d}".format(k)] = (os.path.basename(sci_list[k]), 'file name of exposure')
             info["EXPT{:04d}".format(k)] = (exptime, 'exposure time (s)')
-            info["BJD{:04d}".format(k)] = (
-                hdr["BJD"], 'start time of exposure (BJD)')
-            info["WPPO{:04d}".format(k)] = (
-                hdr[wppos_key], 'WP index position of exposure')
-            info["WANG{:04d}".format(k)] = (
-                waveplate_angles[k], 'WP angle of exposure (deg)')
+            info["BJD{:04d}".format(k)] = (hdr["BJD"], 'start time of exposure (BJD)')
+            info["WPPO{:04d}".format(k)] = (hdr[wppos_key], 'WP index position of exposure')
+            info["WANG{:04d}".format(k)] = (waveplate_angles[k], 'WP angle of exposure (deg)')
+            if "CALW" in hdr :
+                info["CALW{:04d}".format(k)] = (hdr["CALW"], 'Selected element in calibration wheel ')
 
-        print("Saving output {} polarimetry product: {}".format(
-            wave_plate, output_filename))
-        output_hdul = s4p.polarProduct(
-            polar_catalogs, info=info, filename=output_filename)
+        print("Saving output {} polarimetry product: {}".format(wave_plate, output_filename))
+        output_hdul = s4p.polarProduct(polar_catalogs, info=info, filename=output_filename)
 
     return output_filename
 
