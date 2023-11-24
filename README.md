@@ -19,7 +19,7 @@ pip install -U .
 Below is an example to run the SPARC4 pipeline :
 
 ```
-python ~/sparc4-pipeline/scripts/sparc4_mini_pipeline.py --datadir=~/minidata/ --reducedir=~/minidata/reduced --nightdir=20230503
+python ~/sparc4-pipeline/scripts/sparc4_mini_pipeline.py --nightdir=20230605 -vp
 ```
 
 The pipeline routines are organized in the following 5 main libraries:
