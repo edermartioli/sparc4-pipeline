@@ -105,6 +105,9 @@ def set_timecoords_keys(hdr, timezone=-3, timetype="", ra="", dec="",
     if timetype == "LT":
         obstime = obstime - timeZone
 
+    hdr.set("UTDATE", obstime.isot, "UT date at start of exposure ISOT")
+    hdr.set("LTDATE", (obstime+timeZone).isot,"LT date at start of exposure ISOT")
+
     jd = obstime.jd
     mjd = obstime.mjd
 
@@ -116,22 +119,20 @@ def set_timecoords_keys(hdr, timezone=-3, timetype="", ra="", dec="",
     ltt_helio = obstime.light_travel_time(source, 'heliocentric')  # para o HJD
     hjd = obstime.tdb.jd + ltt_helio
 
-    hdr.set("UTDATE", obstime.isot, "UT date at start of exposure ISOT")
-    hdr.set("LTDATE", (obstime+timeZone).isot,"LT date at start of exposure ISOT")
-    hdr.set("JD", jd, "Julian date at start of exposure")
-    hdr.set("MJD", mjd, "Modified Julian date at start of exposure")
-    hdr.set("BJD", bjd.value, "Barycentric Julian date at start of exposure")
-    hdr.set("HJD", hjd.value, "Heliocentric Julian date at start of exposure")
-
     exptime = TimeDelta(float(hdr[exptimekey]), format='sec')
     
     midjd = (obstime+exptime/2).jd
     midmjd = (obstime+exptime/2).mjd
 
-    hdr.set("MIDJD", midjd, "Julian date at middle of exposure")
-    hdr.set("MIDMJD", midmjd, "Modified Julian date at middle of exposure")
-    hdr.set("MIDBJD", (bjd+exptime/2).value, "Barycentric Julian date at middle of exposure")
-    hdr.set("MIDHJD", (hjd+exptime/2).value, "Heliocentric Julian date at middle of exposure")
+    hdr.set("JD", midjd, "Julian date at middle of exposure")
+    hdr.set("MJD", midmjd, "Modified Julian date at middle of exposure")
+    hdr.set("BJD", (bjd+exptime/2).value, "Barycentric Julian date at middle of exposure")
+    hdr.set("HJD", (hjd+exptime/2).value, "Heliocentric Julian date at middle of exposure")
+
+    hdr.set("STARTJD", jd, "Julian date at start of exposure")
+    hdr.set("STARTMJD", mjd, "Modified Julian date at start of exposure")
+    hdr.set("STARTBJD", bjd.value, "Barycentric Julian date at start of exposure")
+    hdr.set("STARTHJD", hjd.value, "Heliocentric Julian date at start of exposure")
 
     # sidereal = obstime.sidereal_time('apparent')
     # hdr.set("ST",sidereal,"Sidereal time")

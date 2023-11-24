@@ -137,14 +137,9 @@ def get_targets_observed(intbl, inst_mode=None, polar_mode=None, calwheel_mode=N
     if calwheel_mode != None:
         tbl = tbl[tbl['CALW'] == calwheel_mode]
 
-    #targets = Table()
-    #try :
-    targets = tbl.group_by("OBJECT").groups.keys
-    #print(tbl)
-    #print(targets)
-    #print(tbl.group_by("OBJECT").groups)
-    #except :
-    #    print("WARNING: could not group table by 'OBJECT' keyword")
+    targets = []
+    if len(tbl) != 0 :
+        targets = tbl.group_by("OBJECT").groups.keys
         
     return targets
 
@@ -201,8 +196,10 @@ def get_inst_modes_observed(tbl, science_only=True):
     if science_only:
         tbl = tbl[tbl["OBSTYPE"] == "OBJECT"]
 
-    inst_modes = tbl.group_by("INSTMODE").groups.keys
-
+    inst_modes = []
+    if len(tbl) != 0 :
+        inst_modes = tbl.group_by("INSTMODE").groups.keys
+        
     return inst_modes
 
 
@@ -225,7 +222,9 @@ def get_polar_modes_observed(tbl, science_only=True):
     else:
         tbl = tbl[tbl["INSTMODE"] == "POLAR"]
 
-    polar_modes = tbl.group_by("WPSEL").groups.keys
+    polar_modes = []
+    if len(tbl) != 0 :
+        polar_modes = tbl.group_by("WPSEL").groups.keys
 
     return polar_modes
 
@@ -253,8 +252,10 @@ def get_calib_wheel_modes(tbl, science_only=True, polar_only=True):
     if polar_only:
         tbl = tbl[tbl["INSTMODE"] == "POLAR"]
 
-    calwheel_modes = tbl.group_by("CALW").groups.keys
-
+    calwheel_modes = []
+    if len(tbl) != 0 :
+        calwheel_modes = tbl.group_by("CALW").groups.keys
+            
     return calwheel_modes
 
 

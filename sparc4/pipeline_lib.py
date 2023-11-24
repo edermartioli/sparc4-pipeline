@@ -215,6 +215,7 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
         updated dictionary to store pipeline parameters
     """
 
+    # set suffix and switch for polarimetry mode
     polsuffix = ""
     polarimetry = False
     if inst_mode == p['INSTMODE_POLARIMETRY_KEYVALUE']:
@@ -225,8 +226,18 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
     objs = s4db.get_targets_observed(db, inst_mode=inst_mode, polar_mode=polar_mode, detector_mode=detector_mode)
     if obj != None:
         objs = objs[objs['OBJECT'] == obj]
-    objs = list(objs["OBJECT"])
 
+    # if table of objects observed is empty, print a message and leave
+    if len(objs) == 0 :
+        if inst_mode == p['INSTMODE_POLARIMETRY_KEYVALUE'] :
+            print("No objects observed in the {} mode, detector mode {} ".format(polsuffix.replace("_"," "), detector_mode_key))
+        else :
+            print("No objects observed in the {} mode, detector mode {} ".format(inst_mode, detector_mode_key))
+        return p
+    
+    # cast output table of objects observed into a list
+    objs = list(objs["OBJECT"])
+    
     calws = ["OFF"]
     if polarimetry :
         # get list of calibration wheel modes
@@ -234,13 +245,6 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
         if calw_mode != "ALL":
             calws = calws[calws['CALW'] == calw_mode]
         calws = list(calws["CALW"])
-
-    if len(objs) == 0 :
-        if inst_mode == p['INSTMODE_POLARIMETRY_KEYVALUE'] :
-            print("No objects observed in the {} mode detector mode {} ".format(polsuffix.replace("_"," "), detector_mode_key))
-        else :
-            print("No objects observed in the {} mode detector mode {} ".format(inst_mode, detector_mode_key))
-        return p
 
     # loop over each object to run the reduction
     for k in range(len(objs)):
@@ -754,11 +758,8 @@ def old_reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", forc
                         p["YSHIFTS"][i]
 
                 # call function to generate final product
-                # for light products
-                s4p.scienceImageLightProduct(obj_fg.files[i], img_data=img_data, info=info, catalogs=frame_catalogs, polarimetry=polarimetry,
+                s4p.scienceImageProduct(obj_fg.files[i], img_data=img_data, info=info, catalogs=frame_catalogs, polarimetry=polarimetry,
                                              filename=p['OBJECT_REDUCED_IMAGES'][i], catalog_beam_ids=p['CATALOG_BEAM_IDS'], wcs_header=frame_wcs_header, time_key=p["TIME_KEY"])
-                # for more complete products with an error and mask extensions
-                # s4p.scienceImageProduct(obj_fg.files[i], img_data=img_data, err_data=err_data, mask_data=mask_data, info=info, catalogs=frame_catalogs, polarimetry=polarimetry, filename=p['OBJECT_REDUCED_IMAGES'][i], catalog_beam_ids=p['CATALOG_BEAM_IDS'], wcs_header=frame_wcs_header, time_key=p["TIME_KEY"])
 
     return p
 
@@ -964,7 +965,7 @@ def reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", match_fr
 
                 # call function to generate final product
                 # for light products
-                s4p.scienceImageLightProduct(obj_fg.files[i], img_data=img_data, info=info, catalogs=frame_catalogs, polarimetry=polarimetry,filename=obj_red_images[i], catalog_beam_ids=p['CATALOG_BEAM_IDS'], wcs_header=frame_wcs_header, time_key=p["TIME_KEY"], ra=ra, dec=dec)
+                s4p.scienceImageProduct(obj_fg.files[i], img_data=img_data, info=info, catalogs=frame_catalogs, polarimetry=polarimetry,filename=obj_red_images[i], catalog_beam_ids=p['CATALOG_BEAM_IDS'], wcs_header=frame_wcs_header, time_key=p["TIME_KEY"], ra=ra, dec=dec)
 
     if 'OBJECT_REDUCED_IMAGES' not in p.keys():
         p['OBJECT_REDUCED_IMAGES'] = obj_red_images
@@ -1448,11 +1449,8 @@ def run_register_frames(p, inframes, inobj_files, info, output_stack="", force=F
     # save stack product
     if output_stack != "":
         if not os.path.exists(output_stack) or force:
-            # for light products
-            s4p.scienceImageLightProduct(obj_files[0], img_data=img_data, info=info, catalogs=p["CATALOGS"], polarimetry=polarimetry,filename=output_stack, catalog_beam_ids=p['CATALOG_BEAM_IDS'], wcs_header=p['WCS_HEADER'], time_key=p["TIME_KEY"])
-            # for more complete products with an error and mask extensions
-            # s4p.scienceImageProduct(obj_files[0], img_data=img_data, err_data=err_data, mask_data=mask_data, info=info, catalogs=p["CATALOGS"], polarimetry=polarimetry, filename=output_stack, catalog_beam_ids=p['CATALOG_BEAM_IDS'], wcs_header=p['WCS_HEADER'], time_key=p["TIME_KEY"])
-            
+            s4p.scienceImageProduct(obj_files[0], img_data=img_data, info=info, catalogs=p["CATALOGS"], polarimetry=polarimetry,filename=output_stack, catalog_beam_ids=p['CATALOG_BEAM_IDS'], wcs_header=p['WCS_HEADER'], time_key=p["TIME_KEY"])
+
     return p
 
 
@@ -2695,29 +2693,25 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
 
     if save_output:
         info = {}
-
-        hdr_start = fits.getheader(sci_list[0])
-        hdr_end = fits.getheader(sci_list[-1])
+        hdr_start = fits.getheader(sorted(sci_list)[0])
+        hdr_end = fits.getheader(sorted(sci_list)[-1])
         if "OBJECT" in hdr_start.keys():
-            info['OBJECT'] = (hdr_start["OBJECT"], 'ID of object of interest')
+            info['OBJECT'] = (hdr_start["OBJECT"], hdr_start.comments["OBJECT"])
         if "OBSLAT" in hdr_start.keys():
-            info['OBSLAT'] = (hdr_start["OBSLAT"],
-                              '[DEG] observatory latitude (N)')
+            info['OBSLAT'] = (hdr_start["OBSLAT"], hdr_start.comments["OBSLAT"])
         if "OBSLONG" in hdr_start.keys():
-            info['OBSLONG'] = (hdr_start["OBSLONG"],
-                               '[DEG] observatory longitude (E)')
+            info['OBSLONG'] = (hdr_start["OBSLONG"], hdr_start.comments["OBSLONG"])
         if "OBSALT" in hdr_start.keys():
-            info['OBSALT'] = (hdr_start["OBSALT"], '[m] observatory altitude')
+            info['OBSALT'] = (hdr_start["OBSALT"], hdr_start.comments["OBSALT"])
         info['TELESCOP'] = ('OPD-PE 1.6m', 'telescope')
         if "INSTRUME" in hdr_start.keys():
-            info['INSTRUME'] = (hdr_start["INSTRUME"], 'instrument')
+            info['INSTRUME'] = (hdr_start["INSTRUME"], hdr_start.comments["INSTRUME"])
         if "EQUINOX" in hdr_start.keys():
-            info['EQUINOX'] = (hdr_start["EQUINOX"],
-                               'equinox of celestial coordinate system')
+            info['EQUINOX'] = (hdr_start["EQUINOX"], hdr_start.comments["EQUINOX"])
         info['PHZEROP'] = (0., '[mag] photometric zero point')
         info['PHOTSYS'] = ("SPARC4", 'photometric system')
         if "CHANNEL" in hdr_start.keys():
-            info['CHANNEL'] = (hdr_start["CHANNEL"], 'Instrument channel')
+            info['CHANNEL'] = (hdr_start["CHANNEL"], hdr_start.comments["CHANNEL"])
         info['POLTYPE'] = (wave_plate, 'polarimetry type l/2 or l/4')
 
         tstart = Time(hdr_start["BJD"], format='jd', scale='utc')
@@ -2730,8 +2724,8 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
 
         tstop = Time(hdr_end["BJD"]+exptime/(24*60*60),format='jd', scale='utc')
 
-        info['TSTART'] = (tstart.jd, 'observation start time in BJD')
-        info['TSTOP'] = (tstop.jd, 'observation stop time in BJD')
+        info['TSTART'] = (tstart.jd, 'obs time of first exposure in BJD')
+        info['TSTOP'] = (tstop.jd, 'obs time of last exposure in BJD')
         info['MEANBJD'] = ((tstop.jd + tstart.jd)/2, 'observation mean time in BJD')
         info['DATE-OBS'] = (tstart.isot, 'TSTART as UTC calendar date')
         info['DATE-END'] = (tstop.isot, 'TSTOP as UTC calendar date')
@@ -2742,8 +2736,8 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
             hdr = fits.getheader(sci_list[k])
             info["FILE{:04d}".format(k)] = (os.path.basename(sci_list[k]), 'file name of exposure')
             info["EXPT{:04d}".format(k)] = (exptime, 'exposure time (s)')
-            info["BJD{:04d}".format(k)] = (hdr["BJD"], 'start time of exposure (BJD)')
-            info["WPPO{:04d}".format(k)] = (hdr[wppos_key], 'WP index position of exposure')
+            info["BJD{:04d}".format(k)] = (hdr["BJD"], hdr.comments["BJD"])
+            info["WPPO{:04d}".format(k)] = (hdr[wppos_key],  hdr.comments[wppos_key])
             info["WANG{:04d}".format(k)] = (waveplate_angles[k], 'WP angle of exposure (deg)')
             if "CALW" in hdr :
                 info["CALW{:04d}".format(k)] = (hdr["CALW"], 'Selected element in calibration wheel ')

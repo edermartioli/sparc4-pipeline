@@ -138,7 +138,7 @@ def getFrameFromMasterCalibration(filename):
     return frame
 
 
-def scienceImageProduct(original_image, img_data=[], err_data=[], mask_data=[], info={}, catalogs=[], polarimetry=False,  skip_ref_catalogs=True, filename="", catalog_beam_ids=["S", "N"], wcs_header=None, time_key="DATE-OBS", ra="", dec=""):
+def scienceImageProduct_old(original_image, img_data=[], err_data=[], mask_data=[], info={}, catalogs=[], polarimetry=False,  skip_ref_catalogs=True, filename="", catalog_beam_ids=["S", "N"], wcs_header=None, time_key="DATE-OBS", ra="", dec=""):
     """ Create a Science FITS image product
 
     Parameters
@@ -345,7 +345,7 @@ def readScienceImagCatalogs(input):
     return catalogs
 
 
-def scienceImageLightProduct(original_image, img_data=[], info={}, catalogs=[], polarimetry=False,  skip_ref_catalogs=True, filename="", catalog_beam_ids=["S", "N"], wcs_header=None, time_key="DATE-OBS", ra="", dec=""):
+def scienceImageProduct(original_image, img_data=[], info={}, catalogs=[], polarimetry=False,  skip_ref_catalogs=True, filename="", catalog_beam_ids=["S", "N"], wcs_header=None, time_key="DATE-OBS", ra="", dec=""):
     """ Create a Science FITS image product
 
     Parameters
