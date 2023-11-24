@@ -7,7 +7,7 @@ The `sparc4-pipeline` is a set of routines that make use of the [`AstroPoP`](htt
 
 # Installation
 
-`git clone [https://github.com/sparc4-pipeline](https://github.com/edermartioli/sparc4-pipeline.git)`
+`git clone https://github.com/edermartioli/sparc4-pipeline.git`
 
 `cd sparc4-pipeline`
 
