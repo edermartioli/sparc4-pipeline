@@ -34,6 +34,6 @@ These libraries can also be used independently to reduce data step by step, as i
 
 Download the [minidata package](https://drive.google.com/file/d/1wixhMG6X9_kpQ95CSTi2H2wGlbZrklzM/view?usp=drive_link) containing SPARC4 data to test the pipeline.
 
-See the [SPARC4 Quick Tutorial](https://github.com/edermartioli/sparc4-pipeline/docs/Manual%20da%20SPARC4%20Pipeline.pdf) (in Portuguese) to start using the pipeline quickly.
+See the [SPARC4 Quick Tutorial](docs/Manual da SPARC4 Pipeline.pdf) (in Portuguese) to start using the pipeline quickly.
 
 The SPARC4 pipeline is under development in collaboration with the scientific community. If you are interested in collaborating, send an email to the pipeline team at the following address: `sparc4-pipeline@googlegroups.com`.
