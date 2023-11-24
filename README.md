@@ -7,12 +7,13 @@ The `sparc4-pipeline` is a set of routines that make use of the [`AstroPoP`](htt
 
 # Installation
 
-`git clone https://github.com/edermartioli/sparc4-pipeline.git`
+```
+git clone https://github.com/edermartioli/sparc4-pipeline.git
 
-`cd sparc4-pipeline`
+cd sparc4-pipeline
 
-`pip install -U .`
-
+pip install -U .
+```
 # Execution
 
 Below is an example to run the SPARC4 pipeline :
