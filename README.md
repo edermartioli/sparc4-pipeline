@@ -32,7 +32,7 @@ The pipeline routines are organized in the following 5 main libraries:
 
 These libraries can also be used independently to reduce data step by step, as in the examples provided in the Jupyter [notebooks](https://github.com/edermartioli/sparc4-pipeline/tree/main/notebooks).
 
-Download the [minidata package](https://drive.google.com/file/d/1wixhMG6X9_kpQ95CSTi2H2wGlbZrklzM/view?usp=drive_link) containing SPARC4 data to test the pipeline.
+Download the [minidata package](https://drive.google.com/file/d/1tAVjyhYGMDcrU5sDdGCmd_f5HoazZ294/view?usp=drive_link) containing SPARC4 data to test the pipeline.
 
 See the [SPARC4 Quick Tutorial](https://github.com/edermartioli/sparc4-pipeline/blob/257cde7c85666b2cd83a76834a9f0023365393fa/docs/Manual%20da%20SPARC4%20Pipeline.pdf) (in Portuguese) to start using the pipeline quickly.
 
