@@ -137,11 +137,14 @@ def get_targets_observed(intbl, inst_mode=None, polar_mode=None, calwheel_mode=N
     if calwheel_mode != None:
         tbl = tbl[tbl['CALW'] == calwheel_mode]
 
-    targets = Table()
-    try :
-        targets = tbl.group_by("OBJECT").groups.keys
-    except :
-        print("WARNING: could not group table by 'OBJECT' keyword")
+    #targets = Table()
+    #try :
+    targets = tbl.group_by("OBJECT").groups.keys
+    #print(tbl)
+    #print(targets)
+    #print(tbl.group_by("OBJECT").groups)
+    #except :
+    #    print("WARNING: could not group table by 'OBJECT' keyword")
         
     return targets
 

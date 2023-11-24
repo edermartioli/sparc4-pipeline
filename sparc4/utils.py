@@ -3,7 +3,7 @@
 
     Description: Library of useful recipes for the SPARC4 pipeline
 
-    @author: Eder Martioli <martioli@iap.fr>
+    @author: Eder Martioli <emartioli@lna.br>
 
     Laboratório Nacional de Astrofísica - LNA/MCTI
     """
@@ -453,53 +453,89 @@ def select_polar_sequences(list_of_files, sortlist=True, npos_in_seq=16, rolling
 
     # run only for a non-empty list
     if len(sortedlist):
-
+        
         # save WPPOS of first image
         prev_pos = fits.getheader(sortedlist[0])['WPPOS']
-        # init current sequence list
-        seq = []
-
-        seq_index = 0
-        base_i_in_2nd_pos = 0
         
-        i = 0
-        while i < len(sortedlist):
-            # get current WPPOS from header
-            current_pos = fits.getheader(sortedlist[i])["WPPOS"]
+        block_index = 0
+        blocks, block_pos = [], []
+        blocks.append([])
+        
+        blocks[block_index].append(sortedlist[0])
+        block_pos.append(prev_pos)
+                
+        for i in range(1,len(sortedlist)) :
+            # save WPPOS of first image
+            pos = fits.getheader(sortedlist[i])['WPPOS']
+            
+            if pos != prev_pos :
+                prev_pos = pos
+                block_index += 1
+                blocks.append([])
+                block_pos.append(prev_pos)
+                
+            blocks[block_index].append(sortedlist[i])
+          
+        number_of_blocks = len(block_pos)
+        sequences.append([])
+        blocksinseq = []
+        seq_index = 0
 
-            if current_pos != prev_pos :
-                if seq_index == 0 :
-                    base_i_in_2nd_pos = i
+        if rolling_seq :
+            
+            for j in range(len(block_pos)) :
+                pos_in_seq = []
+                
+                lastjj = j + npos_in_seq
+                
+                if lastjj > len(block_pos) :
+                    lastjj = len(block_pos)
+                
+                for jj in range(j,lastjj) :
+                    if block_pos[jj] not in pos_in_seq :
+                        for i in range(len(blocks[jj])) :
+                            sequences[seq_index].append(blocks[jj][i])
+                        pos_in_seq.append(block_pos[jj])
+                                                    
+                blocksinseq.append(len(pos_in_seq))
+                
+                if lastjj == len(block_pos) :
+                    break
+
+                sequences.append([])
                 seq_index += 1
-
-            # if current pos is lower than previous it means a new
-            # sequence started -> increment sequences and reset seq
-            if current_pos < prev_pos or seq_index == npos_in_seq :
-                sequences.append(seq)
-                if verbose:
-                    print("Adding seq {} of {} files".format(
-                        len(sequences), len(seq)))
-
-                seq_index = 0
-                seq = []
-
-                if rolling_seq :
-                    i = base_i_in_2nd_pos
-                    # save current position as the one from base i in 2nd previous pos
-                    current_pos = fits.getheader(sortedlist[i])["WPPOS"]
-
-            # append file to current seq
-            seq.append(sortedlist[i])
-            # save current position as previous position
-            prev_pos = current_pos
-
-            # Reached last file, add seq to sequences
-            if i == len(sortedlist) - 1:
-                sequences.append(seq)
-                if verbose:
-                    print("Adding seq {} of {} files".format(
-                        len(sequences), len(seq)))
-            i += 1
+                
+        else :
+            nblocks_in_sequence = 0
+        
+            #--
+            prev_block_pos = block_pos[0]
+            for i in range(len(blocks[0])) :
+                sequences[seq_index].append(blocks[0][i])
+            nblocks_in_sequence += 1
+            #--
+            
+            for j in range(1,len(block_pos)) :
+    
+                # reset sequence
+                if nblocks_in_sequence == npos_in_seq or block_pos[j] < prev_block_pos :
+                    sequences.append([])
+                    seq_index += 1
+                    blocksinseq.append(nblocks_in_sequence)
+                    nblocks_in_sequence = 0
+                    
+                #--
+                prev_block_pos = block_pos[j]
+                for i in range(len(blocks[j])) :
+                    sequences[seq_index].append(blocks[j][i])
+                nblocks_in_sequence += 1
+                if j==len(block_pos)-1:
+                    blocksinseq.append(nblocks_in_sequence)
+                #--
+            
+        if verbose :
+            for k in range(len(sequences)) :
+                print("Sequence {} of {} : {} files for {} waveplate positions".format(k+1,len(sequences),len(sequences[k]),blocksinseq[k]))
             
     return sequences
 

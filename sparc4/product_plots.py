@@ -3,7 +3,7 @@
 
     Description: Library for plotting SPARC4 pipeline products
 
-    @author: Eder Martioli <martioli@iap.fr>
+    @author: Eder Martioli <emartioli@lna.br>
 
     Laboratório Nacional de Astrofísica - LNA/MCTI
     """
@@ -352,13 +352,10 @@ def plot_light_curve(filename, target=0, comps=[], output="", nsig=10,
     fwhm = target_tbl['FWHM']
     if plot_coords:
         # fig, axs = plt.subplots(4, 1, figsize=(12, 6), sharex=True, sharey=False, gridspec_kw={'hspace': 0, 'height_ratios': [1, 1, 1, 1]})
-        plt.plot(time, (x-np.nanmedian(x))*platescale+pixoffset,
-                 '.', color='darkblue', label='x-offset')
-        plt.plot(time, (y-np.nanmedian(y))*platescale -
-                 pixoffset, '.', color='brown', label='y-offset')
+        plt.plot(time, (x-np.nanmedian(x))*platescale+pixoffset, '.', color='darkblue', label='x-offset')
+        plt.plot(time, (y-np.nanmedian(y))*platescale - pixoffset, '.', color='brown', label='y-offset')
         mfhwm = np.nanmedian(fwhm)
-        plt.plot(time, (fwhm-mfhwm)*platescale, color='darkgreen',
-                 label='FWHM - median={:.1f} {}'.format(mfhwm*platescale, unit))
+        plt.plot(time, (fwhm-mfhwm)*platescale, '.', color='darkgreen', label='FWHM - median={:.1f} {}'.format(mfhwm*platescale, unit))
         plt.xlabel(r"time (BJD)", fontsize=16)
         plt.ylabel(r"$\Delta$ {}".format(unit), fontsize=16)
         plt.legend(fontsize=10)
@@ -372,10 +369,8 @@ def plot_light_curve(filename, target=0, comps=[], output="", nsig=10,
     mmag = np.nanmedian(m)
     mskym = np.nanmedian(skym)
     if plot_rawmags:
-        plt.errorbar(time, mmag - m - mag_offset, yerr=em,
-                     label='raw obj dmag, mean={:.4f}'.format(mmag))
-        plt.plot(time, mskym - skym + mag_offset, '-',
-                 label='raw sky dmag, mean={:.4f}'.format(mskym))
+        plt.errorbar(time, mmag - m - mag_offset, yerr=em, fmt='.', label='raw obj dmag, mean={:.4f}'.format(mmag))
+        plt.plot(time, mskym - skym + mag_offset, '.', label='raw sky dmag, mean={:.4f}'.format(mskym))
         plt.xlabel(r"time (BJD)", fontsize=16)
         plt.ylabel(r"$\Delta$mag", fontsize=16)
         plt.legend(fontsize=10)
@@ -437,7 +432,7 @@ def plot_polarimetry_results(loc, pos_model_sampling=1, title_label="", wave_pla
 
     Returns
     -------
-
+    None
     """
 
     waveplate_angles = loc["WAVEPLATE_ANGLES"]
@@ -545,7 +540,7 @@ def plot_2d(x, y, z, LIM=None, LAB=None, z_lim=None, use_index_in_y=False, title
 
     Outputs:
     - Display 2D map of the sequence of spectra z
-
+    None
     """
 
     if use_index_in_y:
@@ -599,5 +594,189 @@ def plot_2d(x, y, z, LIM=None, LAB=None, z_lim=None, use_index_in_y=False, title
     plt.close()
 
 
-def plot_polar_time_series(filename, target=0):
-    pass
+def plot_polar_time_series(filename, target=0, comps=[], output="", nsig=10, plot_total_polarization=True, plot_polarization_angle=True, plot_comps=True, plot_sum=True) :
+
+    """ Tool to plot polarimetric time series
+
+    Parameters
+    ----------
+    filename : str
+        string for fits file path
+
+    output : str, optional
+        The output plot file name to save graphic to file. If empty, it won't be saved.
+
+    Returns
+    -------
+    None
+    """
+
+    # open time series fits file
+    hdul = fits.open(filename)
+
+    # get polarimetry type "halfwave" or "quarterwave"
+    poltype = hdul[0].header["POLTYPE"]
+
+    # get big table with data
+    tbl = hdul["POLAR_TIMESERIES"].data
+    
+    """
+    #Below are the contents of extension "POLAR_TIMESERIES" in polarimetric ts FITS product
+    dtype=(numpy.record, [('TIME', '>f8'), ('SRCINDEX', '>f8'), ('RA', '>f8'), ('DEC', '>f8'), ('X1', '>f8'), ('Y1', '>f8'), ('X2', '>f8'), ('Y2', '>f8'), ('FWHM', '>f8'), ('MAG', '>f8'), ('EMAG', '>f8'), ('Q', '>f8'), ('EQ', '>f8'), ('U', '>f8'), ('EU', '>f8'), ('V', '>f8'), ('EV', '>f8'), ('P', '>f8'), ('EP', '>f8'), ('THETA', '>f8'), ('ETHETA', '>f8'), ('K', '>f8'), ('EK', '>f8'), ('ZERO', '>f8'), ('EZERO', '>f8'), ('NOBS', '>f8'), ('NPAR', '>f8'), ('CHI2', '>f8')]))
+    """
+    
+    # get data target data
+    target_tbl = tbl[tbl["SRCINDEX"] == target]
+
+    # set time axis
+    time = target_tbl['TIME']
+    mintime, maxtime = np.min(time), np.max(time)
+
+    # set minimum number of rows: 1 for photometry and 1 for polarimetry
+    nrows = 2
+
+    # add a row to plot circular polarization
+    if poltype == "quarterwave" :
+        nrows += 1
+        
+    if plot_total_polarization :
+        # for total polarization, add a row for theta if requested
+        if plot_polarization_angle :
+            nrows += 1
+        pass
+    else :
+        # for linear components of polarization (Q and U) we need one more row
+        nrows += 1
+        
+    # set plot frame
+    fig, axs = plt.subplots(nrows, figsize=(12, 6), sharex=True, sharey=False)
+       
+    ##############################
+    # START PLOTTING PHOTOMETRY  #
+    ##############################
+    axindex = 0
+    
+    # FIRST CALCULATE PHOTOMETRY :
+    mag_offset = 0.1
+    m = target_tbl['MAG']
+    em = target_tbl['EMAG']
+    mmag = np.nanmedian(m)
+    
+    cm, ecm = [], []
+    sumag = np.zeros_like(m)
+    for i in range(len(comps)):
+        comp_tbl = tbl[tbl["SRCINDEX"] == comps[i]]
+
+        cmag = comp_tbl['MAG']
+        ecmag = comp_tbl['EMAG']
+        cm.append(cmag)
+        ecm.append(ecmag)
+
+        sumag += 10**(-0.4*cmag)
+
+        mdm = np.nanmedian(cmag - m)
+        dm = (cmag - m) - mdm
+        rms = np.nanmedian(np.abs(dm)) / 0.67449
+        edm = np.sqrt(ecmag**2 + em**2)
+        keep = np.isfinite(dm)
+        keep &= np.abs(dm) < nsig*rms
+
+        if plot_comps:
+            axs[axindex].errorbar(time[keep], dm[keep], yerr=edm[keep], fmt='.', alpha=0.3,label=r"C{} $\Delta$mag={:.3f} $\sigma$={:.2f} mmag".format(comps[i], mdm, rms*1000))
+
+    sumag = -2.5*np.log10(sumag)
+    mdm = np.nanmedian(sumag - m)
+    dm = (sumag - m) - mdm
+    rms = np.nanmedian(np.abs(dm)) / 0.67449
+    keep = np.isfinite(dm)
+    keep &= np.abs(dm) < nsig*rms
+    if plot_sum:
+        axs[axindex].errorbar(time[keep], dm[keep], yerr=em[keep], fmt='k.', label=r"SUM $\Delta$mag={:.3f} $\sigma$={:.2f} mmag".format(mdm, rms*1000))
+
+    if plot_comps or plot_sum:
+        axs[axindex].set_ylabel(r"$\Delta$mag", fontsize=16)
+        axs[axindex].tick_params(axis='y', labelsize=14)
+        axs[axindex].legend(fontsize=10)
+        axs[axindex].minorticks_on()
+        axs[axindex].tick_params(which='minor', length=3, width=0.7, direction='in', bottom=True, top=True, left=True, right=True)
+        axs[axindex].tick_params(which='major', length=7, width=1.2,direction='in', bottom=True, top=True, left=True, right=True)
+    
+    ##############################
+    # START PLOTTING POLARIMETRY #
+    ##############################
+    
+    # PLOT CIRCULAR POLARIZATION IF L4
+    if poltype == "quarterwave" :
+        axindex += 1
+        circ_polarization = target_tbl['V']
+        circ_polarization_error = target_tbl['EV']
+
+        cpmedian = np.nanmedian(circ_polarization)
+        cprms = np.nanmedian(np.abs(circ_polarization - cpmedian)) / 0.67449
+    
+        axs[axindex].errorbar(time, circ_polarization*100, yerr=circ_polarization_error*100, fmt='k.', label=r"V[{}] = {:.3f}$\pm${:.3f} %".format(target, cpmedian*100, cprms*100))
+        axs[axindex].set_ylabel(r"V (%)", fontsize=16)
+        axs[axindex].tick_params(axis='y', labelsize=14)
+        axs[axindex].legend(fontsize=10)
+        axs[axindex].minorticks_on()
+        axs[axindex].tick_params(which='minor', length=3, width=0.7, direction='in', bottom=True, top=True, left=True, right=True)
+        axs[axindex].tick_params(which='major', length=7, width=1.2,direction='in', bottom=True, top=True, left=True, right=True)
+    
+    if plot_total_polarization :
+        plot1_key='P'
+        plot1_error_key='EP'
+        plot2_key='THETA'
+        plot2_error_key='ETHETA'
+    else :
+        plot1_key='Q'
+        plot1_error_key='EQ'
+        plot2_key='U'
+        plot2_error_key='EU'
+    
+    # PLOT first polarization component (P or Q)
+    axindex += 1
+    
+    polarization = target_tbl[plot1_key]
+    polarization_error = target_tbl[plot1_error_key]
+
+    pmedian = np.nanmedian(polarization)
+    prms = np.nanmedian(np.abs(polarization - pmedian)) / 0.67449
+    
+    axs[axindex].errorbar(time, polarization*100, yerr=polarization_error*100, fmt='k.', label=r"{}[{}] = {:.3f}$\pm${:.3f} %".format(plot1_key,target,pmedian*100, prms*100))
+    axs[axindex].set_ylabel(r"{} (%)".format(plot1_key), fontsize=16)
+    axs[axindex].tick_params(axis='y', labelsize=14)
+    axs[axindex].legend(fontsize=10)
+    axs[axindex].minorticks_on()
+    axs[axindex].tick_params(which='minor', length=3, width=0.7, direction='in', bottom=True, top=True, left=True, right=True)
+    axs[axindex].tick_params(which='major', length=7, width=1.2,direction='in', bottom=True, top=True, left=True, right=True)
+    
+    # PLOT second polarization component (THETA or U)
+    y2 = target_tbl[plot2_key]
+    y2err = target_tbl[plot2_error_key]
+    
+    y2median = np.nanmedian(y2)
+    y2rms = np.nanmedian(np.abs(y2 - y2median)) / 0.67449
+    
+    if plot_total_polarization :
+        if plot_polarization_angle :
+            # plot polarization angle (theta)
+            axindex += 1
+            axs[axindex].errorbar(time, y2, yerr=y2err, fmt='k.', label=r"$\theta$[{}] = {:.1f}$\pm${:.1f} deg".format(target, y2median, y2rms))
+            axs[axindex].set_ylabel(r"$\theta$ (deg)", fontsize=16)
+    else :
+        # plot U
+        axindex += 1
+        axs[axindex].errorbar(time, y2*100, yerr=y2err*100, fmt='k.', label=r"{}[{}] = {:.3f}$\pm${:.3f} %".format(plot2_key,target,y2median*100, y2rms*100))
+        axs[axindex].set_ylabel(r"{} (%)".format(plot2_key), fontsize=16)
+        
+    axs[axindex].legend(fontsize=10)
+
+    axs[axindex].tick_params(axis='x', labelsize=14)
+    axs[axindex].tick_params(axis='y', labelsize=14)
+    axs[axindex].minorticks_on()
+    axs[axindex].set_xlabel(r"time (BJD)", fontsize=16)
+    axs[axindex].tick_params(which='minor', length=3, width=0.7, direction='in', bottom=True, top=True, left=True, right=True)
+    axs[axindex].tick_params(which='major', length=7, width=1.2, direction='in', bottom=True, top=True, left=True, right=True)
+    
+    plt.show()
+
