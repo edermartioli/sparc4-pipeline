@@ -119,8 +119,14 @@ def set_timecoords_keys(hdr, timezone=-3, timetype="", ra="", dec="",
     ltt_helio = obstime.light_travel_time(source, 'heliocentric')  # para o HJD
     hjd = obstime.tdb.jd + ltt_helio
 
-    exptime = TimeDelta(float(hdr[exptimekey]), format='sec')
-    
+    exptime = hdr[exptimekey]
+    if type(exptime) == str:
+        if ',' in exptime :
+            exptime = exptime.replace(",", ".")
+        exptime = float(exptime)
+
+    exptime = TimeDelta(exptime, format='sec')
+
     midjd = (obstime+exptime/2).jd
     midmjd = (obstime+exptime/2).mjd
 
