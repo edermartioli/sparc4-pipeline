@@ -169,8 +169,8 @@ p = s4pipelib.init_s4_p(options.nightdir,
                         options.channels,
                         print_report=options.verbose)
 
-channel_colors = ["darkblue","green","orange","darkred"]
-channel_labels = ["g","r","i","z"]
+channel_colors = p['CHANNEL_COLORS']
+channel_labels = p['CHANNEL_LABELS']
 nchannels = len(p['SELECTED_CHANNELS'])
 
 ncols, nrows = 2, 2
