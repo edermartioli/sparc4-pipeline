@@ -119,13 +119,7 @@ def set_timecoords_keys(hdr, timezone=-3, timetype="", ra="", dec="",
     ltt_helio = obstime.light_travel_time(source, 'heliocentric')  # para o HJD
     hjd = obstime.tdb.jd + ltt_helio
 
-    exptime = hdr[exptimekey]
-    if type(exptime) == str:
-        if ',' in exptime :
-            exptime = exptime.replace(",", ".")
-        exptime = float(exptime)
-
-    exptime = TimeDelta(exptime, format='sec')
+    exptime = TimeDelta(get_exptime(hdr,exptimekey=exptimekey), format='sec')
 
     midjd = (obstime+exptime/2).jd
     midmjd = (obstime+exptime/2).mjd
@@ -151,6 +145,29 @@ def set_timecoords_keys(hdr, timezone=-3, timetype="", ra="", dec="",
         hdr.set("AIRMASS", airmass.value, "Airmass at start of exposure")
 
     return hdr
+
+
+def get_exptime(header, exptimekey="EXPTIME") :
+    """ Pipeline module to get exposure time from header
+    Parameters
+    ----------
+    header : astropy fits header
+        header containing exptime
+        
+    exptimekey : str
+        header keyword for exposure time
+    Returns
+    -------
+    exptime : float
+        exposure time in units of seconds
+    """
+    exptime = header[exptimekey]
+    if type(exptime) == str:
+        if ',' in exptime :
+            exptime = exptime.replace(",", ".")
+        exptime = float(exptime)
+        
+    return exptime
 
 
 def identify_files(p, night, print_report=True):

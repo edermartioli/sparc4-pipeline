@@ -13,6 +13,8 @@ CALIBDB_DIR: "/Volumes/Samsung_T5/sparc4-pipeline/calibdb"
 CHANNELS: [1, 2, 3, 4]
 # define SPARC4 channel labels
 CHANNEL_LABELS: ['g','r','i','z']
+# define SPARC4 channel colors
+CHANNEL_COLORS: ["darkblue","green","orange","darkred"]
 
 #### NIGHT DATA BASE #####
 # define SPARC4 keywords used to select reduction groups
@@ -72,7 +74,11 @@ MAX_NUMBER_OF_SCI_FRAMES_PER_LOOP: 100
 # time keyword in the header of raw images
 TIME_KEY: 'DATE-OBS'
 # exposure time (s) keyword in the header of raw images
-EXPTIMEKEY: 'EXPTIME'
+EXPTIMEKEY: 'EXPTIME' # for SPARC4
+#EXPTIMEKEY: 'EXPOSURE' # for OPD Acquisition
+
+# readout noise keyword in the header of raw images
+READNOISEKEY: "RDNOISE"
 
 # wild card to select object images
 OBJECT_WILD_CARDS: ['*.fits']
@@ -107,12 +113,16 @@ SCI_STACK_SIGMA_CLIP: 10
 # define number of files for stack
 NFILES_FOR_STACK: 16
 # define saturation limit in ADU to avoid using saturated images in the stack
-SATURATION_LIMIT: 32000
+#SATURATION_LIMIT: 32000
+SATURATION_LIMIT: 100000
 #-------------------------------------
 
 #### PHOTOMETRY ####
+# whether or not to astropop implementation for aperture photometry
+USE_ASTROPOP_PHOTOMETRY: False
+        
 # whether or not to recenter aperture for photometry on each source
-RECENTER_APER_FOR_PHOTOMETRY: True
+RECENTER_APER_FOR_PHOTOMETRY: False
 
 # whether or not to use multiple apertures
 MULTI_APERTURES: True
@@ -134,10 +144,11 @@ PHOT_MIN_OFFSET_FOR_SKYOUTERRADIUS: 10
 
 # Define a list of aperture radii to perform photometry
 #PHOT_APERTURES: [2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30]
-PHOT_APERTURES: [5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]
+#PHOT_APERTURES: [5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]
+PHOT_APERTURES: [6,8,10,12,14,16]
 
 # Threshold in number of sigmas to detect sources, where sigma = background error
-PHOT_THRESHOLD: 300
+PHOT_THRESHOLD: 100
 #-------------------------------------
 
 #### POLARIMETRY ####
@@ -213,7 +224,8 @@ TIME_SPAN_FOR_RMS: 10.0
 
 # Set a list of aperture radii to include in the time series (must be a sub set of photometry apertures)
 #PHOT_APERTURES_FOR_LIGHTCURVES: [2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30]
-PHOT_APERTURES_FOR_LIGHTCURVES: [5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]
+#PHOT_APERTURES_FOR_LIGHTCURVES: [5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]
+PHOT_APERTURES_FOR_LIGHTCURVES: [6,8,10,12,14,16]
 
 # List of additional keyword data to be included in the photometric time series for PHOT mode
 PHOT_KEYS_TO_ADD_HEADER_DATA_INTO_TSPRODUCT: []
@@ -233,7 +245,7 @@ USE_MEMMAP: False
 
 #### SCIENCE SPECIFIC #####
 # Define target index to calculate differential photometry in lightcurve plots
-TARGET_INDEX: 0
+TARGET_INDEX: 1
 # List of indexes of comparison stars to calculate differential photometry in lightcurve plots
-COMPARISONS: [1, 2, 3]
+COMPARISONS: [0, 2, 3, 4, 5, 6]
 #-------------------------------------
