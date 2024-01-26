@@ -23,6 +23,7 @@ dependencies = [
     "regions",
     "scipy",
     "uncertainties",
+    "photutils",    
 ]
 dynamic = ["version"]
 
