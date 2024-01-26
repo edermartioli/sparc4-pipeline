@@ -209,9 +209,13 @@ for channel in p['SELECTED_CHANNELS']:
     ch_reduce_dir = p['ch_reduce_directories'][j]
     reduce_dir = p['reduce_directories'][j]
 
-    pattern = "{}/*_{}.fits".format(data_dir,options.seq_suffix)
+    pattern = "{}/*_{}dafd.fits".format(data_dir,options.seq_suffix)
     
     inputdata = sorted(glob.glob(pattern))
+    
+    if len(inputdata) == 0 :
+        print("WARNING: Could not identify any image in the path: {}".format(data_dir))
+        continue
     
     focus_values = np.array([])
     fwhms, fwhms_err = np.array([]), np.array([])
@@ -275,4 +279,5 @@ for channel in p['SELECTED_CHANNELS']:
     
     idx += 1
 
-plt.show()
+if idx :
+    plt.show()
