@@ -39,12 +39,17 @@ from astropy.modeling import models, fitting
 import matplotlib.pyplot as plt
 
 
-def focus_image(filename, threshold=3., focus_value_key="TELFOCUS", read_noise_key="RDNOISE",  aperture_radius=50, fwhm_for_source_detection=5.0) :
+def measure_focus(filename, threshold=3., focus_value_key="TELFOCUS", read_noise_key="RDNOISE",  aperture_radius=50, fwhm_for_source_detection=5.0) :
 
     #open fits image
     hdul = fits.open(filename)
-    hdr = hdul[0].header
-    img_data = hdul[0].data
+    
+    ext = 0
+    if filename.endswith(".fits.fz") :
+        ext = 1
+    
+    hdr = hdul[ext].header
+    img_data = hdul[ext].data
     err_data = np.sqrt(img_data + hdr[read_noise_key]*hdr[read_noise_key])
 
     # get focus position value from header
@@ -214,7 +219,7 @@ for channel in p['SELECTED_CHANNELS']:
     for i in range(len(inputdata)) :
     
         try :
-            focus_position, fwhm = focus_image(inputdata[i], threshold=options.threshold, focus_value_key=options.focus_keyword)
+            focus_position, fwhm = measure_focus(inputdata[i], threshold=options.threshold, focus_value_key=options.focus_keyword)
         except :
             print("Could not measure focus on image {}, skipping ...".format(inputdata[i]))
             continue
