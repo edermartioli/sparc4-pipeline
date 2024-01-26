@@ -28,6 +28,7 @@ import sparc4.product_plots as s4plt
 
 parser = OptionParser()
 parser.add_option("-r", "--reducedir", dest="reducedir", help="Reduced data directory", type='string', default="./")
+parser.add_option("-c", "--calibdbdir", dest="calibdbdir", help="Calibration data directory", type='string', default="")
 parser.add_option("-b", "--bias", dest="bias", help="wildcard for bias selection", type='string', default="")
 parser.add_option("-F", "--flat", dest="flat", help="wildcard for flat selection", type='string', default="")
 parser.add_option("-s", "--science", dest="science", help="wildcard for science data selection", type='string', default="")
@@ -52,9 +53,9 @@ p = s4params.load_sparc4_parameters()
 if not os.path.exists(options.reducedir):
     os.mkdir(options.reducedir)
 
-bias_list = glob.glob(options.bias)
-flat_list = glob.glob(options.flat)
-sci_list = glob.glob(options.science)
+bias_list = sorted(glob.glob(options.bias))
+flat_list = sorted(glob.glob(options.flat))
+sci_list = sorted(glob.glob(options.science))
 
 p['master_bias'] = "{}/MasterZero.fits".format(options.reducedir)
 p['master_flat'] = "{}/MasterDomeFlat.fits".format(options.reducedir)
@@ -79,6 +80,9 @@ p = s4pipelib.run_master_calibration(p,
                                      reduce_dir=options.reducedir,
                                      normalize=True,
                                      force=options.force)
+
+if options.calibdbdir != "" :
+    p["CALIBDB_DIR"] = options.calibdbdir
 
 if options.plot:
     # plot master flat
@@ -123,13 +127,15 @@ ts_suffix = "{}".format(object_id.replace(" ", ""))
 if options.verbose:
     print("Start generating photometric time series products with suffix: ",ts_suffix)
 
+list_of_catalogs = s4pipelib.get_list_of_catalogs(p['PHOT_APERTURES_FOR_LIGHTCURVES'], p['INSTMODE_PHOTOMETRY_KEYVALUE'])
+
 # run photometric time series
-phot_ts_product = s4pipelib.phot_time_series(sci_list,
+phot_ts_product = s4pipelib.phot_time_series(p['OBJECT_REDUCED_IMAGES'][1:],
                                              ts_suffix=ts_suffix,
                                              reduce_dir=options.reducedir,
                                              time_key=p['TIME_KEYWORD_IN_PROC'],
                                              time_format=p['TIME_FORMAT_IN_PROC'],
-                                             catalog_names=p['PHOT_CATALOG_NAMES_TO_INCLUDE'],
+                                             catalog_names=list_of_catalogs,
                                              time_span_for_rms=p['TIME_SPAN_FOR_RMS'],
                                              force=options.force)
 
