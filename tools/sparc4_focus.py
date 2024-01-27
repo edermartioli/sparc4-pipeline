@@ -53,7 +53,7 @@ def measure_focus(filename, threshold=3., focus_value_key="TELFOCUS", read_noise
     err_data = np.sqrt(img_data + hdr[read_noise_key]*hdr[read_noise_key])
 
     # get focus position value from header
-    focus_position = hdr[focus_value_key]
+    focus_position = float(hdr[focus_value_key])
     
     # calculate background
     bkg, rms = background(img_data, global_bkg=False)
@@ -209,7 +209,7 @@ for channel in p['SELECTED_CHANNELS']:
     ch_reduce_dir = p['ch_reduce_directories'][j]
     reduce_dir = p['reduce_directories'][j]
 
-    pattern = "{}/*_{}dafd.fits".format(data_dir,options.seq_suffix)
+    pattern = "{}/*_{}.fits".format(data_dir,options.seq_suffix)
     
     inputdata = sorted(glob.glob(pattern))
     
@@ -221,7 +221,7 @@ for channel in p['SELECTED_CHANNELS']:
     fwhms, fwhms_err = np.array([]), np.array([])
     
     for i in range(len(inputdata)) :
-    
+
         try :
             focus_position, fwhm = measure_focus(inputdata[i], threshold=options.threshold, focus_value_key=options.focus_keyword)
         except :
