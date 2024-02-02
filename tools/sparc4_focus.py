@@ -169,6 +169,7 @@ parser.add_option("-w", "--window", dest="window",help="Window aperture size in 
 parser.add_option("-f", "--fwhm", dest="fwhm",help="Estimated FWHM (pixels)",type='float', default=5.)
 parser.add_option("-k", "--focus_keyword", dest="focus_keyword",help="Keyword with focus values",type='string', default="TELFOCUS")
 parser.add_option("-t", "--threshold", dest="threshold",help="Threshold (sigmas) to detect sources on focus images",type='float', default=10.)
+parser.add_option("-e", "--platescale", dest="platescale",help="Plate scale in arcsec/pixel",type='float', default=0.335)
 parser.add_option("-p", action="store_true", dest="parabolic_fit",help="to use parabolic fit", default=False)
 parser.add_option("-v", action="store_true", dest="verbose",help="verbose", default=False)
 
@@ -208,6 +209,10 @@ fig, axes = plt.subplots(nrows, ncols, figsize=(16, 8), sharex=False, sharey=Fal
                              'hspace': 0.5})
 
 idx = 0
+
+best_focus_values = np.array([])
+best_fwhm = np.array([])
+best_channels = []
 
 # Run full reduction for selected channels
 for channel in p['SELECTED_CHANNELS']:
@@ -283,6 +288,9 @@ for channel in p['SELECTED_CHANNELS']:
     
         ax.vlines(xs[imin], ymin, ymax, color="red", ls=":", label="Min focus model at {:.2f}".format(xs[imin]))
 
+        best_focus_values = np.append(best_focus_values, xs[imin])
+        best_channels.append(channel)
+        best_fwhm = np.append(best_fwhm, parabola(xs)[imin])
     else :
         # fit hyperbole
         coeffs_hyp = hyperbolic_fit(focus_values, fwhms)
@@ -296,7 +304,11 @@ for channel in p['SELECTED_CHANNELS']:
         imin_h = np.argmin(np.abs(dydx_h))
 
         ax.vlines(xs[imin_h], ymin, ymax, color="red", ls=":", label="Min focus model at {:.2f}".format(xs[imin_h]))
-    
+        
+        best_focus_values = np.append(best_focus_values, xs[imin_h])
+        best_channels.append(channel)
+        best_fwhm = np.append(best_fwhm, hyperbolic_function(xs, *coeffs_hyp)[imin_h])
+
     minvalue = np.nanargmin(fwhms)
     ax.plot([focus_values[minvalue]], [fwhms[minvalue]], "rx", lw=2, label="Min focus value at {:.2f}".format(focus_values[minvalue]))
 
@@ -310,6 +322,17 @@ for channel in p['SELECTED_CHANNELS']:
     ax.legend()
     
     idx += 1
+    
+print("\n------------------")
+print("FINAL FOCUS RESULTS")
+print("------------------")
+for i in range(len(best_channels)) :
+    print("CHANNEL {}: best focus at {:.2f} -> FWHM={:.2f} pixels or {:.2f} arcsec".format(best_channels[i],best_focus_values[i],best_fwhm[i],best_fwhm[i]*options.platescale))
+
+best_mean_fwhm = np.mean(best_fwhm)
+print("***************************")
+print(" Best mean FOCUS at {:.2f} with FWHM={:.2f} pixels or {:.2f} arcsec".format(np.mean(best_focus_values),best_mean_fwhm,best_mean_fwhm*options.platescale))
+print("***************************")
 
 if idx :
     plt.show()
