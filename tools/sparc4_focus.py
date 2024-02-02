@@ -323,9 +323,9 @@ for channel in p['SELECTED_CHANNELS']:
     
     idx += 1
     
-print("\n------------------")
+print("\n-------------------")
 print("FINAL FOCUS RESULTS")
-print("------------------")
+print("-------------------")
 for i in range(len(best_channels)) :
     print("CHANNEL {}: best focus at {:.2f} -> FWHM={:.2f} pixels or {:.2f} arcsec".format(best_channels[i],best_focus_values[i],best_fwhm[i],best_fwhm[i]*options.platescale))
 
