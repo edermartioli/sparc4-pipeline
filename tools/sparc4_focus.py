@@ -37,9 +37,9 @@ from photutils.segmentation import SourceCatalog
 from astropy.modeling import models, fitting
 
 import matplotlib.pyplot as plt
+from scipy.optimize import curve_fit
 
-
-def measure_focus(filename, threshold=3., focus_value_key="TELFOCUS", read_noise_key="RDNOISE",  aperture_radius=50, fwhm_for_source_detection=5.0) :
+def measure_psf(filename, threshold=3., focus_value_key="TELFOCUS", read_noise_key="RDNOISE",  aperture_radius=50, fwhm_for_source_detection=5.0) :
 
     #open fits image
     hdul = fits.open(filename)
@@ -104,7 +104,8 @@ def measure_focus(filename, threshold=3., focus_value_key="TELFOCUS", read_noise
     for i in range(1,nsources) :
         x1,x2 = aper_stats.bbox_xmin[i],aper_stats.bbox_xmax[i]
         y1,y2 = aper_stats.bbox_ymin[i],aper_stats.bbox_ymax[i]
-            
+           
+        #print("idx={} / {} x={} y={}".format(i,nsources,sources['xcentroid'][i],sources['ycentroid'][i]))
         box_data = img_data[y1:y2,x1:x2]
         
         xvalues = np.mean(box_data,0)
@@ -138,14 +139,25 @@ def measure_focus(filename, threshold=3., focus_value_key="TELFOCUS", read_noise
 
             fwhm = np.append(fwhm,(x_fwhm + y_fwhm)/2)
         
-        #plt.imshow(box_data)
-        #plt.show()
-        
+            #plt.imshow(box_data)
+            #plt.show()
+    #exit()
     #plt.plot(fwhm,"o")
     #plt.show()
     
     return focus_position, fwhm
     
+
+def hyperbolic_function(x, a, b, c, d):
+    return d + a * np.sqrt((((x - c)**2)/b**2) + 1)
+
+def hyperbolic_fit(xdata, ydata):
+    # Initial guess for the parameters
+    initial_guess = [1, 1, np.nanmedian(xdata), 1]
+    # Performing the curve fitting
+    params, params_covariance = curve_fit(hyperbolic_function, xdata, ydata, p0=initial_guess)
+    return params
+
 
 parser = OptionParser()
 parser.add_option("-d", "--datadir", dest="datadir",help="data directory", type='string', default="")
@@ -153,9 +165,11 @@ parser.add_option("-r", "--reducedir", dest="reducedir",help="Reduced data direc
 parser.add_option("-c", "--channels", dest="channels",help="SPARC4 channels: e.g '1,3,4' ", type='string',default="1,2,3,4")
 parser.add_option("-a", "--nightdir", dest="nightdir",help="Name of night directory common to all channels",type='string', default="")
 parser.add_option("-s", "--seq_suffix", dest="seq_suffix",help="Suffix used to select focus images",type='string', default="")
+parser.add_option("-w", "--window", dest="window",help="Window aperture size in units of FWHM",type='float', default=5.)
+parser.add_option("-f", "--fwhm", dest="fwhm",help="Estimated FWHM (pixels)",type='float', default=5.)
 parser.add_option("-k", "--focus_keyword", dest="focus_keyword",help="Keyword with focus values",type='string', default="TELFOCUS")
 parser.add_option("-t", "--threshold", dest="threshold",help="Threshold (sigmas) to detect sources on focus images",type='float', default=10.)
-parser.add_option("-p", action="store_true", dest="plot",help="plot", default=False)
+parser.add_option("-p", action="store_true", dest="parabolic_fit",help="to use parabolic fit", default=False)
 parser.add_option("-v", action="store_true", dest="verbose",help="verbose", default=False)
 
 try:
@@ -221,9 +235,9 @@ for channel in p['SELECTED_CHANNELS']:
     fwhms, fwhms_err = np.array([]), np.array([])
     
     for i in range(len(inputdata)) :
-
+        basename = os.path.basename(inputdata[i])
         try :
-            focus_position, fwhm = measure_focus(inputdata[i], threshold=options.threshold, focus_value_key=options.focus_keyword)
+            focus_position, fwhm = measure_psf(inputdata[i], threshold=options.threshold, focus_value_key=options.focus_keyword,  aperture_radius=options.window*options.fwhm,fwhm_for_source_detection=options.fwhm)
         except :
             print("Could not measure focus on image {}, skipping ...".format(inputdata[i]))
             continue
@@ -236,13 +250,10 @@ for channel in p['SELECTED_CHANNELS']:
             fwhms_err = np.append(fwhms_err,fwhm_err)
             focus_values = np.append(focus_values,focus_position)
 
-            print("Image {} of {} : Focus measured on {} sources at position={:.1f} FWHM = {:.2f} +/- {:.2f} pixels".format(i+1,len(inputdata),len(fwhm),focus_position, mfwhm, fwhm_err))
+            print("Image {} ({}/{}): detected {} sources; focus position={:.1f}; FWHM={:.2f}+/-{:.2f} pixels".format(basename,i+1,len(inputdata),len(fwhm),focus_position, mfwhm, fwhm_err))
         else :
-            print("WARNING: photometry of focus image {} failed to detect sources, skipping ...".format(inputdata[i]))
+            print("WARNING: failed to detect sources on focus image: {}".format(basename))
     
-    # fit parabola
-    coeffs = np.polyfit(focus_values, fwhms, 2)
-    parabola = np.poly1d(coeffs)
     
     if nchannels == 1:
         ax = axes
@@ -257,17 +268,38 @@ for channel in p['SELECTED_CHANNELS']:
     ax.plot(focus_values,fwhms,"ko",label="Data")
     
     xs = np.linspace(np.nanmin(focus_values), np.nanmax(focus_values), 300)
-    ax.plot(xs,parabola(xs), "-", color=channel_colors[j], lw=2, label="f(x) = {:.2f} + {:.2f}*x".format(coeffs[1],coeffs[0]))
+    ymin, ymax = np.nanmin(fwhms)-1,np.nanmax(fwhms)+1
+    
+    if options.parabolic_fit :
+        # fit parabola
+        coeffs = np.polyfit(focus_values, fwhms, 2)
+        parabola = np.poly1d(coeffs)
+        
+        #ax.plot(xs,parabola(xs), "-", color=channel_colors[j], lw=1, label="f(x) = {:.4f} + {:.4f}*x".format(coeffs[1],coeffs[0]))
+        ax.plot(xs,parabola(xs), "-", color=channel_colors[j], lw=1, label="parabolic fit")
+
+        dydx = np.gradient(parabola(xs))
+        imin = np.argmin(np.abs(dydx))
+    
+        ax.vlines(xs[imin], ymin, ymax, color="red", ls=":", label="Min focus model at {:.2f}".format(xs[imin]))
+
+    else :
+        # fit hyperbole
+        coeffs_hyp = hyperbolic_fit(focus_values, fwhms)
+        hyperbolic = hyperbolic_function(focus_values, *coeffs_hyp)
+        
+        #ax.plot(xs,hyperbolic_function(xs, *coeffs_hyp), "-", color=channel_colors[j], lw=2, label="f(x) = {:.4f} + {:.4f}*sqrt((x - {:.4f})**2)/{:.4f}**2 + 1)".format(coeffs_hyp[3],coeffs_hyp[0],coeffs_hyp[2],coeffs_hyp[3]))
+
+        ax.plot(xs,hyperbolic_function(xs, *coeffs_hyp), "-", color=channel_colors[j], lw=2, label="hyperbolic fit")
+
+        dydx_h = np.gradient(hyperbolic_function(xs, *coeffs_hyp))
+        imin_h = np.argmin(np.abs(dydx_h))
+
+        ax.vlines(xs[imin_h], ymin, ymax, color="red", ls=":", label="Min focus model at {:.2f}".format(xs[imin_h]))
     
     minvalue = np.nanargmin(fwhms)
     ax.plot([focus_values[minvalue]], [fwhms[minvalue]], "rx", lw=2, label="Min focus value at {:.2f}".format(focus_values[minvalue]))
 
-    dydx = np.gradient(parabola(xs))
-    imin = np.argmin(np.abs(dydx))
-    
-    ymin, ymax = np.nanmin(fwhms)-1,np.nanmax(fwhms)+1
-    ax.vlines(xs[imin], ymin, ymax, color="red", ls=":", label="Min focus model at {:.2f}".format(xs[imin]))
-    
     ax.tick_params(axis='x', labelsize=14)
     ax.tick_params(axis='y', labelsize=14)
     ax.minorticks_on()
