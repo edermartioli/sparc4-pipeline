@@ -17,6 +17,12 @@ from astropy.coordinates import AltAz, EarthLocation, SkyCoord
 from astropy.io import fits
 from astropy.time import Time, TimeDelta
 
+import twirl
+import matplotlib.pyplot as plt
+from astropy.wcs import WCS
+from astropy.wcs.utils import proj_plane_pixel_scales
+import photutils
+import numpy as np
 
 def set_timecoords_keys(hdr, timezone=-3, timetype="", ra="", dec="",
                         set_airmass=True, time_key='DATE-OBS', exptimekey='EXPTIME'):
@@ -595,3 +601,46 @@ def select_fits_files_with_keyword(list_of_files, keyword, value):
                     matching_files.append(list_of_files[i])
     
     return matching_files
+
+
+def check_astrometry(filename, fov_search_factor=2.0, apply_sparsify_filter=False, sparsify_factor=0.01, nsources_to_plot=30) :
+
+    """ Pipeline module to calcualte astrometric solution from an existing wcs
+    Parameters
+    ----------
+    filename : str
+        fits file name
+
+    Returns
+        wcs : astropy.wcs.WCS
+
+    -------
+    """
+
+    # load fits image
+    hdul = fits.open(filename)
+    img_data, hdr = hdul[0].data, hdul[0].header
+    
+    #print(repr(hdr))
+    
+    # load wcs from input header
+    w = WCS(hdr,naxis=2)
+    
+    fov = (img_data.shape * proj_plane_pixel_scales(w))[0]
+    center = w.pixel_to_world(*np.array(img_data.shape) / 2)
+    
+    # get RAs and Decs from Gaia catalog for a sky area of 2 x FoV
+    gaia_sources_skycoords = twirl.gaia_radecs(center, fov_search_factor * fov)
+    
+    # we only keep stars 0.01 degree apart from each other
+    if apply_sparsify_filter :
+        gaia_sources_skycoords = twirl.geometry.sparsify(gaia_sources_skycoords, sparsify_factor)
+    
+    # use input wcs to generate a "guess" for the set of pixel coordinates of Gaia sources
+    gaia_sources_pixcoords = np.array(w.world_to_pixel_values(gaia_sources_skycoords))
+    
+    plt.imshow(img_data, vmin=np.median(img_data), vmax=3 * np.median(img_data), cmap="Greys_r")
+    _ = photutils.aperture.CircularAperture(gaia_sources_pixcoords[:nsources_to_plot], r=10.0).plot(color="y")
+    plt.show()
+
+    return w
