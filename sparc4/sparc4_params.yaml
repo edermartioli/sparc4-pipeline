@@ -3,11 +3,11 @@
 # -----------------------------------------------------------------------------
 
 #### DIRECTORIES #####
-ROOTDATADIR: "/Volumes/Samsung_T5/Data/SPARC4/minidata"
-ROOTREDUCEDIR: "/Volumes/Samsung_T5/SPARC4/minidata/reduced"
+ROOTDATADIR: "/Users/eder/Data/SPARC4/minidata"
+ROOTREDUCEDIR: "/Users/eder/Data/SPARC4/minidata/reduced"
 
 # calibration database directory
-CALIBDB_DIR: "/Volumes/Samsung_T5/sparc4-pipeline/calibdb"
+CALIBDB_DIR: "/Users/eder/sparc4-pipeline/calibdb"
 
 # define SPARC4 channel numbers
 CHANNELS: [1, 2, 3, 4]
@@ -177,18 +177,31 @@ APERTURE_RADIUS_FOR_PHOTOMETRY_IN_POLAR: 10
 ZERO_OF_WAVEPLATE: 108.7
 
 # Plot polarimetry fit
-PLOT_POLARIMETRY_FIT: True
+PLOT_POLARIMETRY_FIT: False
 
 # For time series, if True: plot total polarization (P, theta) or if False plot equatorial components (U, V)
-PLOT_TOTAL_POLARIZATION: True
+PLOT_TOTAL_POLARIZATION: False
 #-------------------------------------
 
 #### ASTROMETRY ####
+# whether or not to solve astrometry with astrometry.net
+# note: it requires astrometry.net properly installed in the machine (not fully tested)
+SOLVE_ASTROMETRY_WITH_ASTROMETRY_NET: False
+
 # whether or not to solve astrometry in stack frame
-SOLVE_ASTROMETRY_IN_STACK: False
+SOLVE_ASTROMETRY_IN_STACK: True
+
+# whether or not to plot stack frame with matched Gaia sources
+# note: by activating this, the plot will pause the reduction processing and will
+#       continue only when the plot window is closed
+PLOT_ASTROMETRY_RESULTS_IN_STACK: False
 
 # whether or not to solve astrometry in individual frames
+# note: depending on the number of frames it will make reduction very slow
 SOLVE_ASTROMETRY_IN_INDIVIDUAL_FRAMES: False
+
+# set maximum number of Gaia source to be matched for astrometric solution
+MAX_NUMBER_OF_GAIA_SRCS_FOR_ASTROMETRY: 50
 
 # set image plate scale in units of arcseconds per pixel
 PLATE_SCALE: 0.335  # ARCSEC/PIXEL -> SPARC4 1x1 binning
@@ -200,7 +213,7 @@ TWEAK_ORDER: 3
 SEARCH_RADIUS:  0.1
 
 # directory path to the astrometric indices
-ASTROM_INDX_PATH : '/Volumes/Samsung_T5/sparc4-pipeline/astrometry_indexes/'
+ASTROM_INDX_PATH : '/Users/eder/sparc4-pipeline/astrometry_indexes/'
 
 # paths to the astrometric reference images in the 4-channels
 ASTROM_REF_IMGS: ['20230503_s4c1_CR1_astrometryRef_stack.fits',
@@ -222,7 +235,8 @@ TIME_FORMAT_IN_PROC: 'jd'
 # Time span to define window (in minutes) within which to calculate running rms
 TIME_SPAN_FOR_RMS: 10.0
 
-# Set a list of aperture radii to include in the time series (must be a sub set of photometry apertures)
+# Set a list of aperture radii to include in the time series
+# WARNING: This must be a sub set of photometry apertures defined in PHOT_APERTURES
 #PHOT_APERTURES_FOR_LIGHTCURVES: [2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30]
 #PHOT_APERTURES_FOR_LIGHTCURVES: [5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]
 PHOT_APERTURES_FOR_LIGHTCURVES: [6,8,10,12,14,16]

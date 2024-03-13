@@ -46,6 +46,153 @@ import sparc4.utils as s4utils
 import photutils
 from astropy.stats import SigmaClip
 
+#import astroalign as aa
+from aafitrans import find_transform
+import twirl
+from astropy.wcs.utils import fit_wcs_from_points
+
+            
+def astrometry_from_existing_wcs(wcs, img_data, pixel_coords=None, sky_coords=None, pixel_scale=0.335, fov_search_factor=1.1, sparsify_factor=0.01, apply_sparsify_filter=True, max_number_of_gaia_sources=50, compute_wcs_tolerance = 10, plot_solution=False, nsources_to_plot=30, use_twirl_to_compute_wcs=False) :
+
+    """ Pipeline module to calcualte astrometric solution from an existing wcs
+    Parameters
+    ----------
+    wcs : astropy.wcs.WCS
+        wcs object
+    img_data : numpy.ndarray (n x m)
+        float array containing the image data (electrons)
+    pixel_coords : np.array (optional)
+        array of pixel coordinates np.array([x0,y0],[x1,y1],...,[xn,yn])
+    sky_coords : np.array (optional)
+        array of sky coordinates np.array([ra0,dec0],[ra1,dec1],...,[ran,decn])
+    pixel_scale : float
+        pixel scale in units of arc seconds
+    ra_key : str
+        header keyword to get Right Ascension
+    dec_key : str
+        header keyword to get Declination
+    fov_search_factor : float
+        size of FoV to search Gaia sources in units of the image FoV
+    apply_sparsify_filter : bool
+        to apply a sparsify filter to keep detected Gaia sources apart from each other
+    sparsify_factor : float
+        to avoid blended sources -  keep stars "sparsify_factor" degrees apart from each other
+    max_number_of_gaia_sources : int
+        limit to truncate number of Gaia sources to be matched for astrometry
+    compute_wcs_tolerance : float
+        tolerance passed as a parameter to the function twirl.compute_wcs()
+    plot_solution : bool
+        to plot image and Gaia sources using new astrometric solution
+    nsources_to_plot : int
+        number of Gaia sources to plot
+    use_twirl_to_compute_wcs : bool
+        use twirl to comput wcs, if not then use fit_wcs_from_points
+    Returns
+        wcs : astropy.wcs.WCS
+        Updated wcs object
+    -------
+    """
+
+    loc = {}
+    loc['ASTROMETRY_SOURCES_SKYCOORDS'] = None
+
+    # detect stars in the image if a list of pixel coordinates is not provided
+    if pixel_coords is None :
+        #print("Detecting peaks using twirl ... ")
+        pixel_coords = twirl.find_peaks(img_data)
+    try :
+        if sky_coords is None :
+            # get the center of the image
+            ra, dec = wcs.wcs.crval[0], wcs.wcs.crval[1]
+    
+            # set image center coordinates
+            center = SkyCoord(ra, dec, unit=(u.deg,u.deg))
+            #print("Center: ", center)
+
+            # get image shape
+            shape = img_data.shape
+    
+            # set pixel scale
+            pixel = pixel_scale * u.arcsec  # known pixel scale
+
+            # set field of view
+            fov = np.max(shape) * pixel.to(u.deg)
+    
+            # get RAs and Decs from Gaia catalog for a sky area of fov_search_factor x FoV
+            gaia_sources_skycoords = twirl.gaia_radecs(center, fov_search_factor * fov)
+    
+            # we only keep stars 0.01 degree apart from each other
+            if apply_sparsify_filter :
+                gaia_sources_skycoords = twirl.geometry.sparsify(gaia_sources_skycoords, sparsify_factor)
+    
+            # use input wcs to generate a "guess" for the set of pixel coordinates of Gaia sources
+            gaia_sources_radecs_guess = np.array(wcs.world_to_pixel_values(gaia_sources_skycoords))
+    
+            #plt.imshow(img_data, vmin=np.median(img_data), vmax=3 * np.median(img_data), cmap="Greys_r")
+            #_ = photutils.aperture.CircularAperture(pixel_coords[:max_number_of_gaia_sources], r=10.0).plot(color="y")
+            #_ = photutils.aperture.CircularAperture(gaia_sources_radecs_guess[:max_number_of_gaia_sources], r=15.0).plot(color="r")
+            #plt.show()
+    
+            # Use astroalign to find transformation between detected sources and Gaia sources in pixel scale
+            #T, (source_pos_array, target_pos_array) = aa.find_transform(pixel_coords[:max_number_of_gaia_sources], gaia_sources_radecs_guess[:max_number_of_gaia_sources])
+            
+            # instead of astroalign, we use below the same function from aafitrans, which optimizes the use of astroalign
+            T, (source_pos_array, target_pos_array) = find_transform(pixel_coords,
+                                                                     gaia_sources_radecs_guess[:max_number_of_gaia_sources],
+                                                                     max_control_points=max_number_of_gaia_sources,
+                                                                     ttype='similarity',
+                                                                     pixel_tolerance=2,
+                                                                     min_matches=4,
+                                                                     num_nearest_neighbors=8,
+                                                                     kdtree_search_radius=0.02,
+                                                                     n_samples=1,
+                                                                     get_best_fit=True,
+                                                                     seed=None)
+
+            # Recover sky coordinates for the set of matched Gaia sources using original wcs
+            matched_sky_coords = np.array(wcs.pixel_to_world_values(target_pos_array))
+
+            # compute new World Coordinate System
+            if use_twirl_to_compute_wcs :
+                wcs = twirl.compute_wcs(source_pos_array, matched_sky_coords, tolerance=compute_wcs_tolerance)
+            else :
+                all_sky_coords = SkyCoord(matched_sky_coords, unit='deg')
+                wcs = fit_wcs_from_points(np.array([source_pos_array[:,0], source_pos_array[:,1]]), all_sky_coords)
+        
+            loc['ASTROMETRY_SOURCES_SKYCOORDS'] = gaia_sources_skycoords[:max_number_of_gaia_sources]
+        else :
+            all_sky_coords = SkyCoord(sky_coords, unit='deg')
+            wcs = fit_wcs_from_points(np.array([pixel_coords[:,0], pixel_coords[:,1]]), all_sky_coords)
+            loc['ASTROMETRY_SOURCES_SKYCOORDS'] = sky_coords
+
+    except Exception as e :
+        loc['ASTROMETRY_SOURCES_SKYCOORDS'] = np.array(wcs.pixel_to_world_values(pixel_coords))
+        print("WARNING: could not solve astrometry : {}".format(e))
+
+    wcs_hdr = wcs.to_header(relax=True)
+    if 'DATE-OBS' in wcs_hdr :
+        del wcs_hdr['DATE-OBS']
+    if 'MJD-OBS' in wcs_hdr :
+        del wcs_hdr['MJD-OBS']
+    if 'LONPOLE' in wcs_hdr :
+        del wcs_hdr['LONPOLE']
+    if 'LATPOLE' in wcs_hdr :
+        del wcs_hdr['LATPOLE']
+    wcs = WCS(wcs_hdr, naxis=2)
+    
+    # plot Gaia sources using new wcs to visually check if solution is correct
+    if plot_solution :
+        wcs_hdr = wcs.to_header(relax=True)
+        for key in wcs_hdr :
+            print(key,"=",wcs_hdr[key])
+            
+        astrometry_sources_pixcoords = np.array(wcs.world_to_pixel_values(loc['ASTROMETRY_SOURCES_SKYCOORDS'][:nsources_to_plot]))
+        plt.imshow(img_data, vmin=np.median(img_data), vmax=3 * np.median(img_data), cmap="Greys_r")
+        _ = photutils.aperture.CircularAperture(astrometry_sources_pixcoords, r=10.0).plot(color="y")
+        plt.show()
+        
+    return wcs
+    
 def aperture_photometry_wrapper(img_data, x, y, err_data=None, aperture_radius=10, r_in=25, r_out=50, sigma_clip_threshold=3.0, read_noise=0.0, recenter=False) :
 
     """ Pipeline module to run aperture photometry of sources in an image
@@ -542,6 +689,7 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
                                                  target=p['TARGET_INDEX'],
                                                  comps=p['COMPARISONS'],
                                                  plot_total_polarization=p["PLOT_TOTAL_POLARIZATION"])
+                                                 
     return p
 
 
@@ -858,11 +1006,11 @@ def old_reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", forc
                 try:
                     # make catalog
                     if match_frames:
-                        p, frame_catalogs = build_catalogs(p, img_data, deepcopy(p["CATALOGS"]), xshift=p["XSHIFTS"][i], yshift=p["YSHIFTS"][i], polarimetry=polarimetry, exptime=exptime, readnoise=readnoise)
+                        p, frame_catalogs = build_catalogs(p, img_data, frames[i].header, deepcopy(p["CATALOGS"]), xshift=p["XSHIFTS"][i], yshift=p["YSHIFTS"][i], polarimetry=polarimetry, exptime=exptime, readnoise=readnoise, set_wcs_from_database=False)
                     else:
-                        p, frame_catalogs = build_catalogs(p, img_data, polarimetry=polarimetry, exptime=exptime, readnoise=readnoise)
-                except:
-                    print("WARNING: could not build frame catalog")
+                        p, frame_catalogs = build_catalogs(p, img_data, frames[i].header, polarimetry=polarimetry, exptime=exptime, readnoise=readnoise, set_wcs_from_database=False)
+                except Exception as e:
+                    print("WARNING: could not build frame catalog: ", e)
                     # set local
                     frame_catalogs = []
 
@@ -870,17 +1018,9 @@ def old_reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", forc
                       obj_fg.files[i], '->', p['OBJECT_REDUCED_IMAGES'][i])
 
                 frame_wcs_header = deepcopy(p['WCS_HEADER'])
-
-                if np.isfinite(p["XSHIFTS"][i]):
-                    frame_wcs_header['CRPIX1'] = frame_wcs_header['CRPIX1'] + \
-                        p["XSHIFTS"][i]
-                if np.isfinite(p["YSHIFTS"][i]):
-                    frame_wcs_header['CRPIX2'] = frame_wcs_header['CRPIX2'] + \
-                        p["YSHIFTS"][i]
-
+                
                 # call function to generate final product
-                s4p.scienceImageProduct(obj_fg.files[i], img_data=img_data, info=info, catalogs=frame_catalogs, polarimetry=polarimetry,
-                                             filename=p['OBJECT_REDUCED_IMAGES'][i], catalog_beam_ids=p['CATALOG_BEAM_IDS'], wcs_header=frame_wcs_header, time_key=p["TIME_KEY"])
+                s4p.scienceImageProduct(obj_fg.files[i], img_data=img_data, info=info, catalogs=frame_catalogs, polarimetry=polarimetry,filename=p['OBJECT_REDUCED_IMAGES'][i], catalog_beam_ids=p['CATALOG_BEAM_IDS'], wcs_header=frame_wcs_header, time_key=p["TIME_KEY"])
 
     return p
 
@@ -1043,14 +1183,12 @@ def reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", match_fr
             info['YSHIFTST'] = ("OK", "y shift status")
             if match_frames:
                 if np.isfinite(p["XSHIFTS"][i]):
-                    info['XSHIFT'] = (
-                        p["XSHIFTS"][i], "register x shift (pixel)")
+                    info['XSHIFT'] = (p["XSHIFTS"][i], "register x shift (pixel)")
                 else:
                     info['XSHIFTST'] = ("UNDEFINED", "x shift status")
 
                 if np.isfinite(p["YSHIFTS"][i]):
-                    info['YSHIFT'] = (
-                        p["YSHIFTS"][i], "register y shift (pixel)")
+                    info['YSHIFT'] = (p["YSHIFTS"][i], "register y shift (pixel)")
                 else:
                     info['YSHIFTST'] = ("UNDEFINED", "y shift status")
 
@@ -1072,11 +1210,11 @@ def reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", match_fr
                 try:
                     # make catalog
                     if match_frames and "CATALOGS" in p.keys():
-                        p, frame_catalogs = build_catalogs(p, img_data, deepcopy(p["CATALOGS"]), xshift=p["XSHIFTS"][i], yshift=p["YSHIFTS"][i], polarimetry=polarimetry, exptime=exptime, readnoise=readnoise)
+                        p, frame_catalogs = build_catalogs(p, img_data, frames[i].header, deepcopy(p["CATALOGS"]), xshift=p["XSHIFTS"][i], yshift=p["YSHIFTS"][i], polarimetry=polarimetry, exptime=exptime, readnoise=readnoise, set_wcs_from_database=False)
                     else:
-                        p, frame_catalogs = build_catalogs(p, img_data, polarimetry=polarimetry, exptime=exptime, readnoise=readnoise)
-                except:
-                    print("WARNING: could not build frame catalog.")
+                        p, frame_catalogs = build_catalogs(p, img_data, frames[i].header, polarimetry=polarimetry, exptime=exptime, readnoise=readnoise, set_wcs_from_database=False)
+                except Exception as e:
+                    print("WARNING: could not build frame catalog: ", e)
                     # set local
                     frame_catalogs = []
 
@@ -1085,15 +1223,8 @@ def reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", match_fr
 
                 frame_wcs_header = deepcopy(p['WCS_HEADER'])
 
-                if np.isfinite(p["XSHIFTS"][i]):
-                    frame_wcs_header['CRPIX1'] = frame_wcs_header['CRPIX1'] + \
-                        p["XSHIFTS"][i]
-                if np.isfinite(p["YSHIFTS"][i]):
-                    frame_wcs_header['CRPIX2'] = frame_wcs_header['CRPIX2'] + \
-                        p["YSHIFTS"][i]
-
                 # call function to generate final product
-                s4p.scienceImageProduct(obj_fg.files[i], img_data=img_data, info=info, catalogs=frame_catalogs, polarimetry=polarimetry,filename=obj_red_images[i], catalog_beam_ids=p['CATALOG_BEAM_IDS'], wcs_header=frame_wcs_header, time_key=p["TIME_KEY"], ra=ra, dec=dec)
+                s4p.scienceImageProduct(obj_fg.files[i], img_data=img_data, info=info, catalogs=frame_catalogs,polarimetry=polarimetry,filename=obj_red_images[i], catalog_beam_ids=p['CATALOG_BEAM_IDS'],wcs_header=frame_wcs_header,time_key=p["TIME_KEY"], ra=ra, dec=dec)
 
     if 'OBJECT_REDUCED_IMAGES' not in p.keys():
         p['OBJECT_REDUCED_IMAGES'] = obj_red_images
@@ -1157,9 +1288,7 @@ def stack_science_images(p, inputlist, reduce_dir="./", force=False, stack_suffi
                 p['REF_IMAGE_INDEX'] = i
         p['REF_OBJECT_HEADER'] = fits.getheader(p['REFERENCE_IMAGE'])
 
-        
-
-        p["CATALOGS"] = s4p.readScienceImagCatalogs(p['OBJECT_STACK'])
+        p["CATALOGS"] = s4p.readScienceImageCatalogs(p['OBJECT_STACK'])
 
         return p
 
@@ -1571,7 +1700,7 @@ def run_register_frames(p, inframes, inobj_files, info, output_stack="", force=F
     p = calculate_aperture_radius(p, img_data)
 
     # generate catalog
-    p, stack_catalogs = build_catalogs(p, img_data, maxnsources=maxnsources, polarimetry=polarimetry, stackmode=True, exptime=meanexptime, readnoise=readnoise)
+    p, stack_catalogs = build_catalogs(p, img_data, frames[0].header, maxnsources=maxnsources, polarimetry=polarimetry, stackmode=True, exptime=meanexptime, readnoise=readnoise, set_wcs_from_database=True)
 
     # set master catalogs
     p["CATALOGS"] = stack_catalogs
@@ -1768,49 +1897,73 @@ def read_catalog_coords(catalog):
     return ra, dec, x, y
 
 
-def set_wcs(p):
+def set_wcs_from_astrom_ref_image(ref_filename, header):
     """ Pipeline module to set WCS header parameters from an input header of a
             reference image. The reference image is usually an astrometric field.
     Parameters
     ----------
-    p : dict
-        dictionary to store pipeline parameters
+    ref_filename : str
+        reference file name to get a guess of WCS
+    header : fits.Header
+        FITS image header
     Returns
-        p with updated WCS keywords
+        w :
+        updated WCS object
     -------
      :
     """
-    ra, dec = p['REF_OBJECT_HEADER']['RA'].split(":"), p['REF_OBJECT_HEADER']['DEC'].split(":")
-
+    
+    # get ra and dec from current header
+    ra, dec = header['RA'].split(":"), header['DEC'].split(":")
     ra_str = '{:02d}h{:02d}m{:.2f}s'.format(int(ra[0]), int(ra[1]), float(ra[2]))
     dec_str = '{:02d}d{:02d}m{:.2f}s'.format(int(dec[0]), int(dec[1]), float(dec[2]))
-    # print(ra_str, dec_str)
-
+    #print("RA=",ra_str, "DEC=",dec_str)
+    
+    # set object coordinates as SkyCoords
     coord = SkyCoord(ra_str, dec_str, frame='icrs')
     ra_deg, dec_deg = coord.ra.degree, coord.dec.degree
-    p['RA_DEG'], p['DEC_DEG'] = ra_deg, dec_deg
-    
+    crval1, crval2 = ra_deg, dec_deg
+
+    # get image center in pixel coordinates
+    crpix1 = (header['NAXIS1'] + 1) / 2
+    crpix2 = (header['NAXIS2'] + 1) / 2
+
     #print("Getting WCS data from reference image:", p["ASTROM_REF_IMG"])
+    w = WCS(fits.getheader(ref_filename, 0), naxis=2)
     
-    p['WCS'] = WCS(fits.getheader(p["ASTROM_REF_IMG"], 0), naxis=2)
-    p['WCS_HEADER'] = p['WCS'].to_header(relax=True)
-    p['WCS_HEADER']['CRVAL1'] = ra_deg
-    p['WCS_HEADER']['CRVAL2'] = dec_deg
-    # p['WCS_HEADER']['LATPOLE'] = 0
-    # p['WCS_HEADER']['LONPOLE'] = 180
-    del p['WCS_HEADER']['DATE-OBS']
-    del p['WCS_HEADER']['MJD-OBS']
+    # update values in WCS
+    w.crval = [crval1, crval2]
+    w.wcs.crpix = [crpix1, crpix2]
+    w.wcs.crval = [crval1, crval2]
+    
+    # get header from updated wcs
+    wcs_hdr = w.to_header(relax=True)
+    
+    # update date-obs in wcs
+    wcs_hdr['DATE-OBS'] = header["DATE-OBS"]
+    
+    # deleted wcs header keywords from ref image
+    del wcs_hdr['MJD-OBS']
+    del wcs_hdr['LONPOLE']
+    del wcs_hdr['LATPOLE']
+      
+    # update wcs object
+    w = WCS(wcs_hdr,naxis=2)
 
-    return p
+    return w
 
 
-def generate_catalogs(p, data, sources, fwhm, catalogs=[], catalogs_label='', aperture_radius=10, r_ann=(25, 50), sortbyflux=True, maxnsources=0, polarimetry=False, use_e_beam_for_astrometry=False, solve_astrometry=False, exptime=1.0, readnoise=0.):
+def generate_catalogs(p, data, hdr, sources, fwhm, catalogs=[], catalogs_label='', aperture_radius=10, r_ann=(25, 50), sortbyflux=True, maxnsources=0, polarimetry=False, use_e_beam_for_astrometry=True, solve_astrometry=False, exptime=1.0, readnoise=0.):
     """ Pipeline module to generate new catalogs and append it
     to a given list of catalogs
     Parameters
     ----------
     p : dict
         dictionary to store pipeline parameters
+    data : numpy.ndarray (n x m)
+        float array containing the image data
+    hdr : fits.PrimaryHDU().header
+        FITS image header
     Returns
         catalogs: list of dicts
             returns a list of catalog dictionaries, where the new catalogs
@@ -1861,36 +2014,52 @@ def generate_catalogs(p, data, sources, fwhm, catalogs=[], catalogs_label='', ap
         flagse = flagse[sorted]
 
         if use_e_beam_for_astrometry:
-            xs_for_astrometry = xo
-            ys_for_astrometry = yo
-        else:
             xs_for_astrometry = xe
             ys_for_astrometry = ye
+        else:
+            xs_for_astrometry = xo
+            ys_for_astrometry = yo
 
+        pixel_coords = np.ndarray((len(xs_for_astrometry), 2))
+        for j in range(len(xs_for_astrometry)) :
+            pixel_coords[j] = [xs_for_astrometry[j],ys_for_astrometry[j]]
+            
         if solve_astrometry:
-            if use_e_beam_for_astrometry:
-                fluxes_for_astrometry = 10**(-0.4*mage)
-            else:
-                fluxes_for_astrometry = 10**(-0.4*mago)
-
-            h, w = np.shape(data)
-
-            # print ("I'm trying now to solve astrometry ...")
-            # print("INPUT parameters: ",xs_for_astrometry, ys_for_astrometry, fluxes_for_astrometry, h, w, p['REF_OBJECT_HEADER'], {'ra': p['RA_DEG'], 'dec': p['DEC_DEG'], 'radius': p['SEARCH_RADIUS'], 'scale-low': p['PLATE_SCALE']-0.015, 'scale-units': 'arcsecperpix', 'scale-high':p['PLATE_SCALE']+0.015, 'crpix-center': 1, 'tweak-order': p['TWEAK_ORDER']})
+            
             try:
-                print("Trying to solve astrometry using solve_astrometry_xy()")
-                # Solve astrometry
-                # p['WCS'] = solve_astrometry_xy(xs_for_astrometry, ys_for_astrometry, fluxes_for_astrometry, image_height=h, image_width=w, image_header=p['REF_OBJECT_HEADER'], image_params={'ra': p['RA_DEG'],'dec': p['DEC_DEG'],'pltscl': p['PLATE_SCALE']}, return_wcs=True)
-                # solution = solve_astrometry_xy(xs_for_astrometry, ys_for_astrometry, fluxes_for_astrometry, height=h, width=w, image_header=p['REF_OBJECT_HEADER'], options={'ra': p['RA_DEG'], 'dec': p['DEC_DEG'], 'radius': p['SEARCH_RADIUS'], 'scale-low': p['PLATE_SCALE']-0.02, 'scale-units': 'arcsecperpix', 'scale-high':p['PLATE_SCALE']+0.02, 'crpix-center': 1, 'tweak-order': p['TWEAK_ORDER']})
-                solution = solve_astrometry_xy(xs_for_astrometry, ys_for_astrometry, fluxes_for_astrometry, w, h, options={'ra': p['RA_DEG'], 'dec': p['DEC_DEG'], 'radius': p['SEARCH_RADIUS'], 'scale-low': p['PLATE_SCALE']-0.02, 'scale-high': p['PLATE_SCALE']+0.02, 'scale-units': 'arcsecperpix', 'crpix-center': 1, 'tweak-order': p['TWEAK_ORDER'], 'add_path': p['ASTROM_INDX_PATH']})
-                                               
-                p['WCS'] = solution.wcs
-                p['WCS_HEADER'] = p['WCS'].to_header(relax=True)
-
-            except:
-                print("WARNING: could not solve astrometry, using WCS from database")
-
-        ras, decs = p['WCS'].all_pix2world(xs_for_astrometry, ys_for_astrometry, 0)
+                if p["SOLVE_ASTROMETRY_WITH_ASTROMETRY_NET"] :
+                    print ("Trying to solve astrometry in PHOT-MODE using astrometry.net")
+                    if use_e_beam_for_astrometry:
+                        fluxes_for_astrometry = 10**(-0.4*mage)
+                    else:
+                        fluxes_for_astrometry = 10**(-0.4*mago)
+                    h, w = np.shape(data)
+                    #print("INPUT parameters: ",xs_for_astrometry, ys_for_astrometry, fluxes_for_astrometry, h, w, p['REF_OBJECT_HEADER'], {'ra': p['RA_DEG'], 'dec': p['DEC_DEG'], 'radius': p['SEARCH_RADIUS'], 'scale-low': p['PLATE_SCALE']-0.015, 'scale-units': 'arcsecperpix', 'scale-high':p['PLATE_SCALE']+0.015, 'crpix-center': 1, 'tweak-order': p['TWEAK_ORDER']})
+                    # Solve astrometry
+                    solution = solve_astrometry_xy(xs_for_astrometry, ys_for_astrometry, fluxes_for_astrometry, w, h, options={'ra': p['RA_DEG'], 'dec': p['DEC_DEG'], 'radius': p['SEARCH_RADIUS'], 'scale-low': p['PLATE_SCALE']-0.02, 'scale-high': p['PLATE_SCALE']+0.02, 'scale-units': 'arcsecperpix', 'crpix-center': 1, 'tweak-order': p['TWEAK_ORDER'], 'add_path': p['ASTROM_INDX_PATH']})
+                    p['WCS'] = solution.wcs
+                else :
+            
+                    print("Trying to solve astrometry in POLAR-MODE using astrometry_from_existing_wcs()")
+                    p['WCS'] = astrometry_from_existing_wcs(deepcopy(p['WCS']), data, pixel_coords=pixel_coords, pixel_scale=p["PLATE_SCALE"], max_number_of_gaia_sources=p['MAX_NUMBER_OF_GAIA_SRCS_FOR_ASTROMETRY'], plot_solution=p['PLOT_ASTROMETRY_RESULTS_IN_STACK'], nsources_to_plot=30, use_twirl_to_compute_wcs=False)
+                    
+            except Exception as e:
+            
+                print("WARNING: could not solve astrometry in POLAR-MODE, using WCS from database:",e)
+                p['WCS'] = set_wcs_from_astrom_ref_image(p["ASTROM_REF_IMG"], hdr)
+            
+            # update wcs header in parameters dict
+            p['WCS_HEADER'] = p['WCS'].to_header(relax=True)
+                
+        # Recover sky coordinates for the set of input sources
+        catalog_sky_coords = np.array(p['WCS'].pixel_to_world_values(pixel_coords))
+        p['SKYCOORDS_FROM_CATALOG_PIXCOORDS'] = catalog_sky_coords
+    
+        #ras, decs = p['WCS'].all_pix2world(xs_for_astrometry, ys_for_astrometry, 0)
+        ras, decs = [], []
+        for i in range(len(p['SKYCOORDS_FROM_CATALOG_PIXCOORDS'])) :
+            ras.append(p['SKYCOORDS_FROM_CATALOG_PIXCOORDS'][i][0])
+            decs.append(p['SKYCOORDS_FROM_CATALOG_PIXCOORDS'][i][1])
 
         nsources = len(mago)
         if maxnsources:
@@ -1898,28 +2067,48 @@ def generate_catalogs(p, data, sources, fwhm, catalogs=[], catalogs_label='', ap
 
         # save photometry data into the catalogs
         for i in range(nsources):
-            catalogs[current_catalogs_len]["{}".format(i)] = (i, ras[i], decs[i], xo[i], yo[i], fwhmso[i], fwhmso[i], mago[i], mago_error[i], smago[i], smago_error[i], aperture_radius, flagso[i])
-            catalogs[current_catalogs_len+1]["{}".format(i)] = (i, ras[i], decs[i], xe[i], ye[i], fwhmse[i], fwhmse[i], mage[i], mage_error[i], smage[i], smage_error[i], aperture_radius, flagse[i])
+            catalogs[current_catalogs_len]["{}".format(i)] = (i, ras[i], decs[i], xe[i], ye[i], fwhmso[i], fwhmso[i], mago[i], mago_error[i], smago[i], smago_error[i], aperture_radius, flagso[i])
+            catalogs[current_catalogs_len+1]["{}".format(i)] = (i, ras[i], decs[i], xo[i], yo[i], fwhmse[i], fwhmse[i], mage[i], mage_error[i], smage[i], smage_error[i], aperture_radius, flagse[i])
     else:
         catalogs.append({})
-
+        
         # x, y = np.array(sources['x']), np.array(sources['y'])
         x, y, mag, mag_error, smag, smag_error, fwhms, flags = run_aperture_photometry(data, sources['x'], sources['y'], aperture_radius, r_ann, output_mag=True, sortbyflux=sortbyflux, exptime=exptime, recenter=p["RECENTER_APER_FOR_PHOTOMETRY"], readnoise=readnoise, use_astropop=p["USE_ASTROPOP_PHOTOMETRY"])
 
-        if solve_astrometry:
-            fluxes_for_astrometry = 10**(-0.4*mag)
-            h, w = np.shape(data)
-
+        pixel_coords = np.ndarray((len(x), 2))
+        for j in range(len(x)) :
+            pixel_coords[j] = [x[j],y[j]]
+            
+        if solve_astrometry :
             try:
-                # image_header=p['REF_OBJECT_HEADER']
-                solution = solve_astrometry_xy(x, y, fluxes_for_astrometry, w, h, options={'ra': p['RA_DEG'], 'dec': p['DEC_DEG'], 'radius': p['SEARCH_RADIUS'], 'scale-low': p['PLATE_SCALE'] - 0.02, 'scale-high': p['PLATE_SCALE']+0.02, 'scale-units': 'arcsecperpix', 'crpix-center': 1, 'tweak-order': p['TWEAK_ORDER'], 'add_path': p['ASTROM_INDX_PATH']})
-                p['WCS'] = solution.wcs
-                p['WCS_HEADER'] = p['WCS'].to_header(relax=True)
-            except:
-                print("WARNING: could not solve astrometry, using WCS from database")
-
-        ras, decs = p['WCS'].all_pix2world(x, y, 0)
-
+                if p["SOLVE_ASTROMETRY_WITH_ASTROMETRY_NET"] :
+                    print("Trying to solve astrometry in PHOT-MODE using astrometry.net")
+                    fluxes_for_astrometry = 10**(-0.4*mag)
+                    h, w = np.shape(data)
+                    solution = solve_astrometry_xy(x, y, fluxes_for_astrometry, w, h, options={'ra': p['RA_DEG'], 'dec': p['DEC_DEG'], 'radius': p['SEARCH_RADIUS'], 'scale-low': p['PLATE_SCALE'] - 0.02, 'scale-high': p['PLATE_SCALE']+0.02, 'scale-units': 'arcsecperpix', 'crpix-center': 1, 'tweak-order': p['TWEAK_ORDER'], 'add_path': p['ASTROM_INDX_PATH']})
+                    p['WCS'] = solution.wcs
+                    
+                else :
+                    print("Trying to solve astrometry in PHOT-MODE using astrometry_from_existing_wcs()")
+                    p['WCS'] = astrometry_from_existing_wcs(deepcopy(p['WCS']), data, pixel_coords=pixel_coords, pixel_scale=p["PLATE_SCALE"], max_number_of_gaia_sources=p['MAX_NUMBER_OF_GAIA_SRCS_FOR_ASTROMETRY'], plot_solution=p['PLOT_ASTROMETRY_RESULTS_IN_STACK'], nsources_to_plot=100)
+                    
+            except Exception as e:
+                print("WARNING: could not solve astrometry in PHOT-MODE, using WCS from database: ", e)
+                p['WCS'] = set_wcs_from_astrom_ref_image(p["ASTROM_REF_IMG"], hdr)
+                
+        # update wcs header in parameters dict
+        p['WCS_HEADER'] = p['WCS'].to_header(relax=True)
+         
+        # Recover sky coordinates for the set of input sources
+        catalog_sky_coords = np.array(p['WCS'].pixel_to_world_values(pixel_coords))
+        p['SKYCOORDS_FROM_CATALOG_PIXCOORDS'] = catalog_sky_coords
+        
+        #ras, decs = p['WCS'].all_pix2world(x, y, 0)
+        ras, decs = [], []
+        for i in range(len(p['SKYCOORDS_FROM_CATALOG_PIXCOORDS'])) :
+            ras.append(p['SKYCOORDS_FROM_CATALOG_PIXCOORDS'][i][0])
+            decs.append(p['SKYCOORDS_FROM_CATALOG_PIXCOORDS'][i][1])
+            
         nsources = len(mag)
         if maxnsources:
             nsources = maxnsources
@@ -1928,7 +2117,7 @@ def generate_catalogs(p, data, sources, fwhm, catalogs=[], catalogs_label='', ap
         for i in range(nsources):
             catalogs[current_catalogs_len]["{}".format(i)] = (i, ras[i], decs[i], x[i], y[i], fwhms[i], fwhms[i], mag[i], mag_error[i], smag[i], smag_error[i], aperture_radius, flags[i])
 
-    return catalogs
+    return catalogs, p
 
 
 def set_sky_aperture(p, aperture_radius):
@@ -1961,7 +2150,7 @@ def set_sky_aperture(p, aperture_radius):
     return r_ann
 
 
-def build_catalogs(p, data, catalogs=[], xshift=0., yshift=0., solve_astrometry=True, maxnsources=0, polarimetry=False, stackmode=False, exptime=1.0, readnoise=0.):
+def build_catalogs(p, data, hdr, catalogs=[], xshift=0., yshift=0., solve_astrometry=True, maxnsources=0, polarimetry=False, stackmode=False, exptime=1.0, readnoise=0., set_wcs_from_database=False):
     """ Pipeline module to generate the catalogs of sources from an image
         This module will perform the following tasks:
         1. Calculate background in the input image
@@ -1975,6 +2164,8 @@ def build_catalogs(p, data, catalogs=[], xshift=0., yshift=0., solve_astrometry=
         dictionary to store pipeline parameters
     data : numpy.ndarray (n x m)
         float array containing the image data
+    hdr : fits.PrimaryHDU().header
+        FITS image header
     catalogs : list of dicts, optional
         list of dictionaries containing the input catalogs. If not provided it
         will re-detect sources on image and build a new catalog
@@ -2003,16 +2194,21 @@ def build_catalogs(p, data, catalogs=[], xshift=0., yshift=0., solve_astrometry=
     # hdul = fits.open(image_name, mode = "readonly")
     # data = np.array(hdul[0].data, dtype=float)
 
-    # set wcs in the parameters file
-    p = set_wcs(p)
+    #if set_wcs_from_database or 'WCS' not in p :
+    # set wcs from a reference image in the database
+    p['WCS'] = set_wcs_from_astrom_ref_image(p["ASTROM_REF_IMG"], hdr)
     
-    # print("******* DEBUG ASTROMETRY **********")
-    # print("RA_DEG={} DEC_DEG={}".format(p['RA_DEG'], p['DEC_DEG']))
-    # print("WCS:\n{}".format(p['WCS']))
+    # get image coordinates from header
+    coord = SkyCoord(hdr['RA'], hdr['DEC'], unit=(u.hourangle, u.deg), frame='icrs')
+    p['RA_DEG'], p['DEC_DEG'] = coord.ra.degree, coord.dec.degree
+
+    #print("******* DEBUG ASTROMETRY **********")
+    #print("WCS:\n{}".format(p['WCS']))
  
     if stackmode:
         catalogs = []
 
+    # When no catalog is provided, generate a new one (usually on stack image)
     if catalogs == []:
     
         # calculate background
@@ -2031,7 +2227,7 @@ def build_catalogs(p, data, catalogs=[], xshift=0., yshift=0., solve_astrometry=
         print("Creating new catalog of detected sources:")
 
         # print("Running aperture photometry with aperture_radius={} r_ann={}".format(aperture_radius,r_ann))
-        catalogs = generate_catalogs(p, data, sources, fwhm, catalogs, aperture_radius=aperture_radius, r_ann=r_ann, polarimetry=polarimetry, solve_astrometry=p["SOLVE_ASTROMETRY_IN_STACK"], exptime=exptime, readnoise=readnoise)
+        catalogs, p = generate_catalogs(p, data, hdr, sources, fwhm, catalogs, aperture_radius=aperture_radius, r_ann=r_ann, polarimetry=polarimetry, solve_astrometry=p["SOLVE_ASTROMETRY_IN_STACK"], exptime=exptime, readnoise=readnoise)
 
         if p['MULTI_APERTURES']:
             print("Running photometry for multiple apertures:")
@@ -2043,12 +2239,29 @@ def build_catalogs(p, data, catalogs=[], xshift=0., yshift=0., solve_astrometry=
                 r_ann = set_sky_aperture(p, aperture_radius)
 
                 # print("Running aperture photometry with aperture_radius={} r_ann={}".format(aperture_radius,r_ann))
-                catalogs = generate_catalogs(p, data, sources, fwhm, catalogs, aperture_radius=aperture_radius, r_ann=r_ann, polarimetry=polarimetry, solve_astrometry=p["SOLVE_ASTROMETRY_IN_INDIVIDUAL_FRAMES"], exptime=exptime, readnoise=readnoise)
+                catalogs, p = generate_catalogs(p, data, hdr, sources, fwhm, catalogs, aperture_radius=aperture_radius, r_ann=r_ann, polarimetry=polarimetry, exptime=exptime, readnoise=readnoise)
                 
     else:
-
+        # Here's when a catalog is provided:
         print("Running aperture photometry for catalogs with an offset of dx={} dy={}".format(xshift, yshift))
-
+        
+        ras, decs, x, y = read_catalog_coords(catalogs[0])
+        pixel_coords = np.ndarray((len(x), 2))
+        sky_coords = np.ndarray((len(ras), 2))
+        for i in range(len(x)) :
+            pixel_coords[i] = [x[i]+xshift,y[i]+yshift]
+            sky_coords[i] = [ras[i],decs[i]]
+        
+        if p['SOLVE_ASTROMETRY_IN_INDIVIDUAL_FRAMES'] :
+            # run full astrometry for individual frames using the existing WCS as reference
+            p['WCS'] = astrometry_from_existing_wcs(deepcopy(p['WCS']), data, pixel_coords=pixel_coords, pixel_scale=p["PLATE_SCALE"], max_number_of_gaia_sources=p['MAX_NUMBER_OF_GAIA_SRCS_FOR_ASTROMETRY'], plot_solution=False, nsources_to_plot=100)
+        else :
+            # update WCS using the set of x+offset,y+offset and ra,dec arrays in the catalog.
+            p['WCS'] = astrometry_from_existing_wcs(deepcopy(p['WCS']), data, pixel_coords=pixel_coords, sky_coords=sky_coords, pixel_scale=p["PLATE_SCALE"], plot_solution=False, nsources_to_plot=100)
+        
+        # update wcs header in parameters dict
+        p['WCS_HEADER'] = p['WCS'].to_header(relax=True)
+        
         for j in range(len(catalogs)):
             # load coordinates from an input catalog
             ras, decs, x, y = read_catalog_coords(catalogs[j])

@@ -317,7 +317,7 @@ def scienceImageProduct_old(original_image, img_data=[], err_data=[], mask_data=
     return hdu_list
 
 
-def readScienceImagCatalogs(input):
+def readScienceImageCatalogs(input):
     """ Pipeline module to read catalogs in a sci image product.
 
     Parameters
@@ -502,8 +502,7 @@ def scienceImageProduct(original_image, img_data=[], info={}, catalogs=[], polar
             data=catalog_array, header=catalog_header, name=cat_label)
 
         # set each column unit
-        column_units = ["", "DEG", "DEG", "PIXEL", "PIXEL",
-                        "PIXEL", "PIXEL", "MAG", "MAG", "MAG", "MAG", "PIXEL", ""]
+        column_units = ["", "DEG", "DEG", "PIXEL", "PIXEL","PIXEL", "PIXEL", "MAG", "MAG", "MAG", "MAG", "PIXEL", ""]
 
         # add description for each column in the header
         for i in range(len(column_units)):
