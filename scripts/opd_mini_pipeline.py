@@ -13,8 +13,9 @@
 
     python -W"ignore" /Volumes/Samsung_T5/sparc4-pipeline/scripts/opd_mini_pipeline.py --bias=/Volumes/Samsung_T5/Data/OPD/WASP-34/fixed/ZERO*.fits --flat=/Volumes/Samsung_T5/Data/OPD/WASP-34/fixed/flat_I*.fits --science=/Volumes/Samsung_T5/Data/OPD/WASP-34fixed/wasp34*.fits --reducedir=/Volumes/Samsung_T5/Data/OPD/WASP-34/reduced/ --time_key="UTDATE" --object="WASP-34" -pv
 
-
     python -W"ignore" /Volumes/Samsung_T5/sparc4-pipeline/scripts/opd_mini_pipeline.py --bias=/Volumes/Samsung_T5/Data/OPD/WASP-108/bias*.fits --flat=/Volumes/Samsung_T5/Data/OPD/WASP-108/flat*.fits --science=/Volumes/Samsung_T5/Data/OPD/WASP-108/wasp108b*.fits --reducedir=/Volumes/Samsung_T5/Data/OPD/WASP-108/reduced/ --time_key="DATE-OBS" --object="WASP-108" -vp
+    
+    python -W"ignore" scripts/opd_mini_pipeline.py --bias=/Users/eder/Data/OPD/WASP-108/raw/bias*.fits --flat=/Users/eder/Data/OPD/WASP-108/raw/flat*.fits --science=/Users/eder/Data/OPD/WASP-108/raw/wasp108*.fits --reducedir=/Users/eder/Data/OPD/WASP-108/reduced/ --time_key="DATE-OBS" --object="WASP-108" -vp
     """
 
 import glob

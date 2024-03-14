@@ -7,13 +7,15 @@
 
     Laboratório Nacional de Astrofísica - LNA/MCTI
 
-    Simple usage example:
+    Simple usage examples:
 
     python -W ignore sparc4_mini_pipeline.py --nightdir=20230604 -vp
 
     python -W ignore sparc4_mini_pipeline.py --nightdir=20230604 --datadir=/Volumes/Samsung_T5/Data/SPARC4/comissioning_jun23/ --reducedir=/Volumes/Samsung_T5/Data/SPARC4/comissioning_jun23/reduced -v
 
     python -W ignore sparc4_mini_pipeline.py --nightdir=20230606 --datadir=/Volumes/Samsung_T5/Data/SPARC4/standards --reducedir=/Volumes/Samsung_T5/Data/SPARC4/standards/reduced -v
+    
+    python -W ignore scripts/sparc4_mini_pipeline.py --nightdir=20231107 --datadir=/Users/eder/Data/SPARC4/wasp-78/ --reducedir=/Users/eder/Data/SPARC4/wasp-78/reduced -v
     """
 
 import os
