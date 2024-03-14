@@ -28,12 +28,21 @@ DB_KEYS: ["DATE-OBS", "EXPTIME",
 # list of header keywords to define a detector mode
 DETECTOR_MODE_KEYWORDS: ["PREAMP", "READRATE", "EMMODE", "EMGAIN"]
 
+# list of valid OBSTYPE key values, if not one of these image is ignored
+OBSTYPE_VALID_KEYVALUES: ["ZERO", "FLAT", "FOCUS", "DARK", "OBJECT"]
+
 # include image statistics in database (much slower but more complete)
 INCLUDE_IMG_STATISTICS: False
 
 # include full frames only
 # if "False", frames with sizes different than 1024x1024 will also be reduced (not fully tested).
 FULL_FRAMES_ONLY: True
+
+# pattern to include data
+PATTERN_TO_INCLUDE_DATA: '*.fits'
+
+# patterns to exclude data
+PATTERNS_TO_EXCLUDE_DATA: ['*test*.fits', '*lixo*.fits']
 #-------------------------------------
 
 #### CALIBRATIONS #####
@@ -73,15 +82,13 @@ MAX_NUMBER_OF_SCI_FRAMES_PER_LOOP: 100
 #### SCIENCE DATA #####
 # time keyword in the header of raw images
 TIME_KEY: 'DATE-OBS'
+
 # exposure time (s) keyword in the header of raw images
 EXPTIMEKEY: 'EXPTIME' # for SPARC4
 #EXPTIMEKEY: 'EXPOSURE' # for OPD Acquisition
 
 # readout noise keyword in the header of raw images
 READNOISEKEY: "RDNOISE"
-
-# wild card to select object images
-OBJECT_WILD_CARDS: ['*.fits']
 
 # DEFINE CALIBRATION WHEEL MODE: ALL (to consider all modes observed), OFF, POLARIZER, or DEPOLARIZER
 CALW_MODE: "OFF"
@@ -148,7 +155,7 @@ PHOT_MIN_OFFSET_FOR_SKYOUTERRADIUS: 10
 PHOT_APERTURES: [6,8,10,12,14,16]
 
 # Threshold in number of sigmas to detect sources, where sigma = background error
-PHOT_THRESHOLD: 100
+PHOT_THRESHOLD: 50
 #-------------------------------------
 
 #### POLARIMETRY ####

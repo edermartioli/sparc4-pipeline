@@ -367,8 +367,18 @@ def init_s4_p(nightdir, datadir="", reducedir="", channels="", print_report=Fals
         reduce_dir = '{}/{}/'.format(ch_reduce_dir, nightdir)
 
         # produce lists of files for all channels
-        channel_data_pattern = '{}/*.fits'.format(ch_night_data_dir)
-        p['filelists'].append(sorted(glob.glob(channel_data_pattern)))
+        channel_data_pattern = '{}/{}'.format(ch_night_data_dir,p["PATTERN_TO_INCLUDE_DATA"])
+                
+        # get full list using data wildcard pattern defined in parameters file:
+        file_list = sorted(glob.glob(channel_data_pattern))
+    
+        # loop over exclude patterns to remove data from list
+        for i in range(len(p['PATTERNS_TO_EXCLUDE_DATA'])) :
+            exclude_data_pattern = '{}/{}'.format(ch_night_data_dir,p['PATTERNS_TO_EXCLUDE_DATA'][i])
+            exclude_list = sorted(glob.glob(exclude_data_pattern))
+            file_list = list(set(file_list) - set(exclude_list))
+            
+        p['filelists'].append(sorted(file_list))
 
         p['ch_reduce_directories'].append(ch_reduce_dir)
         p['reduce_directories'].append(reduce_dir)

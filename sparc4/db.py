@@ -15,7 +15,7 @@ from astropy.io import fits
 from astropy.table import Table
 
 
-def create_db_from_observations(filelist, dbkeys=[], include_img_statistics=True, include_only_fullframe=True, output=""):
+def create_db_from_observations(filelist, dbkeys=[], include_img_statistics=True, include_only_fullframe=True, valid_obstype_keys=["ZERO", "FLAT", "FOCUS", "DARK", "OBJECT"], output=""):
     """ SPARC4 pipeline module to create a database of observations
     Parameters
     ----------
@@ -25,6 +25,8 @@ def create_db_from_observations(filelist, dbkeys=[], include_img_statistics=True
         input list of header keywords to include in database
     include_img_statistics : bool, optional
         boolean to include image statistics in the database (slower)
+    valid_obstype_keys : list of str
+        list of valide obstype key values
     output : str, optional
         output db FITS file name
 
@@ -57,6 +59,11 @@ def create_db_from_observations(filelist, dbkeys=[], include_img_statistics=True
             if include_only_fullframe:
                 if hdr["NAXIS1"] != 1024 or hdr["NAXIS2"] != 1024:
                     continue
+            if "OBSTYPE" in hdr.keys() :
+                if hdr["OBSTYPE"] not in valid_obstype_keys :
+                    continue
+            else :
+                continue
         except:
             print("Skipping image file {}".format(filelist[i]))
             continue
