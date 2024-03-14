@@ -62,7 +62,7 @@ for channel in p['SELECTED_CHANNELS']:
 
     # if db doesn't exist create one
     if not os.path.exists(p['s4db_files'][j]) or options.force :
-        db = s4db.create_db_from_observations(p['filelists'][j], p['DB_KEYS'], include_img_statistics=p["INCLUDE_IMG_STATISTICS"],include_only_fullframe=p["FULL_FRAMES_ONLY"], output=p['s4db_files'][j])
+        db = s4db.create_db_from_observations(p['filelists'][j], p['DB_KEYS'], include_img_statistics=p['INCLUDE_IMG_STATISTICS'],include_only_fullframe=p['FULL_FRAMES_ONLY'], valid_obstype_keys=p['OBSTYPE_VALID_KEYVALUES'], output=p['s4db_files'][j])
     else:
         db = s4db.create_db_from_file(p['s4db_files'][j])
 
@@ -73,6 +73,7 @@ for channel in p['SELECTED_CHANNELS']:
 
         # create a list of zeros for current detector mode
         zero_list = s4db.get_file_list(db, obstype=p['BIAS_OBSTYPE_KEYVALUE'], detector_mode=detector_modes[key])
+    
         # calculate master bias
         p["master_bias"] = "{}/{}_s4c{}{}_MasterZero.fits".format(reduce_dir, options.nightdir, p['CHANNELS'][j], key)
         p = s4pipelib.run_master_calibration(p, inputlist=zero_list, output=p["master_bias"], obstype='bias', data_dir=data_dir, reduce_dir=reduce_dir, force=options.force)
