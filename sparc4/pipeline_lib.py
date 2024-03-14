@@ -575,6 +575,7 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
             
             elif inst_mode == p['INSTMODE_POLARIMETRY_KEYVALUE'] :
                 addkeys = p['POLAR_KEYS_TO_ADD_HEADER_DATA_INTO_TSPRODUCT']
+                
                 for beam in p["CATALOG_BEAM_IDS"] :
                     list_of_catalogs = get_list_of_catalogs(p['PHOT_APERTURES_FOR_LIGHTCURVES'], inst_mode, polar_beam=beam)
                     lists_of_catalogs.append(list_of_catalogs)
@@ -624,7 +625,7 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
             if inst_mode == p['INSTMODE_POLARIMETRY_KEYVALUE']:
         
                 # combine light curve data from the two beams
-                outlc = combine_ts_products_of_polar_beams(ts_products[0], ts_products[1])
+                outlc = combine_ts_products_of_polar_beams(ts_products[0], ts_products[1], addkeys)
 
                 # plot light curve
                 if plot_lc:
@@ -2571,7 +2572,7 @@ def load_list_of_sci_image_catalogs(sci_list, wppos_key="WPPOS", polarimetry=Fal
         return beam, apertures, nsources
 
 
-def combine_ts_products_of_polar_beams(ts_product_S, ts_product_N) :
+def combine_ts_products_of_polar_beams(ts_product_S, ts_product_N, keys_to_add_header_data=[]) :
     """ Create a combined timeseries FITS product
 
     Parameters
@@ -2580,7 +2581,8 @@ def combine_ts_products_of_polar_beams(ts_product_S, ts_product_N) :
         photometric time series product for the Southern polar beam
     ts_product_N : astropy.io.fits.HDUList
         photometric time series product for the Northern polar beam
-
+    keys_to_add_header_data : list
+        list of keywords to add data from iamge header
     Returns
     -------
     output : str
@@ -2653,6 +2655,9 @@ def combine_ts_products_of_polar_beams(ts_product_S, ts_product_N) :
         tsdata["FLAG"] = s_tbl["FLAG"] + n_tbl["FLAG"]
         # Sum RMS in quadrature
         tsdata["RMS"] = np.sqrt(s_tbl["RMS"]*s_tbl["RMS"] + n_tbl["RMS"]*n_tbl["RMS"])
+
+        for i in range(len(keys_to_add_header_data)) :
+            tsdata[keys_to_add_header_data[i]] = s_tbl[keys_to_add_header_data[i]]
 
         # set catalog key
         catalog_key = slc[ext].name.replace("POL_S","PHOT")

@@ -222,7 +222,6 @@ ASTROM_REF_IMGS: ['20230503_s4c1_CR1_astrometryRef_stack.fits',
                   '20230503_s4c4_CR1_astrometryRef_stack.fits']
 #-------------------------------------
 
-
 #### TIME SERIES ####
 # set header keyword to get time in processed frames
 #TIME_KEYWORD_IN_PROC: 'DATE-OBS'
