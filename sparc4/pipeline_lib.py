@@ -764,8 +764,7 @@ def run_master_calibration(p, inputlist=[], output="", obstype='bias', data_dir=
 
     # extract gain from the first image
     if float(frames[0].header['GAIN']) != 0:
-        gain = float(frames[0].header['GAIN'])*u.electron / \
-            u.adu  # using quantities is better for safety
+        gain = float(frames[0].header['GAIN'])*u.electron/u.adu  # using quantities is better for safety
     else:
         gain = 3.3*u.electron/u.adu
     print('gain:', gain)
@@ -1218,8 +1217,7 @@ def reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", match_fr
                     # set local
                     frame_catalogs = []
 
-                print("Saving frame {} of {}:".format(i+1, len(frames)),
-                      obj_fg.files[i], '->', obj_red_images[i])
+                print("Saving frame {} of {}:".format(i+1, len(frames)), obj_fg.files[i], '->', obj_red_images[i])
 
                 frame_wcs_header = deepcopy(p['WCS_HEADER'])
 

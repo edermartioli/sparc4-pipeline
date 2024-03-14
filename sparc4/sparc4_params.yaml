@@ -166,7 +166,7 @@ MATCH_PAIRS_TOLERANCE: 3.0
 POS_MODEL_SAMPLING: 1.0
 
 # set minimum aperture (pixels) to search for best polar results
-MIN_APERTURE_FOR_POLARIMETRY: 4
+MIN_APERTURE_FOR_POLARIMETRY: 6
 # set maximum aperture (pixels) to search for best polar results
 MAX_APERTURE_FOR_POLARIMETRY: 16
 

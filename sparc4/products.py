@@ -411,8 +411,7 @@ def scienceImageProduct(original_image, img_data=[], info={}, catalogs=[], polar
     if wcs_header:
         baseheader += wcs_header
 
-    baseheader = s4utils.set_timecoords_keys(
-        baseheader, time_key=time_key, ra=ra, dec=dec)
+    baseheader = s4utils.set_timecoords_keys(baseheader, time_key=time_key, ra=ra, dec=dec)
 
     # create primary hdu with header of base image
     primary_hdu = fits.PrimaryHDU(header=baseheader)

@@ -75,13 +75,19 @@ def set_timecoords_keys(hdr, timezone=-3, timetype="", ra="", dec="",
         equinox = "J{:.1f}".format(hdr['EQUINOX'])
 
     try:
-        if ra == "":
-            ra = hdr['RA']
-        if dec == "":
-            dec = hdr['DEC']
+        if 'RA' in  hdr.keys() :
+            if ra == "" :
+                ra = hdr['RA']
+        else :
+            ra = "00:00:00"
+            
+        if 'DEC' in  hdr.keys() :
+            if dec == "" :
+                dec = hdr['DEC']
+        else :
+            dec = "00:00:00"
         # set source observed
-        source = SkyCoord(ra, dec, unit=(u.hourangle, u.deg),
-                          frame='icrs', equinox=equinox)
+        source = SkyCoord(ra, dec, unit=(u.hourangle, u.deg),frame='icrs', equinox=equinox)
     except:
         print("WARNING: could not set coordinates RA: {}  DEC: {}. Setting RA=0 Dec=0.".format(ra, dec))
         source = SkyCoord(0, 0, unit="deg")
