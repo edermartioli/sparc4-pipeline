@@ -266,7 +266,7 @@ def get_calib_wheel_modes(tbl, science_only=True, polar_only=True):
     return calwheel_modes
 
 
-def get_file_list(tbl, object_id=None, inst_mode=None, polar_mode=None, obstype=None, calwheel_mode=None, detector_mode=None, skyflat=False):
+def get_file_list(tbl, object_id=None, inst_mode=None, polar_mode=None, obstype=None, calwheel_mode=None, detector_mode=None, wppos=None, skyflat=False):
     """ SPARC4 pipeline module to get a list of files selected from database
     Parameters
     ----------
@@ -284,6 +284,8 @@ def get_file_list(tbl, object_id=None, inst_mode=None, polar_mode=None, obstype=
         to select observations of a given calibration wheel position mode
     detector_mode : dict, optional
         to select observations of a given detector mode
+    wppos : int, optional
+        to select observations of a given waveplate position
     skyflat : bool, optional
         special case for sky flats
     Returns
@@ -317,6 +319,9 @@ def get_file_list(tbl, object_id=None, inst_mode=None, polar_mode=None, obstype=
     if calwheel_mode != None:
         tbl = tbl[tbl['CALW'] == calwheel_mode]
 
+    if wppos != None:
+        tbl = tbl[tbl["WPPOS"] == wppos]
+        
     outlist = []
     for i in range(len(tbl)):
         outlist.append(str(tbl["FILE"][i]))
@@ -382,3 +387,4 @@ def get_polar_sequences(tbl, object_id, detector_mode, polar_mode, calwheel_mode
                 sequences.append(seq)
 
     return sequences
+

@@ -119,202 +119,32 @@ def masterCalibration(list_of_imgs, img_data=[], err_data=[], mask_data=[], info
 
 
 def getFrameFromMasterCalibration(filename):
+    """ Pipeline module to get Frame from a master calibration input fits file
 
+    Parameters
+    ----------
+    input : str
+        input fits image path
+        
+    Returns
+    -------
+    frame: AStropop Frame
+        image data in the Frame format
+    """
     hdu_list = fits.open(filename)
+    header = hdu_list[0].header
 
     img_data = hdu_list[0].data[0]
     err_data = hdu_list[0].data[1]
     mask_data = hdu_list[0].data[2]
 
-    header = hdu_list[0].header
-
     unit = None
     if header['BUNIT'] == 'electron':
         unit = u.electron
 
-    frame = FrameData(data=img_data, unit=unit,
-                      uncertainty=err_data, mask=mask_data, header=header)
+    frame = FrameData(data=img_data, unit=unit, uncertainty=err_data, mask=mask_data, header=header)
 
     return frame
-
-
-def scienceImageProduct_old(original_image, img_data=[], err_data=[], mask_data=[], info={}, catalogs=[], polarimetry=False,  skip_ref_catalogs=True, filename="", catalog_beam_ids=["S", "N"], wcs_header=None, time_key="DATE-OBS", ra="", dec=""):
-    """ Create a Science FITS image product
-
-    Parameters
-    ----------
-    original_image : str
-        file path for the original image
-    img_data : numpy.ndarray (n x m)
-        float array containing the master calibration data
-    err_data : numpy.ndarray (n x m)
-        float array containing the uncertainty of master calibration data
-    mask_data : numpy.ndarray (n x m)
-        uint array containing the mask data
-    info : dict
-        dictionary with additional header cards to include in the header of product
-        The following format must be used:
-            info = {key1: (value1, comment1), key2: (value2, comment2), ... }
-    catalogs : list of dict catalogs
-        a catalog is a dictionary with information about detected sources
-        The following format must be used for each catalog in the list:
-            catalog = {star_id1 : (1, ra1, dec1, x1, y1, fwhm_x1, fwhm_y1, mag1, emag1, mag_sky1, emag_sky1, aper1, flag1),
-                       star_id2 : (2, ra2, dec2, x2, y2, fwhm_x2, fwhm_y2, mag2, emag2, mag_sky2, emag_sky2, aper2, flag2),
-                       .... }
-            flag (int):
-                0 : single star, all aperture pixels used, no issues in the photometry
-                1 : single star, part of pixels in aperture have been rejected, no issues in the photometry
-                2 : single star, issues in the photometry
-                3 : blended star, all aperture pixels used, no issues in the photometry
-                4 : blended star, part of pixels in aperture have been rejected, no issues in the photometry
-                5 : blended star, issues in the photometry
-                6 : not a star, all aperture pixels used, no issues in the photometry
-                7 : not a star, part of pixels in aperture have been rejected, no issues in the photometry
-                8 : not a star, issues in the photometry
-    polarimetry : bool
-        Boolean to set polarimetry product
-    skip_ref_catalogs : bool
-        Boolean to skip the first catalog in the list (for photometry) or the first two catalogs in the list (for polarimetry).
-    filename : str, optional
-        The output file name to save product. If empty, file won't be saved.
-    catalog_beam_ids : list
-        List of two strings to label the two polarimetric beams. Deafult is ["S", "N"], for South and North beams.
-    wcs_header : FITS header
-        FITS header containing the WCS information. This will be appended to the main header.
-    time_key : str, optional
-        string to point to the main date keyword in FITS header
-    ra : str, optional
-        string to overwrite header RA (Right Ascension) keyword
-    dec : str, optional
-        string to overwrite header DEC (Declination) keyword
-
-    Returns
-    -------
-    hdu_list : astropy.io.fits.HDUList
-        output hdu_list top-level FITS object.
-    """
-
-    # get header from base image
-    baseheader = fits.getheader(original_image)
-
-    # add information about data in the product
-    info['DATA0'] = ('IMG DATA', 'content of slice 0 in cube')
-    info['DATA1'] = ('ERR DATA', 'content of slice 1 in cube')
-    info['DATA2'] = ('MASK DATA', 'content of slice 2 in cube')
-
-    # get file basename and add it to the info dict
-    basename = os.path.basename(original_image)
-    info['ORIGIMG'] = (basename, 'original file name')
-    info['POLAR'] = (polarimetry, 'polarimetry frame')
-
-    if wcs_header:
-        baseheader += wcs_header
-
-    baseheader = s4utils.set_timecoords_keys(
-        baseheader, time_key=time_key, ra=ra, dec=dec)
-
-    # create primary hdu with header of base image
-    primary_hdu = fits.PrimaryHDU(header=baseheader)
-
-    # add keys given by the info dict
-    for key in info.keys():
-        primary_hdu.header.set(key, info[key][0], info[key][1])
-
-    # define default arrays in case they are not provided
-    if len(img_data) == 0:
-        img_data = np.empty((1024, 1024), dtype=float) * np.nan
-    if len(err_data) == 0:
-        err_data = np.full_like(img_data, np.nan)
-    if len(mask_data) == 0:
-        mask_data = np.zeros_like(img_data)
-
-    # set data cube into primary extension
-    primary_hdu.data = np.array([img_data, err_data, mask_data])
-
-    hdus = [primary_hdu]
-
-    ini_catalog = 0
-    if skip_ref_catalogs and polarimetry:
-        ini_catalog = 2
-    elif skip_ref_catalogs:
-        ini_catalog = 1
-
-    for j in range(ini_catalog, len(catalogs)):
-        # create empty header for catalog extension
-        catalog_header = fits.PrimaryHDU().header
-
-        # add number of objects in catalog table
-        catalog_header.set("NOBJCAT", len(catalogs[j].keys()), "Number of objects in the catalog")
-
-        # collect catalog data
-        catdata = []
-        for key in catalogs[j].keys():
-            catdata.append(catalogs[j][key])
-
-        # set names and data format for each column in the catalog table
-        dtype = [('SRCINDEX', 'i4'), ('RA', 'f8'), ('DEC', 'f8'), ('X', 'f8'), ('Y', 'f8'), ('FWHMX', 'f8'), ('FWHMY','f8'), ('MAG', 'f8'), ('EMAG', 'f8'), ('SKYMAG', 'f8'), ('ESKYMAG', 'f8'), ('APER', 'i4'), ('FLAG', 'i4')]
-
-        # cast catalog data into numpy array
-        catalog_array = np.array(catdata, dtype=dtype)
-
-        # get photometry aperture value for the catalog label
-        aperture_value = catalog_array[0][11]
-
-        # add aperture value to catalog header
-        catalog_header.set("APRADIUS", aperture_value,
-                           "Aperture radius in pixels")
-
-        cat_label = "UNLABELED_CATALOG"
-
-        if polarimetry:
-            if j == 0:
-                catalog_header.set("POLBEAM", catalog_beam_ids[0], "Polar beam: [N]orth or [S]outh")
-                cat_label = "REF_CATALOG_POL_{}_AP{:03d}".format(catalog_beam_ids[0], aperture_value)
-                pass
-            elif j == 1:
-                catalog_header.set("POLBEAM", catalog_beam_ids[1], "Polar beam: [N]orth or [S]outh")
-                cat_label = "REF_CATALOG_POL_{}_AP{:03d}".format(catalog_beam_ids[1], aperture_value)
-                pass
-            else:
-                if (j % 2) == 0:
-                    catalog_header.set("POLBEAM", catalog_beam_ids[0], "Polar beam: [N]orth or [S]outh")
-                    # cat_label = "CATALOG_POL_{}_{:04d}".format(catalog_beam_ids[0],int(j/2-1))
-                    cat_label = "CATALOG_POL_{}_AP{:03d}".format(catalog_beam_ids[0], aperture_value)
-                else:
-                    catalog_header.set("POLBEAM", catalog_beam_ids[1], "Polar beam: [N]orth or [S]outh")
-                    # cat_label = "CATALOG_POL_{}_{:04d}".format(catalog_beam_ids[1],int((j-1)/2-1))
-                    cat_label = "CATALOG_POL_{}_AP{:03d}".format(catalog_beam_ids[1], aperture_value)
-        else:
-            if j == 0:
-                cat_label = "REF_CATALOG_PHOT_AP{:03d}".format(aperture_value)
-                pass
-            else:
-                # cat_label = "CATALOG_PHOT_{:04d}".format(j-1)
-                cat_label = "CATALOG_PHOT_AP{:03d}".format(aperture_value)
-
-        hdu_catalog = fits.TableHDU(data=catalog_array, header=catalog_header, name=cat_label)
-
-        # set each column unit
-        column_units = ["", "DEG", "DEG", "PIXEL", "PIXEL","PIXEL", "PIXEL", "MAG", "MAG", "MAG", "MAG", "PIXEL", ""]
-
-        # add description for each column in the header
-        for i in range(len(column_units)):
-            if column_units[i] != "":
-                hdu_catalog.header.comments["TTYPE{:d}".format(
-                    i+1)] = "units of {}".format(column_units[i])
-
-        # append catalog hdu to hdulist
-        hdus.append(hdu_catalog)
-
-    # create hdu list
-    hdu_list = create_hdu_list(hdus)
-
-    # write FITS file if filename is given
-    if filename != "":
-        hdu_list.writeto(filename, overwrite=True, output_verify="fix+warn")
-
-    # return hdu list
-    return hdu_list
 
 
 def readScienceImageCatalogs(input):

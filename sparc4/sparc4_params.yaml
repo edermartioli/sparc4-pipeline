@@ -5,9 +5,15 @@
 #### DIRECTORIES #####
 ROOTDATADIR: "/Users/eder/Data/SPARC4/minidata"
 ROOTREDUCEDIR: "/Users/eder/Data/SPARC4/minidata/reduced"
+# Define directory tree structure.
+# If True: $DATADIR/sparc4acs{1,2,3,4}/night/ or if False: $DATADIR/night/sparc4acs{1,2,3,4}/
+NIGTHS_INSIDE_CHANNELS_DIR: True
 
 # calibration database directory
 CALIBDB_DIR: "/Users/eder/sparc4-pipeline/calibdb"
+
+# set a target list .csv file. Minimal columns: TARGET_ID, RA, DEC
+TARGET_LIST_FILE: ""
 
 # define SPARC4 channel numbers
 CHANNELS: [1, 2, 3, 4]
@@ -74,6 +80,10 @@ POLARIMETRY_L2_KEYVALUE: 'L2'
 # Value of WPSEL keyword used to identify polarimetric instrument mode
 POLARIMETRY_L4_KEYVALUE: 'L4'
 
+# set maximum number of zero frames to use to avoid memory issues
+# WARNING: it will take the first zeros and ignore the rest
+MAX_NUMBER_OF_ZERO_FRAMES_TO_USE: 1000
+
 # set maximum number of science frames for each reduction loop
 # it avoids memory issues for long lists
 MAX_NUMBER_OF_SCI_FRAMES_PER_LOOP: 100
@@ -100,6 +110,14 @@ APPLY_BIAS_CORRECTION: True
 # Whether or not to apply flat-field correction
 APPLY_FLATFIELD_CORRECTION: True
 
+# APPLY FLAT PER WAVEPLATE POSITION
+APPLY_FLAT_PER_WPPOS: True
+
+# Whether or not to allow using a flat obtained in PHOT mode to correct POLAR images if no POLAR flats were taken.
+ALLOW_USING_PHOTFLAT_TO_CORRECT_POLAR: True
+# Whether or not to allow interchanging flats from L2/L4 modes if no flats were taken for that mode.
+ALLOW_INTERCHANGE_L2L4_FLATS: True
+
 # FITS image extension of raw images where science data is located
 SCI_EXT: 0
 # index of reference image
@@ -111,7 +129,7 @@ UPSAMPLEFACTOR: 4
 
 ### STACK ###
 # method to select files for stack
-METHOD_TO_SELECT_FILES_FOR_STACK: 'MAX_FLUXES' # 'MAX_FLUXES' or 'MIN_SHIFTS'
+METHOD_TO_SELECT_FILES_FOR_STACK: 'FIRST_FRAMES' # 'MAX_FLUXES' or 'FIRST_FRAMES'
 # stack method
 #SCI_STACK_METHOD: 'median'
 SCI_STACK_METHOD: 'mean'
@@ -155,7 +173,7 @@ PHOT_MIN_OFFSET_FOR_SKYOUTERRADIUS: 10
 PHOT_APERTURES: [6,8,10,12,14,16]
 
 # Threshold in number of sigmas to detect sources, where sigma = background error
-PHOT_THRESHOLD: 50
+PHOT_THRESHOLD: 30
 #-------------------------------------
 
 #### POLARIMETRY ####
@@ -197,6 +215,9 @@ SOLVE_ASTROMETRY_WITH_ASTROMETRY_NET: False
 
 # whether or not to solve astrometry in stack frame
 SOLVE_ASTROMETRY_IN_STACK: True
+
+# sip_degree to model geometric distortion.
+SIP_DEGREE: 4
 
 # whether or not to plot stack frame with matched Gaia sources
 # note: by activating this, the plot will pause the reduction processing and will
@@ -265,7 +286,11 @@ USE_MEMMAP: False
 
 #### SCIENCE SPECIFIC #####
 # Define target index to calculate differential photometry in lightcurve plots
-TARGET_INDEX: 1
+TARGET_INDEX: 0
 # List of indexes of comparison stars to calculate differential photometry in lightcurve plots
-COMPARISONS: [0, 2, 3, 4, 5, 6]
+COMPARISONS: [1, 2, 3, 4, 5, 6]
+# whether or not to update the target index from input - if False the TARGET_INDEX is kept as above
+UPDATE_TARGET_INDEX_FROM_INPUT: True
+# define target index from input list
+TARGET_INDEX_FROM_INPUT: 0
 #-------------------------------------

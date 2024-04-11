@@ -12,6 +12,7 @@ import warnings
 
 import matplotlib.pyplot as plt
 import numpy as np
+from astropy.table import Table
 from astropop.math.physical import QFloat
 from astropop.polarimetry import halfwave_model, quarterwave_model
 from astropy.coordinates import Angle, SkyCoord
@@ -172,8 +173,8 @@ def plot_sci_frame(filename, cat_ext=3, nstars=5, output="", percentile=98,
                          weight='bold', fontsize=18,
                          transform=ax.get_transform('icrs'))
 
-        plt.xlabel(r'RA')
-        plt.ylabel(r'Dec')
+        plt.xlabel(r'rA', fontsize=14)
+        plt.ylabel(r'dec', fontsize=14)
         overlay = ax.get_coords_overlay('icrs')
         overlay.grid(color='white', ls='dotted')
 
@@ -187,8 +188,8 @@ def plot_sci_frame(filename, cat_ext=3, nstars=5, output="", percentile=98,
                      c='darkred', weight='bold', fontsize=18)
         plt.imshow(img_data, vmin=np.percentile(img_data, 100. - percentile),
                    vmax=np.percentile(img_data, percentile), origin='lower')
-        plt.xlabel("columns (pixel)", fontsize=16)
-        plt.ylabel("rows (pixel)", fontsize=16)
+        plt.xlabel("columns (pixel)", fontsize=18)
+        plt.ylabel("rows (pixel)", fontsize=18)
 
     plt.show()
 
@@ -325,9 +326,13 @@ def plot_light_curve(filename, target=0, comps=[], output="", nsig=10,
 
     Returns
     -------
-    None
+    results : dict
+        dict container with light curve data
     """
-
+    
+    # initialize results dict container
+    results = Table()
+    
     # open time series fits file
     hdul = fits.open(filename)
 
@@ -340,19 +345,19 @@ def plot_light_curve(filename, target=0, comps=[], output="", nsig=10,
     time = target_tbl['TIME']
     mintime, maxtime = np.min(time), np.max(time)
 
-    use_sky_coords = True
-    platescale, unit = 1.0, 'pix'
-    if use_sky_coords:
-        platescale, unit = 0.335, 'arcsec'
-
-    pixoffset = 7*platescale
-
     x = target_tbl['X']
     y = target_tbl['Y']
     fwhm = target_tbl['FWHM']
+
     if plot_coords:
+        use_sky_coords = True
+        platescale, unit = 1.0, 'pix'
+        if use_sky_coords:
+            platescale, unit = 0.335, 'arcsec'
+        
+        pixoffset = 7*platescale
         # fig, axs = plt.subplots(4, 1, figsize=(12, 6), sharex=True, sharey=False, gridspec_kw={'hspace': 0, 'height_ratios': [1, 1, 1, 1]})
-        plt.plot(time, (x-np.nanmedian(x))*platescale+pixoffset, '.', color='darkblue', label='x-offset')
+        plt.plot(time, (x-np.nanmedian(x))*platescale + pixoffset, '.', color='darkblue', label='x-offset')
         plt.plot(time, (y-np.nanmedian(y))*platescale - pixoffset, '.', color='brown', label='y-offset')
         mfhwm = np.nanmedian(fwhm)
         plt.plot(time, (fwhm-mfhwm)*platescale, '.', color='darkgreen', label='FWHM - median={:.1f} {}'.format(mfhwm*platescale, unit))
@@ -368,6 +373,7 @@ def plot_light_curve(filename, target=0, comps=[], output="", nsig=10,
     eskym = target_tbl['ESKYMAG']
     mmag = np.nanmedian(m)
     mskym = np.nanmedian(skym)
+
     if plot_rawmags:
         plt.errorbar(time, mmag - m - mag_offset, yerr=em, fmt='.', label='raw obj dmag, mean={:.4f}'.format(mmag))
         plt.plot(time, mskym - skym + mag_offset, '.', label='raw sky dmag, mean={:.4f}'.format(mskym))
@@ -376,8 +382,19 @@ def plot_light_curve(filename, target=0, comps=[], output="", nsig=10,
         plt.legend(fontsize=10)
         plt.show()
 
+    results['TIME'] = time
+    results['x'] = x
+    results['y'] = y
+    results['fwhm'] = fwhm
+    results['mag'] = m
+    results['mag_err'] = em
+    results['skymag'] = skym
+    results['skymag_err'] = eskym
+    
     cm, ecm = [], []
     sumag = np.zeros_like(m)
+    sumag_var = np.zeros_like(m)
+    
     for i in range(len(comps)):
         comp_tbl = tbl[tbl["SRCINDEX"] == comps[i]]
 
@@ -387,11 +404,17 @@ def plot_light_curve(filename, target=0, comps=[], output="", nsig=10,
         ecm.append(ecmag)
 
         sumag += 10**(-0.4*cmag)
-
+        sumag_var += ecmag*ecmag
+        
         mdm = np.nanmedian(cmag - m)
         dm = (cmag - m) - mdm
+        
         rms = np.nanmedian(np.abs(dm)) / 0.67449
         edm = np.sqrt(ecmag**2 + em**2)
+        
+        results['diffmag_C{:05d}'.format(i)] = dm
+        results['diffmag_err_C{:05d}'.format(i)] = edm
+
         keep = np.isfinite(dm)
         keep &= np.abs(dm) < nsig*rms
 
@@ -402,10 +425,18 @@ def plot_light_curve(filename, target=0, comps=[], output="", nsig=10,
     sumag = -2.5*np.log10(sumag)
     mdm = np.nanmedian(sumag - m)
     dm = (sumag - m) - mdm
-    rms = np.nanmedian(np.abs(dm)) / 0.67449
-    keep = np.isfinite(dm)
-    keep &= np.abs(dm) < nsig*rms
+    sumag_err = np.sqrt(sumag_var)
+    
+    results['magsum'] = sumag
+    results['magsum_err'] = sumag_err
+    results['diffmagsum'] = dm
+
     if plot_sum:
+        
+        rms = np.nanmedian(np.abs(dm)) / 0.67449
+        keep = np.isfinite(dm)
+        keep &= np.abs(dm) < nsig*rms
+        
         plt.errorbar(time[keep], dm[keep], yerr=em[keep], fmt='k.',
                      label=r"SUM $\Delta$mag={:.3f} $\sigma$={:.2f} mmag".format(mdm, rms*1000))
 
@@ -415,6 +446,12 @@ def plot_light_curve(filename, target=0, comps=[], output="", nsig=10,
         plt.legend(fontsize=10)
         plt.show()
 
+    if output != "" :
+        # save output table to file
+        results.write(output, overwrite=True)
+
+    return results
+    
 
 def plot_polarimetry_results(loc, pos_model_sampling=1, title_label="", wave_plate='halfwave'):
     """ Pipeline module to plot half-wave polarimetry data

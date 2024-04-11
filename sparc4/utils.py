@@ -206,11 +206,12 @@ def identify_files(p, night, print_report=True):
     data_directories = []
 
     for channel in channels:
-
-        channeldir = '{}/sparc4acs{}/{}/'.format(data_dir, channel, night)
-
-        channelpattern = '{}/sparc4acs{}/{}/*.fits'.format(
-            data_dir, channel, night)
+        
+        channeldir = '{}/{}/sparc4acs{}/'.format(data_dir, night, channel)
+        channelpattern = '{}/{}/sparc4acs{}/*.fits'.format(data_dir, night, channel)
+        if p['NIGTHS_INSIDE_CHANNELS_DIR'] :
+            channeldir = '{}/sparc4acs{}/{}/'.format(data_dir, channel, night)
+            channelpattern = '{}/sparc4acs{}/{}/*.fits'.format(data_dir, channel, night)
 
         inputdata.append(sorted(glob.glob(channelpattern)))
 
@@ -650,3 +651,4 @@ def check_astrometry(filename, fov_search_factor=2.0, apply_sparsify_filter=Fals
     plt.show()
 
     return w
+
