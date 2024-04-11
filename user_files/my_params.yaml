@@ -1,0 +1,297 @@
+# -----------------------------------------------------------------------------
+#   Define SPARC4 pipeline parameters
+# -----------------------------------------------------------------------------
+
+#### DIRECTORIES #####
+ROOTDATADIR: "/Users/eder/Data/SPARC4/minidata"
+ROOTREDUCEDIR: "/Users/eder/Data/SPARC4/minidata/reduced-new"
+# Define directory tree structure.
+# If True: $DATADIR/sparc4acs{1,2,3,4}/night/ or if False: $DATADIR/night/sparc4acs{1,2,3,4}/
+NIGTHS_INSIDE_CHANNELS_DIR: True
+
+# calibration database directory
+CALIBDB_DIR: "/Users/eder/sparc4-pipeline/calibdb"
+
+# set a target list .csv file. Minimal columns: TARGET_ID, RA, DEC
+TARGET_LIST_FILE: ""
+
+# define SPARC4 channel numbers
+CHANNELS: [1, 2, 3, 4]
+# define SPARC4 channel labels
+CHANNEL_LABELS: ['g','r','i','z']
+# define SPARC4 channel colors
+CHANNEL_COLORS: ["darkblue","green","orange","darkred"]
+
+#### NIGHT DATA BASE #####
+# define SPARC4 keywords used to select reduction groups
+DB_KEYS: ["DATE-OBS", "EXPTIME",
+          "OBJECT", "OBSTYPE", "INSTMODE", "CHANNEL",
+          "VBIN", "HBIN", "INITLIN", "INITCOL", "FINALLIN", "FINALCOL",
+          "VSHIFT", "VCLKAMP", "CCDSERN",
+          "PREAMP", "READRATE", "EMMODE", "EMGAIN",
+          "WPPOS", "WPSEL", "CALW", "ASEL"]
+
+# list of header keywords to define a detector mode
+DETECTOR_MODE_KEYWORDS: ["PREAMP", "READRATE", "EMMODE", "EMGAIN"]
+
+# list of valid OBSTYPE key values, if not one of these image is ignored
+OBSTYPE_VALID_KEYVALUES: ["ZERO", "FLAT", "FOCUS", "DARK", "OBJECT"]
+
+# include image statistics in database (much slower but more complete)
+INCLUDE_IMG_STATISTICS: False
+
+# include full frames only
+# if "False", frames with sizes different than 1024x1024 will also be reduced (not fully tested).
+FULL_FRAMES_ONLY: True
+
+# pattern to include data
+PATTERN_TO_INCLUDE_DATA: '*.fits'
+
+# patterns to exclude data
+PATTERNS_TO_EXCLUDE_DATA: ['*test*.fits', '*lixo*.fits']
+#-------------------------------------
+
+#### CALIBRATIONS #####
+# wild cards to identify calibration images
+CALIB_WILD_CARDS: ['*.fits']
+# Method to combine calibration images
+CALIB_IMCOMBINE_METHOD: 'median'
+# Number of sigmas to clip if using method==mean
+#NSIGMA_IMCOMBINE_METHOD: 5
+# Value of obstype keyword used to identify bias images
+BIAS_OBSTYPE_KEYVALUE: 'ZERO'
+# Value of obstype keyword used to identify flat images
+FLAT_OBSTYPE_KEYVALUE: 'FLAT'
+#FLAT_OBSTYPE_KEYVALUE: 'DFLAT'
+# Value of obstype keyword used to identify focus images
+FOCUS_OBSTYPE_KEYVALUE: 'FOCUS'
+# Value of obstype keyword used to identify dark images
+DARK_OBSTYPE_KEYVALUE: 'DARK'
+# Value of obstype keyword used to identify object images
+OBJECT_OBSTYPE_KEYVALUE: 'OBJECT'
+
+# Value of INSTMODE keyword used to identify photometric instrument mode
+INSTMODE_PHOTOMETRY_KEYVALUE: 'PHOT'
+# Value of INSTMODE keyword used to identify polarimetric instrument mode
+INSTMODE_POLARIMETRY_KEYVALUE: 'POLAR'
+
+# Value of WPSEL keyword used to identify polarimetric instrument mode
+POLARIMETRY_L2_KEYVALUE: 'L2'
+# Value of WPSEL keyword used to identify polarimetric instrument mode
+POLARIMETRY_L4_KEYVALUE: 'L4'
+
+# set maximum number of zero frames to use to avoid memory issues
+# WARNING: it will take the first zeros and ignore the rest
+MAX_NUMBER_OF_ZERO_FRAMES_TO_USE: 1000
+
+# set maximum number of science frames for each reduction loop
+# it avoids memory issues for long lists
+MAX_NUMBER_OF_SCI_FRAMES_PER_LOOP: 100
+#-------------------------------------
+
+#### SCIENCE DATA #####
+# time keyword in the header of raw images
+TIME_KEY: 'DATE-OBS'
+
+# exposure time (s) keyword in the header of raw images
+EXPTIMEKEY: 'EXPTIME' # for SPARC4
+#EXPTIMEKEY: 'EXPOSURE' # for OPD Acquisition
+
+# readout noise keyword in the header of raw images
+READNOISEKEY: "RDNOISE"
+
+# DEFINE CALIBRATION WHEEL MODE: ALL (to consider all modes observed), OFF, POLARIZER, or DEPOLARIZER
+CALW_MODE: "OFF"
+
+# Whether or not to apply cosmic ray rejection algorithm (LACOSMIC)
+DETECT_AND_REJECT_COSMIC_RAYS: False
+# Whether or not to apply bias correction
+APPLY_BIAS_CORRECTION: True
+# Whether or not to apply flat-field correction
+APPLY_FLATFIELD_CORRECTION: True
+
+# APPLY FLAT PER WAVEPLATE POSITION
+APPLY_FLAT_PER_WPPOS: False
+
+# Whether or not to allow using a flat obtained in PHOT mode to correct POLAR images if no POLAR flats were taken.
+ALLOW_USING_PHOTFLAT_TO_CORRECT_POLAR: True
+# Whether or not to allow interchanging flats from L2/L4 modes if no flats were taken for that mode.
+ALLOW_INTERCHANGE_L2L4_FLATS: True
+
+# FITS image extension of raw images where science data is located
+SCI_EXT: 0
+# index of reference image
+REF_IMAGE_INDEX: 0
+# algorithm to calculate shift: 'cross-correlation' or 'asterism-matching'
+#SHIFT_ALGORITHM: 'asterism-matching'
+SHIFT_ALGORITHM: 'cross-correlation'
+UPSAMPLEFACTOR: 4
+
+### STACK ###
+# method to select files for stack
+METHOD_TO_SELECT_FILES_FOR_STACK: 'FIRST_FRAMES' # 'MAX_FLUXES' or 'FIRST_FRAMES'
+# stack method
+#SCI_STACK_METHOD: 'median'
+SCI_STACK_METHOD: 'mean'
+SCI_STACK_SIGMA_CLIP: 10
+
+# define number of files for stack
+NFILES_FOR_STACK: 16
+# define saturation limit in ADU to avoid using saturated images in the stack
+#SATURATION_LIMIT: 32000
+SATURATION_LIMIT: 100000
+#-------------------------------------
+
+#### PHOTOMETRY ####
+# whether or not to astropop implementation for aperture photometry
+USE_ASTROPOP_PHOTOMETRY: False
+        
+# whether or not to recenter aperture for photometry on each source
+RECENTER_APER_FOR_PHOTOMETRY: False
+
+# whether or not to use multiple apertures
+MULTI_APERTURES: True
+
+# Define N for automatic calculation of aperture for photometry, where APER_RADIUS = N X FWHM
+PHOT_APERTURE_N_X_FWHM: 1.5
+PHOT_SKYINNER_N_X_FWHM: 4.0
+PHOT_SKYOUTER_N_X_FWHM: 10.0
+
+# Define aperture size for a fixed aperture when required
+PHOT_FIXED_APERTURE: 10
+# Define a fixed sky annulus (inner radius, outer radius) in units of pixel
+PHOT_FIXED_R_ANNULUS: [25,50]
+
+# Define minimum offset (in pixels) between source aperture radius and sky aperture inner radius
+PHOT_MIN_OFFSET_FOR_SKYINNERRADIUS: 2
+# Define minimum offset (in pixels) between sky aperture inner and outer radius
+PHOT_MIN_OFFSET_FOR_SKYOUTERRADIUS: 10
+
+# Define a list of aperture radii to perform photometry
+#PHOT_APERTURES: [2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30]
+#PHOT_APERTURES: [5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]
+PHOT_APERTURES: [6,8,10,12,14,16]
+
+# Threshold in number of sigmas to detect sources, where sigma = background error
+PHOT_THRESHOLD: 100
+#-------------------------------------
+
+#### POLARIMETRY ####
+# set (maximum) number of waveplate positions in a polar sequence.
+MAX_NUMBER_OF_WPPOS_IN_SEQUENCE: 16
+# whether or not to use rolling polar sequence mode
+ROLLING_POLAR_SEQUENCE: False
+
+# [S]outh and [N]orth polarimetric beams
+CATALOG_BEAM_IDS: ["S","N"]
+
+# tolerance for matching pairs in polarimetric images (units of pixels)
+MATCH_PAIRS_TOLERANCE: 3.0
+# Set angular sampling of the model in units of degrees
+POS_MODEL_SAMPLING: 1.0
+
+# set minimum aperture (pixels) to search for best polar results
+MIN_APERTURE_FOR_POLARIMETRY: 6
+# set maximum aperture (pixels) to search for best polar results
+MAX_APERTURE_FOR_POLARIMETRY: 16
+
+# set aperture radius (in pixels) to calculate photometry in polar data
+APERTURE_RADIUS_FOR_PHOTOMETRY_IN_POLAR: 10
+
+# Set zero of polarimetry calibrated from standards
+ZERO_OF_WAVEPLATE: 108.7
+
+# Plot polarimetry fit
+PLOT_POLARIMETRY_FIT: False
+
+# For time series, if True: plot total polarization (P, theta) or if False plot equatorial components (U, V)
+PLOT_TOTAL_POLARIZATION: False
+#-------------------------------------
+
+#### ASTROMETRY ####
+# whether or not to solve astrometry with astrometry.net
+# note: it requires astrometry.net properly installed in the machine (not fully tested)
+SOLVE_ASTROMETRY_WITH_ASTROMETRY_NET: False
+
+# whether or not to solve astrometry in stack frame
+SOLVE_ASTROMETRY_IN_STACK: True
+
+# sip_degree to model geometric distortion.
+SIP_DEGREE: 4
+
+# whether or not to plot stack frame with matched Gaia sources
+# note: by activating this, the plot will pause the reduction processing and will
+#       continue only when the plot window is closed
+PLOT_ASTROMETRY_RESULTS_IN_STACK: False
+
+# whether or not to solve astrometry in individual frames
+# note: depending on the number of frames it will make reduction very slow
+SOLVE_ASTROMETRY_IN_INDIVIDUAL_FRAMES: False
+
+# set maximum number of Gaia source to be matched for astrometric solution
+MAX_NUMBER_OF_GAIA_SRCS_FOR_ASTROMETRY: 50
+
+# set image plate scale in units of arcseconds per pixel
+PLATE_SCALE: 0.335  # ARCSEC/PIXEL -> SPARC4 1x1 binning
+
+# order of polynomial to fit astrometry solution
+TWEAK_ORDER: 3
+
+# radius to define the range of solutions in units of degree
+SEARCH_RADIUS:  0.1
+
+# directory path to the astrometric indices
+ASTROM_INDX_PATH : '/Users/eder/sparc4-pipeline/astrometry_indexes/'
+
+# paths to the astrometric reference images in the 4-channels
+ASTROM_REF_IMGS: ['20230503_s4c1_CR1_astrometryRef_stack.fits',
+                  '20230503_s4c2_CR1_astrometryRef_stack.fits',
+                  '20230503_s4c3_CR1_astrometryRef_stack.fits',
+                  '20230503_s4c4_CR1_astrometryRef_stack.fits']
+#-------------------------------------
+
+#### TIME SERIES ####
+# set header keyword to get time in processed frames
+#TIME_KEYWORD_IN_PROC: 'DATE-OBS'
+TIME_KEYWORD_IN_PROC: 'BJD'
+
+# set time format that appears in the header of processed frames
+#TIME_FORMAT_IN_PROC: 'isot'
+TIME_FORMAT_IN_PROC: 'jd'
+
+# Time span to define window (in minutes) within which to calculate running rms
+TIME_SPAN_FOR_RMS: 10.0
+
+# Set a list of aperture radii to include in the time series
+# WARNING: This must be a sub set of photometry apertures defined in PHOT_APERTURES
+#PHOT_APERTURES_FOR_LIGHTCURVES: [2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30]
+#PHOT_APERTURES_FOR_LIGHTCURVES: [5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]
+PHOT_APERTURES_FOR_LIGHTCURVES: [6,8,10,12,14,16]
+
+# List of additional keyword data to be included in the photometric time series for PHOT mode
+PHOT_KEYS_TO_ADD_HEADER_DATA_INTO_TSPRODUCT: []
+
+# List of additional keyword data to be included in the photometric time series for POLAR mode
+POLAR_KEYS_TO_ADD_HEADER_DATA_INTO_TSPRODUCT: ["WPPOS"]
+
+# Below are the catalog names to get coordinates from
+PHOT_REF_CATALOG_NAME: "BEST_APERTURES"
+POLAR_REF_CATALOG_NAME: "CATALOG_POL_N_AP010"
+#-------------------------------------
+
+#### GENERAL PROCESSING #####
+# whether or not to use memmap backend
+USE_MEMMAP: False
+#-------------------------------------
+
+#### SCIENCE SPECIFIC #####
+# Define target index to calculate differential photometry in lightcurve plots
+TARGET_INDEX: 0
+# List of indexes of comparison stars to calculate differential photometry in lightcurve plots
+COMPARISONS: [1, 2, 3, 4, 5, 6]
+# whether or not to update the target index from input - if False the TARGET_INDEX is kept as above
+UPDATE_TARGET_INDEX_FROM_INPUT: True
+# define target index from input list
+TARGET_INDEX_FROM_INPUT: 0
+#-------------------------------------
+
