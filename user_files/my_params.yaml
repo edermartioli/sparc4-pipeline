@@ -4,7 +4,7 @@
 
 #### DIRECTORIES #####
 ROOTDATADIR: "/Users/eder/Data/SPARC4/minidata"
-ROOTREDUCEDIR: "/Users/eder/Data/SPARC4/minidata/reduced-new"
+ROOTREDUCEDIR: "/Users/eder/Data/SPARC4/minidata/reduced"
 # Define directory tree structure.
 # If True: $DATADIR/sparc4acs{1,2,3,4}/night/ or if False: $DATADIR/night/sparc4acs{1,2,3,4}/
 NIGTHS_INSIDE_CHANNELS_DIR: True
@@ -24,7 +24,7 @@ CHANNEL_COLORS: ["darkblue","green","orange","darkred"]
 
 #### NIGHT DATA BASE #####
 # define SPARC4 keywords used to select reduction groups
-DB_KEYS: ["DATE-OBS", "EXPTIME",
+DB_KEYS: ["DATE-OBS", "EXPTIME", "RA", "DEC",
           "OBJECT", "OBSTYPE", "INSTMODE", "CHANNEL",
           "VBIN", "HBIN", "INITLIN", "INITCOL", "FINALLIN", "FINALCOL",
           "VSHIFT", "VCLKAMP", "CCDSERN",
@@ -173,7 +173,7 @@ PHOT_MIN_OFFSET_FOR_SKYOUTERRADIUS: 10
 PHOT_APERTURES: [6,8,10,12,14,16]
 
 # Threshold in number of sigmas to detect sources, where sigma = background error
-PHOT_THRESHOLD: 100
+PHOT_THRESHOLD: 30
 #-------------------------------------
 
 #### POLARIMETRY ####
@@ -293,5 +293,6 @@ COMPARISONS: [1, 2, 3, 4, 5, 6]
 UPDATE_TARGET_INDEX_FROM_INPUT: True
 # define target index from input list
 TARGET_INDEX_FROM_INPUT: 0
+# define search radius in arcsec for matching SIMBAD sources around the observed RA,DEC (from header)
+COORD_SEARCH_RADIUS_IN_ARCSEC: 10
 #-------------------------------------
-
