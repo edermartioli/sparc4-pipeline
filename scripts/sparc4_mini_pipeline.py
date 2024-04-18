@@ -70,15 +70,27 @@ for channel in p['SELECTED_CHANNELS']:
     else:
         db = s4db.create_db_from_file(p['s4db_files'][j])
 
+    # Create target list file name for a given night and channel
+    p["TARGET_LIST_FILE"] = os.path.join(reduce_dir,"{}_sparc4acs{}_target_list.csv".format(options.nightdir, p['CHANNELS'][j]))
+
+    if options.target_list != "" :
+        # Copy input target list file to reduction location using a standard file name
+        print("Copying input target list file {} to {}".format(options.target_list, p["TARGET_LIST_FILE"]))
+        command = "cp {} {} ".format(options.target_list,p["TARGET_LIST_FILE"])
+        os.system(command)
+    else :
+        # If no target list file is provided, then create one from information in the data
+        target_list = s4pipelib.build_target_list_from_data(p['objects'][j], p['obj_skycoords'][j], search_radius_arcsec=p["COORD_SEARCH_RADIUS_IN_ARCSEC"],output=p["TARGET_LIST_FILE"])
+        if options.verbose :
+            print("Target list file name: {}".format(p["TARGET_LIST_FILE"]))
+            print("Target list table:")
+            print(target_list)
+
     # detect all detector modes
     detector_modes = s4db.get_detector_modes_observed(db, science_only=True, detector_keys=p["DETECTOR_MODE_KEYWORDS"])
 
     # set astrometry ref image as the one for this channel
     p["ASTROM_REF_IMG"] = os.path.join(p["CALIBDB_DIR"], p["ASTROM_REF_IMGS"][j])
-    
-    # set input target list file
-    if options.target_list != "" :
-        p["TARGET_LIST_FILE"] = options.target_list
     
     for key in detector_modes.keys():
             
@@ -94,15 +106,15 @@ for channel in p['SELECTED_CHANNELS']:
         except Exception as e:
             print("WARNING: Could not reduce {} mode, detector mode {} : {}".format(p_phot['INSTMODE_PHOTOMETRY_KEYVALUE'], key, e))
         
-        #try:
-        # reduce science data in polarimetric L2 mode
-        p_polarl2 = s4pipelib.reduce_sci_data(db, p_polarl2, j, p_polarl2['INSTMODE_POLARIMETRY_KEYVALUE'], detector_modes[key], options.nightdir, reduce_dir, polar_mode=p_polarl2['POLARIMETRY_L2_KEYVALUE'], fit_zero=False, detector_mode_key=key, calw_mode=p_polarl2['CALW_MODE'], match_frames=match_frames, force=options.force, verbose=options.verbose, plot_stack=options.plot, plot_lc=options.plot, plot_polar=p["PLOT_POLARIMETRY_FIT"])
-        #except Exception as e:
-        #    print("WARNING: Could not reduce {}-{} mode, detector mode {} : {}".format(p_polarl2['INSTMODE_POLARIMETRY_KEYVALUE'], p_polarl2['POLARIMETRY_L2_KEYVALUE'], key, e))
+        try:
+            # reduce science data in polarimetric L2 mode
+            p_polarl2 = s4pipelib.reduce_sci_data(db, p_polarl2, j, p_polarl2['INSTMODE_POLARIMETRY_KEYVALUE'], detector_modes[key], options.nightdir, reduce_dir, polar_mode=p_polarl2['POLARIMETRY_L2_KEYVALUE'], fit_zero=False, detector_mode_key=key, calw_mode=p_polarl2['CALW_MODE'], match_frames=match_frames, force=options.force, verbose=options.verbose, plot_stack=options.plot, plot_lc=options.plot, plot_polar=p["PLOT_POLARIMETRY_FIT"])
+        except Exception as e:
+            print("WARNING: Could not reduce {}-{} mode, detector mode {} : {}".format(p_polarl2['INSTMODE_POLARIMETRY_KEYVALUE'], p_polarl2['POLARIMETRY_L2_KEYVALUE'], key, e))
         
-        #try:
-        # reduce science data in  polarimetric L4 mode
-        p_polarl4 = s4pipelib.reduce_sci_data(db, p_polarl4, j, p_polarl4['INSTMODE_POLARIMETRY_KEYVALUE'], detector_modes[key], options.nightdir, reduce_dir, polar_mode=p_polarl4['POLARIMETRY_L4_KEYVALUE'], fit_zero=fit_zero_of_wppos, detector_mode_key=key, calw_mode=p_polarl4['CALW_MODE'], match_frames=match_frames, force=options.force, verbose=options.verbose, plot_stack=options.plot, plot_lc=options.plot, plot_polar=p_polarl4["PLOT_POLARIMETRY_FIT"])
-        #except Exception as e:
-        #    print("WARNING: Could not reduce {}-{} mode, detector mode {} : {}".format(p_polarl4['INSTMODE_POLARIMETRY_KEYVALUE'], p_polarl4['POLARIMETRY_L4_KEYVALUE'], key, e))
+        try:
+            # reduce science data in  polarimetric L4 mode
+            p_polarl4 = s4pipelib.reduce_sci_data(db, p_polarl4, j, p_polarl4['INSTMODE_POLARIMETRY_KEYVALUE'], detector_modes[key], options.nightdir, reduce_dir, polar_mode=p_polarl4['POLARIMETRY_L4_KEYVALUE'], fit_zero=fit_zero_of_wppos, detector_mode_key=key, calw_mode=p_polarl4['CALW_MODE'], match_frames=match_frames, force=options.force, verbose=options.verbose, plot_stack=options.plot, plot_lc=options.plot, plot_polar=p_polarl4["PLOT_POLARIMETRY_FIT"])
+        except Exception as e:
+            print("WARNING: Could not reduce {}-{} mode, detector mode {} : {}".format(p_polarl4['INSTMODE_POLARIMETRY_KEYVALUE'], p_polarl4['POLARIMETRY_L4_KEYVALUE'], key, e))
         
