@@ -218,6 +218,7 @@ def identify_files(p, night, print_report=True):
         data_directories.append(channeldir)
 
     objects, objsInPhot, objsInPolar = [], [], []
+    obj_skycoords = []
     objectsdata, objsInPhotdata, objsInPolardata = [], [], []
     sciences, dflats, sflats, zeros = [], [], [], []
     darks, foci = [], []
@@ -239,6 +240,8 @@ def identify_files(p, night, print_report=True):
         sciences.append([])
 
         objects.append([])
+        obj_skycoords.append([])
+
         objsInPhot.append([])
         objsInPolar.append([])
 
@@ -269,6 +272,8 @@ def identify_files(p, night, print_report=True):
 
                 if header["OBJECT"] not in objects[j]:
                     objects[j].append(header["OBJECT"])
+                    obj_skycoords[j].append([header["RA"],header["DEC"]])
+                    
                     objectsdata[j][header["OBJECT"]] = []
 
                 sciences[j].append(inputdata[j][i])
@@ -321,6 +326,7 @@ def identify_files(p, night, print_report=True):
 
     p['data_directories'] = data_directories
     p['objects'] = objects
+    p['obj_skycoords'] = obj_skycoords
     p['sciences'] = sciences
     p['dflats'] = dflats
     p['sflats'] = sflats

@@ -24,7 +24,7 @@ CHANNEL_COLORS: ["darkblue","green","orange","darkred"]
 
 #### NIGHT DATA BASE #####
 # define SPARC4 keywords used to select reduction groups
-DB_KEYS: ["DATE-OBS", "EXPTIME",
+DB_KEYS: ["DATE-OBS", "EXPTIME", "RA", "DEC",
           "OBJECT", "OBSTYPE", "INSTMODE", "CHANNEL",
           "VBIN", "HBIN", "INITLIN", "INITCOL", "FINALLIN", "FINALCOL",
           "VSHIFT", "VCLKAMP", "CCDSERN",
@@ -111,7 +111,7 @@ APPLY_BIAS_CORRECTION: True
 APPLY_FLATFIELD_CORRECTION: True
 
 # APPLY FLAT PER WAVEPLATE POSITION
-APPLY_FLAT_PER_WPPOS: True
+APPLY_FLAT_PER_WPPOS: False
 
 # Whether or not to allow using a flat obtained in PHOT mode to correct POLAR images if no POLAR flats were taken.
 ALLOW_USING_PHOTFLAT_TO_CORRECT_POLAR: True
@@ -293,4 +293,6 @@ COMPARISONS: [1, 2, 3, 4, 5, 6]
 UPDATE_TARGET_INDEX_FROM_INPUT: True
 # define target index from input list
 TARGET_INDEX_FROM_INPUT: 0
+# define search radius in arcsec for matching SIMBAD sources around the observed RA,DEC (from header)
+COORD_SEARCH_RADIUS_IN_ARCSEC: 10
 #-------------------------------------

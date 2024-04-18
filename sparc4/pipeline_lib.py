@@ -37,6 +37,8 @@ from astropy.wcs import WCS
 from astropy.wcs.utils import proj_plane_pixel_scales
 from uncertainties import ufloat, umath
 
+from astroquery.simbad import Simbad
+
 import sparc4.db as s4db
 import sparc4.params as params
 import sparc4.product_plots as s4plt
@@ -50,9 +52,103 @@ from astropy.stats import SigmaClip
 from aafitrans import find_transform
 import twirl
 from astropy.wcs.utils import fit_wcs_from_points
+from astropop.catalogs import gaia
 
 import yaml
+       
+
+def build_target_list_from_data(object_list=[], skycoords_list=[], search_radius_arcsec=10, update_ids=False, output="") :
+
+    """ Pipeline module to build a target list based on a list of objects and coordinates obtained from the data
+    Parameters
+    ----------
+    object_list : list, optional
+        list of object names
+    skycoords_list : list of tuples, optional
+        list of (RA,DEC) sky coordinates in the format RA="HH:MM:SS.SS", DEC="+/-DD:MM:SS.SS"
+    search_radius_arcsec: float
+        search radius (in units of arcseconds) for matching SIMBAD sources around the input list of skycoords
+    update_ids: bool, optional
+        whether or not to update object IDs with the MAIN ID a matching SIMBAD source
+    output: str, optional
+        otuput csv file name for target list
+    Returns
+        tbl : astropy.table.Table
+        table of targets
+    -------
+    """
+    
+    # initialize output table of targets (OBJECT_ID, RA, DEC)
+    tbl = Table()
+    
+    # initialize lists to feed output table
+    ids, ras, decs = [], [], []
+    
+    # loop over all observed objects given as a list
+    for obj_id in object_list :
+        try :
+            # query SIMBAD repository to match object by name
+            obj_match_simbad = Simbad.query_object(obj_id)
+        
+            if obj_match_simbad is None :
+                continue
+                
+            # append
+            if update_ids :
+                ids.append(obj_match_simbad["MAIN_ID"][0])
+            else :
+                ids.append(obj_id)
+
+            # cast coordinates into SkyCoord
+            coord = SkyCoord(obj_match_simbad["RA"][0], obj_match_simbad["DEC"][0], unit=(u.hourangle, u.deg), frame='icrs')
             
+            # append coordinates into arrays
+            ras.append(coord.ra.deg)
+            decs.append(coord.dec.deg)
+
+        except Exception as e:
+            print("WARNING: failed to retrieve SIMBAD info for object {} : {}".format(obj_id, e))
+            continue
+    
+    # loop over all observed coordinates given as a list
+    for coords in skycoords_list :
+        try :
+            # cast input coordinates into SkyCoord
+            coord = SkyCoord(coords[0], coords[1], unit=(u.hourangle, u.deg), frame='icrs')
+        
+            # query SIMBAD repository to match an object by coordinates
+            results = Simbad.query_region(coord, radius = search_radius_arcsec * (1/3600) * u.deg)
+    
+            if results is None :
+                continue
+                
+            for i in range(len(results)) :
+                id = results[i]["MAIN_ID"][0]
+                res_coord = SkyCoord(results[i]["RA"], results[i]["DEC"], unit=(u.hourangle, u.deg), frame='icrs')
+
+                if (id in ids) or (res_coord.ra.deg in ras and res_coord.dec.deg in decs):
+                    continue
+                else :
+                    # append object id into array
+                    ids.append(id)
+                    # append coordinates into arrays
+                    ras.append(res_coord.ra.deg)
+                    decs.append(res_coord.dec.deg)
+        except  Exception as e:
+            print("WARNING: failed to retrieve SIMBAD info for coordinates RA={} DEC={}: {}".format(coords[0], coords[1], e))
+            continue
+    
+    if len(ids) and len(ras) and len(decs) :
+        tbl["OBJECT_ID"] = ids
+        tbl["RA"], tbl["DEC"] = ras, decs
+    
+        if output != "" :
+            tbl.write(output, overwrite=True)
+    
+    return tbl
+    
+    
+       
 def astrometry_from_existing_wcs(wcs, img_data, pixel_coords=None, sky_coords=None, pixel_scale=0.335, fov_search_factor=1.1, sparsify_factor=0.01, apply_sparsify_filter=True, max_number_of_gaia_sources=50, compute_wcs_tolerance = 10, plot_solution=False, nsources_to_plot=30, use_twirl_to_compute_wcs=False, sip_degree=None) :
 
     """ Pipeline module to calcualte astrometric solution from an existing wcs
@@ -123,7 +219,12 @@ def astrometry_from_existing_wcs(wcs, img_data, pixel_coords=None, sky_coords=No
     
             # get RAs and Decs from Gaia catalog for a sky area of fov_search_factor x FoV
             gaia_sources_skycoords = twirl.gaia_radecs(center, fov_search_factor * fov)
-    
+            
+            # Below is the initial implementation of the Astropop query to gaia DR3 to avoid using twirl above.
+            # gaia_sources = gaia.gaiadr3(center, radius=fov_search_factor * fov)
+            # find a way to get gaia_sources_skycoords from gaia_sources
+            # ...
+
             # we only keep stars 0.01 degree apart from each other
             if apply_sparsify_filter :
                 gaia_sources_skycoords = twirl.geometry.sparsify(gaia_sources_skycoords, sparsify_factor)
@@ -356,8 +457,7 @@ def init_s4_p(nightdir, datadir="", reducedir="", channels="", print_report=Fals
     os.makedirs(p['ROOTREDUCEDIR'], exist_ok=True)
 
     # organize files to be reduced
-    if print_report:
-        p = s4utils.identify_files(p, nightdir, print_report=print_report)
+    p = s4utils.identify_files(p, nightdir, print_report=print_report)
 
     p['data_directories'] = []
     p['reduce_directories'] = []
