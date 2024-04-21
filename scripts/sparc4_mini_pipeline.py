@@ -80,7 +80,7 @@ for channel in p['SELECTED_CHANNELS']:
         os.system(command)
     else :
         # If no target list file is provided, then create one from information in the data
-        target_list = s4pipelib.build_target_list_from_data(p['objects'][j], p['obj_skycoords'][j], search_radius_arcsec=p["COORD_SEARCH_RADIUS_IN_ARCSEC"],output=p["TARGET_LIST_FILE"])
+        target_list = s4pipelib.build_target_list_from_data(p['objects'][j], p['obj_skycoords'][j], search_radius_arcsec=p["COORD_SEARCH_RADIUS_IN_ARCSEC"], output=p["TARGET_LIST_FILE"])
         if options.verbose :
             print("Target list file name: {}".format(p["TARGET_LIST_FILE"]))
             print("Target list table:")
