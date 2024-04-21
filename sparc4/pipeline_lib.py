@@ -253,10 +253,10 @@ def astrometry_from_existing_wcs(wcs, img_data, pixel_coords=None, sky_coords=No
             # use input wcs to generate a "guess" for the set of pixel coordinates of Gaia sources
             sources_radecs_guess = np.array(wcs.world_to_pixel_values(sources_skycoords))
 
-            plt.imshow(img_data, vmin=np.median(img_data), vmax=3 * np.median(img_data), cmap="Greys_r")
-            _ = photutils.aperture.CircularAperture(pixel_coords[:max_number_of_catalog_sources], r=10.0).plot(color="y")
-            _ = photutils.aperture.CircularAperture(sources_radecs_guess[:max_number_of_catalog_sources], r=15.0).plot(color="r")
-            plt.show()
+            #plt.imshow(img_data, vmin=np.median(img_data), vmax=3 * np.median(img_data), cmap="Greys_r")
+            #_ = photutils.aperture.CircularAperture(pixel_coords[:max_number_of_catalog_sources], r=10.0).plot(color="y")
+            #_ = photutils.aperture.CircularAperture(sources_radecs_guess[:max_number_of_catalog_sources], r=15.0).plot(color="r")
+            #plt.show()
     
             # Use astroalign to find transformation between detected sources and Gaia sources in pixel scale
             #T, (source_pos_array, target_pos_array) = aa.find_transform(pixel_coords[:max_number_of_catalog_sources], sources_radecs_guess[:max_number_of_catalog_sources])
