@@ -53,6 +53,7 @@ from aafitrans import find_transform
 import twirl
 from astropy.wcs.utils import fit_wcs_from_points
 from astropop.catalogs import gaia
+from astroquery.vizier import Vizier
 
 import yaml
        
@@ -141,15 +142,18 @@ def build_target_list_from_data(object_list=[], skycoords_list=[], search_radius
     if len(ids) and len(ras) and len(decs) :
         tbl["OBJECT_ID"] = ids
         tbl["RA"], tbl["DEC"] = ras, decs
-    
-        if output != "" :
-            tbl.write(output, overwrite=True)
-    
+    else :
+        tbl["OBJECT_ID"] = ["Vega"]
+        tbl["RA"] = [279.23473458]
+        tbl["DEC"] = [38.78368889]
+
+    if output != "" :
+        tbl.write(output, overwrite=True)
+        
     return tbl
     
-    
-       
-def astrometry_from_existing_wcs(wcs, img_data, pixel_coords=None, sky_coords=None, pixel_scale=0.335, fov_search_factor=1.1, sparsify_factor=0.01, apply_sparsify_filter=True, max_number_of_gaia_sources=50, compute_wcs_tolerance = 10, plot_solution=False, nsources_to_plot=30, use_twirl_to_compute_wcs=False, sip_degree=None) :
+
+def astrometry_from_existing_wcs(wcs, img_data, pixel_coords=None, sky_coords=None, pixel_scale=0.335, fov_search_factor=1.1, sparsify_factor=0.01, apply_sparsify_filter=True, max_number_of_catalog_sources=50, compute_wcs_tolerance = 10, plot_solution=False, nsources_to_plot=30, use_twirl_to_compute_wcs=False, sip_degree=None, use_vizier=False, vizier_catalogs=["UCAC"], vizier_catalog_idx=2) :
 
     """ Pipeline module to calcualte astrometric solution from an existing wcs
     Parameters
@@ -174,7 +178,7 @@ def astrometry_from_existing_wcs(wcs, img_data, pixel_coords=None, sky_coords=No
         to apply a sparsify filter to keep detected Gaia sources apart from each other
     sparsify_factor : float
         to avoid blended sources -  keep stars "sparsify_factor" degrees apart from each other
-    max_number_of_gaia_sources : int
+    max_number_of_catalog_sources : int
         limit to truncate number of Gaia sources to be matched for astrometry
     compute_wcs_tolerance : float
         tolerance passed as a parameter to the function twirl.compute_wcs()
@@ -199,13 +203,14 @@ def astrometry_from_existing_wcs(wcs, img_data, pixel_coords=None, sky_coords=No
     if pixel_coords is None :
         #print("Detecting peaks using twirl ... ")
         pixel_coords = twirl.find_peaks(img_data)
+        
     try :
         if sky_coords is None :
             # get the center of the image
             ra, dec = wcs.wcs.crval[0], wcs.wcs.crval[1]
     
             # set image center coordinates
-            center = SkyCoord(ra, dec, unit=(u.deg,u.deg))
+            center = SkyCoord(ra, dec, unit=(u.deg,u.deg), frame='icrs')
             #print("Center: ", center)
 
             # get image shape
@@ -217,33 +222,49 @@ def astrometry_from_existing_wcs(wcs, img_data, pixel_coords=None, sky_coords=No
             # set field of view
             fov = np.max(shape) * pixel.to(u.deg)
     
-            # get RAs and Decs from Gaia catalog for a sky area of fov_search_factor x FoV
-            gaia_sources_skycoords = twirl.gaia_radecs(center, fov_search_factor * fov)
+            # get RAs and Decs from online catalogs for a sky area of fov_search_factor x FoV
+            if use_vizier :
+                result = Vizier.query_region(center, width=[fov_search_factor * fov,fov_search_factor * fov], catalog=vizier_catalogs)
+                sources_skycoords = []
+                for i in range(len(result[vizier_catalog_idx])) :
+                    ra_i, dec_i = result[vizier_catalog_idx]['RAJ2000'][i], result[vizier_catalog_idx]['DEJ2000'][i]
+                    sources_skycoords.append([ra_i,dec_i])
+                sources_skycoords = np.array(sources_skycoords,dtype=float)
+            else :
+                try :
+                    # get gaia sources in the field
+                    sources_skycoords = twirl.gaia_radecs(center, fov_search_factor * fov)
+                    # we only keep stars 0.01 degree apart from each other
+                    if apply_sparsify_filter :
+                        sources_skycoords = twirl.geometry.sparsify(sources_skycoords, sparsify_factor)
+                    # Below is the initial implementation of the Astropop query to gaia DR3 to avoid using twirl above.
+                    # gaia_sources = gaia.gaiadr3(center, radius=fov_search_factor * fov)
+                    # find a way to get sources_skycoords from gaia_sources
+                    # ...
+                except Exception as e :
+                    print("WARNING: could not acesss Gaia, using Vizier -> {}:  {}".format(vizier_catalogs,e))
+                    result = Vizier.query_region(center, width=[fov_search_factor * fov,fov_search_factor * fov], catalog=vizier_catalogs)
+                    sources_skycoords = []
+                    for i in range(len(result[vizier_catalog_idx])) :
+                        ra_i, dec_i = result[vizier_catalog_idx]['RAJ2000'][i], result[vizier_catalog_idx]['DEJ2000'][i]
+                        sources_skycoords.append([ra_i,dec_i])
+                    sources_skycoords = np.array(sources_skycoords,dtype=float)
             
-            # Below is the initial implementation of the Astropop query to gaia DR3 to avoid using twirl above.
-            # gaia_sources = gaia.gaiadr3(center, radius=fov_search_factor * fov)
-            # find a way to get gaia_sources_skycoords from gaia_sources
-            # ...
-
-            # we only keep stars 0.01 degree apart from each other
-            if apply_sparsify_filter :
-                gaia_sources_skycoords = twirl.geometry.sparsify(gaia_sources_skycoords, sparsify_factor)
-    
             # use input wcs to generate a "guess" for the set of pixel coordinates of Gaia sources
-            gaia_sources_radecs_guess = np.array(wcs.world_to_pixel_values(gaia_sources_skycoords))
-    
-            #plt.imshow(img_data, vmin=np.median(img_data), vmax=3 * np.median(img_data), cmap="Greys_r")
-            #_ = photutils.aperture.CircularAperture(pixel_coords[:max_number_of_gaia_sources], r=10.0).plot(color="y")
-            #_ = photutils.aperture.CircularAperture(gaia_sources_radecs_guess[:max_number_of_gaia_sources], r=15.0).plot(color="r")
-            #plt.show()
+            sources_radecs_guess = np.array(wcs.world_to_pixel_values(sources_skycoords))
+
+            plt.imshow(img_data, vmin=np.median(img_data), vmax=3 * np.median(img_data), cmap="Greys_r")
+            _ = photutils.aperture.CircularAperture(pixel_coords[:max_number_of_catalog_sources], r=10.0).plot(color="y")
+            _ = photutils.aperture.CircularAperture(sources_radecs_guess[:max_number_of_catalog_sources], r=15.0).plot(color="r")
+            plt.show()
     
             # Use astroalign to find transformation between detected sources and Gaia sources in pixel scale
-            #T, (source_pos_array, target_pos_array) = aa.find_transform(pixel_coords[:max_number_of_gaia_sources], gaia_sources_radecs_guess[:max_number_of_gaia_sources])
+            #T, (source_pos_array, target_pos_array) = aa.find_transform(pixel_coords[:max_number_of_catalog_sources], sources_radecs_guess[:max_number_of_catalog_sources])
             
             # instead of astroalign, we use below the same function from aafitrans, which optimizes the use of astroalign
             T, (source_pos_array, target_pos_array) = find_transform(pixel_coords,
-                                                                     gaia_sources_radecs_guess[:max_number_of_gaia_sources],
-                                                                     max_control_points=max_number_of_gaia_sources,
+                                                                     sources_radecs_guess[:max_number_of_catalog_sources],
+                                                                     max_control_points=max_number_of_catalog_sources,
                                                                      ttype='similarity',
                                                                      pixel_tolerance=2,
                                                                      min_matches=4,
@@ -263,7 +284,7 @@ def astrometry_from_existing_wcs(wcs, img_data, pixel_coords=None, sky_coords=No
                 all_sky_coords = SkyCoord(matched_sky_coords, unit='deg')
                 wcs = fit_wcs_from_points(np.array([source_pos_array[:,0], source_pos_array[:,1]]), all_sky_coords)
         
-            loc['ASTROMETRY_SOURCES_SKYCOORDS'] = gaia_sources_skycoords[:max_number_of_gaia_sources]
+            loc['ASTROMETRY_SOURCES_SKYCOORDS'] = sources_skycoords[:max_number_of_catalog_sources]
         else :
             all_sky_coords = SkyCoord(sky_coords, unit='deg')
             wcs = fit_wcs_from_points(np.array([pixel_coords[:,0], pixel_coords[:,1]]), all_sky_coords)
@@ -2209,7 +2230,7 @@ def generate_catalogs(p, data, hdr, sources, fwhm, catalogs=[], catalogs_label='
                 else :
             
                     print("Solving astrometry in POLAR-MODE using astrometry_from_existing_wcs()")
-                    p['WCS'] = astrometry_from_existing_wcs(deepcopy(p['WCS']), data, pixel_coords=pixel_coords, pixel_scale=p["PLATE_SCALE"], max_number_of_gaia_sources=p['MAX_NUMBER_OF_GAIA_SRCS_FOR_ASTROMETRY'], plot_solution=p['PLOT_ASTROMETRY_RESULTS_IN_STACK'], nsources_to_plot=30, use_twirl_to_compute_wcs=False, sip_degree=p['SIP_DEGREE'])
+                    p['WCS'] = astrometry_from_existing_wcs(deepcopy(p['WCS']), data, pixel_coords=pixel_coords, pixel_scale=p["PLATE_SCALE"], max_number_of_catalog_sources=p['MAX_NUMBER_OF_GAIA_SRCS_FOR_ASTROMETRY'], plot_solution=p['PLOT_ASTROMETRY_RESULTS_IN_STACK'], nsources_to_plot=30, use_twirl_to_compute_wcs=False, sip_degree=p['SIP_DEGREE'], use_vizier=p['USE_VIZIER'], vizier_catalogs=p['VIZIER_CATALOGS'], vizier_catalog_idx=p['VIZIER_CATALOG_IDX'])
 
             except Exception as e:
             
@@ -2265,7 +2286,7 @@ def generate_catalogs(p, data, hdr, sources, fwhm, catalogs=[], catalogs_label='
                     
                 else :
                     print("Solving astrometry in PHOT-MODE using astrometry_from_existing_wcs()")
-                    p['WCS'] = astrometry_from_existing_wcs(deepcopy(p['WCS']), data, pixel_coords=pixel_coords, pixel_scale=p["PLATE_SCALE"], max_number_of_gaia_sources=p['MAX_NUMBER_OF_GAIA_SRCS_FOR_ASTROMETRY'], plot_solution=p['PLOT_ASTROMETRY_RESULTS_IN_STACK'], nsources_to_plot=100, sip_degree=p['SIP_DEGREE'])
+                    p['WCS'] = astrometry_from_existing_wcs(deepcopy(p['WCS']), data, pixel_coords=pixel_coords, pixel_scale=p["PLATE_SCALE"], max_number_of_catalog_sources=p['MAX_NUMBER_OF_GAIA_SRCS_FOR_ASTROMETRY'], plot_solution=p['PLOT_ASTROMETRY_RESULTS_IN_STACK'], nsources_to_plot=100, sip_degree=p['SIP_DEGREE'], use_vizier=p['USE_VIZIER'], vizier_catalogs=p['VIZIER_CATALOGS'], vizier_catalog_idx=p['VIZIER_CATALOG_IDX'])
                     
             except Exception as e:
                 print("WARNING: could not solve astrometry in PHOT-MODE, using WCS from database: ", e)
@@ -2600,10 +2621,10 @@ def build_catalogs(p, data, hdr, catalogs=[], xshift=0., yshift=0., solve_astrom
         
         if p['SOLVE_ASTROMETRY_IN_INDIVIDUAL_FRAMES'] :
             # run full astrometry for individual frames using the existing WCS as reference
-            p['WCS'] = astrometry_from_existing_wcs(deepcopy(p['WCS']), data, pixel_coords=pixel_coords, pixel_scale=p["PLATE_SCALE"], max_number_of_gaia_sources=p['MAX_NUMBER_OF_GAIA_SRCS_FOR_ASTROMETRY'], plot_solution=False, nsources_to_plot=100, sip_degree=p['SIP_DEGREE'])
+            p['WCS'] = astrometry_from_existing_wcs(deepcopy(p['WCS']), data, pixel_coords=pixel_coords, pixel_scale=p["PLATE_SCALE"], max_number_of_catalog_sources=p['MAX_NUMBER_OF_GAIA_SRCS_FOR_ASTROMETRY'], plot_solution=False, nsources_to_plot=100, sip_degree=p['SIP_DEGREE'], use_vizier=p['USE_VIZIER'], vizier_catalogs=p['VIZIER_CATALOGS'], vizier_catalog_idx=p['VIZIER_CATALOG_IDX'])
         else :
             # update WCS using the set of x+offset,y+offset and ra,dec arrays in the catalog.
-            p['WCS'] = astrometry_from_existing_wcs(deepcopy(p['WCS']), data, pixel_coords=pixel_coords, sky_coords=sky_coords, pixel_scale=p["PLATE_SCALE"], plot_solution=False, nsources_to_plot=100, sip_degree=p['SIP_DEGREE'])
+            p['WCS'] = astrometry_from_existing_wcs(deepcopy(p['WCS']), data, pixel_coords=pixel_coords, sky_coords=sky_coords, pixel_scale=p["PLATE_SCALE"], plot_solution=False, nsources_to_plot=100, sip_degree=p['SIP_DEGREE'], use_vizier=p['USE_VIZIER'], vizier_catalogs=p['VIZIER_CATALOGS'], vizier_catalog_idx=p['VIZIER_CATALOG_IDX'])
         
         # update wcs header in parameters dict
         p['WCS_HEADER'] = p['WCS'].to_header(relax=True)
