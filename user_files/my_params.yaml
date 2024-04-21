@@ -219,6 +219,14 @@ SOLVE_ASTROMETRY_IN_STACK: True
 # sip_degree to model geometric distortion.
 SIP_DEGREE: 4
 
+# Use a Vizier online catalog for astrometric solution. If False, then uses Gaia.
+# It also serves as a backup when Gaia server is down.
+USE_VIZIER: False
+# Define vizier catalogs
+VIZIER_CATALOGS: ["UCAC"]
+# Define vizier catalog index
+VIZIER_CATALOG_IDX: 2
+
 # whether or not to plot stack frame with matched Gaia sources
 # note: by activating this, the plot will pause the reduction processing and will
 #       continue only when the plot window is closed
