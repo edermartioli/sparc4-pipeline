@@ -2379,7 +2379,7 @@ def add_targets_from_users_file(p, data, sources, dist_threshold=8, polarimetry=
     tbl = ascii.read(p['TARGET_LIST_FILE'])
     
     # initialize list of target sky coordinates
-    visible_targets_sky_coords = []
+    visible_targets_sky_coords, visible_targets_pixel_coords = [], []
 
     # if tbl is empty, return intact sources and p, and empty target_sky_coords
     if len(tbl) == 0 :
@@ -2404,7 +2404,7 @@ def add_targets_from_users_file(p, data, sources, dist_threshold=8, polarimetry=
         
     # use current wcs to generate the set of pixel coordinates of input targets
     targets_pixel_coords = np.array(p["WCS"].world_to_pixel_values(target_sky_coords))
-            
+
     # save x and y pixel coordinates into arrays
     ny, nx = np.shape(data)
     x, y, x2, y2 = [], [], [], []
@@ -2423,7 +2423,9 @@ def add_targets_from_users_file(p, data, sources, dist_threshold=8, polarimetry=
         if (xcoord > 0) and (xcoord < nx) and \
            (ycoord > 0) and (ycoord < ny) and \
            (xcoord2 > 0) and (xcoord2 < nx) and \
-           (ycoord2 > 0) and (ycoord2 < ny) :
+           (ycoord2 > 0) and (ycoord2 < ny) and \
+            np.isfinite(xcoord) and np.isfinite(ycoord) and \
+            np.isfinite(xcoord2) and np.isfinite(ycoord2) :
            
             x.append(xcoord)
             y.append(ycoord)
@@ -2433,13 +2435,14 @@ def add_targets_from_users_file(p, data, sources, dist_threshold=8, polarimetry=
             #print(i,tbl["OBJECT_ID"][i],targets_pixel_coords[i][0],targets_pixel_coords[i][1])
             
             visible_targets_sky_coords.append([tbl["RA"][i],tbl["DEC"][i]])
-       
+            visible_targets_pixel_coords.append([xcoord,ycoord])
+            
     # if number of targets in the field is 0, exit
     if len(x) == 0 :
         return sources, visible_targets_sky_coords, p
        
     # set circular apertures for photometry
-    apertures = photutils.aperture.CircularAperture(targets_pixel_coords, r=10)
+    apertures = photutils.aperture.CircularAperture(visible_targets_pixel_coords, r=10)
     # calculate photometric quantities for all targets
     aper_stats = photutils.aperture.ApertureStats(data, apertures)
             
@@ -2483,7 +2486,7 @@ def add_targets_from_users_file(p, data, sources, dist_threshold=8, polarimetry=
         for j in range(len(sources['x'])) :
             new_src_pixel_coords[j] = [sources['x'][j],sources['y'][j]]
         # plot image to check targets
-        astrometry_sources_pixcoords = np.array(targets_pixel_coords)
+        astrometry_sources_pixcoords = np.array(visible_targets_pixel_coords)
         plt.imshow(data, vmin=np.percentile(data, 0.5), vmax=np.percentile(data, 99.5), origin='lower', cmap="Greys_r")
         _ = photutils.aperture.CircularAperture(src_pixel_coords, r=6.0).plot(color="g")
         _ = photutils.aperture.CircularAperture(new_src_pixel_coords, r=10.0).plot(color="m")
