@@ -11,7 +11,7 @@
 
     python -W ignore sparc4_mini_pipeline.py --nightdir=20230604 -vp --params=/Users/eder/sparc4-pipeline/params/my_params.yaml
 
-    python -W ignore sparc4_mini_pipeline.py --nightdir=20230604 --datadir=/Volumes/Samsung_T5/Data/SPARC4/comissioning_jun23/ --reducedir=/Volumes/Samsung_T5/Data/SPARC4/comissioning_jun23/reduced -v
+    python -W ignore sparc4_mini_pipeline.py --nightdir=20230605 --datadir=/Users/eder/Data/SPARC4/comissioning_jun23/ --reducedir=/Users/eder/Data/SPARC4/comissioning_jun23/reduced -v
 
     python -W ignore sparc4_mini_pipeline.py --nightdir=20230606 --datadir=/Volumes/Samsung_T5/Data/SPARC4/standards --reducedir=/Volumes/Samsung_T5/Data/SPARC4/standards/reduced -v
     
@@ -43,9 +43,6 @@ try:
 except:
     print("Error: check usage with  -h sparc4_mini_pipeline.py")
     sys.exit(1)
-
-match_frames = True
-fit_zero_of_wppos = True
 
 # initialize pipeline parameters
 p = s4pipelib.init_s4_p(options.nightdir,
@@ -102,19 +99,19 @@ for channel in p['SELECTED_CHANNELS']:
     
         try:
             # reduce science data in photometric mode
-            p_phot = s4pipelib.reduce_sci_data(db, p_phot, j, p_phot['INSTMODE_PHOTOMETRY_KEYVALUE'], detector_modes[key], options.nightdir, reduce_dir, polar_mode=None, fit_zero=False, detector_mode_key=key, calw_mode="OFF", match_frames=match_frames, force=options.force, verbose=options.verbose, plot_stack=options.plot, plot_lc=options.plot, plot_polar=False)
+            p_phot = s4pipelib.reduce_sci_data(db, p_phot, j, p_phot['INSTMODE_PHOTOMETRY_KEYVALUE'], detector_modes[key], options.nightdir, reduce_dir, polar_mode=None, fit_zero=False, detector_mode_key=key, calw_mode="OFF", match_frames=p['MATCH_FRAMES'], force=options.force, verbose=options.verbose, plot_stack=options.plot, plot_lc=options.plot, plot_polar=False)
         except Exception as e:
             print("WARNING: Could not reduce {} mode, detector mode {} : {}".format(p_phot['INSTMODE_PHOTOMETRY_KEYVALUE'], key, e))
         
         try:
             # reduce science data in polarimetric L2 mode
-            p_polarl2 = s4pipelib.reduce_sci_data(db, p_polarl2, j, p_polarl2['INSTMODE_POLARIMETRY_KEYVALUE'], detector_modes[key], options.nightdir, reduce_dir, polar_mode=p_polarl2['POLARIMETRY_L2_KEYVALUE'], fit_zero=False, detector_mode_key=key, calw_mode=p_polarl2['CALW_MODE'], match_frames=match_frames, force=options.force, verbose=options.verbose, plot_stack=options.plot, plot_lc=options.plot, plot_polar=p["PLOT_POLARIMETRY_FIT"])
+            p_polarl2 = s4pipelib.reduce_sci_data(db, p_polarl2, j, p_polarl2['INSTMODE_POLARIMETRY_KEYVALUE'], detector_modes[key], options.nightdir, reduce_dir, polar_mode=p_polarl2['POLARIMETRY_L2_KEYVALUE'], fit_zero=False, detector_mode_key=key, calw_mode=p_polarl2['CALW_MODE'], match_frames=p['MATCH_FRAMES'], force=options.force, verbose=options.verbose, plot_stack=options.plot, plot_lc=options.plot, plot_polar=p["PLOT_POLARIMETRY_FIT"])
         except Exception as e:
             print("WARNING: Could not reduce {}-{} mode, detector mode {} : {}".format(p_polarl2['INSTMODE_POLARIMETRY_KEYVALUE'], p_polarl2['POLARIMETRY_L2_KEYVALUE'], key, e))
         
         try:
             # reduce science data in  polarimetric L4 mode
-            p_polarl4 = s4pipelib.reduce_sci_data(db, p_polarl4, j, p_polarl4['INSTMODE_POLARIMETRY_KEYVALUE'], detector_modes[key], options.nightdir, reduce_dir, polar_mode=p_polarl4['POLARIMETRY_L4_KEYVALUE'], fit_zero=fit_zero_of_wppos, detector_mode_key=key, calw_mode=p_polarl4['CALW_MODE'], match_frames=match_frames, force=options.force, verbose=options.verbose, plot_stack=options.plot, plot_lc=options.plot, plot_polar=p_polarl4["PLOT_POLARIMETRY_FIT"])
+            p_polarl4 = s4pipelib.reduce_sci_data(db, p_polarl4, j, p_polarl4['INSTMODE_POLARIMETRY_KEYVALUE'], detector_modes[key], options.nightdir, reduce_dir, polar_mode=p_polarl4['POLARIMETRY_L4_KEYVALUE'], fit_zero=p['FIT_ZERO_OF_WPPOS_IN_L4'], detector_mode_key=key, calw_mode=p_polarl4['CALW_MODE'], match_frames=p['MATCH_FRAMES'], force=options.force, verbose=options.verbose, plot_stack=options.plot, plot_lc=options.plot, plot_polar=p_polarl4["PLOT_POLARIMETRY_FIT"])
         except Exception as e:
             print("WARNING: Could not reduce {}-{} mode, detector mode {} : {}".format(p_polarl4['INSTMODE_POLARIMETRY_KEYVALUE'], p_polarl4['POLARIMETRY_L4_KEYVALUE'], key, e))
         
