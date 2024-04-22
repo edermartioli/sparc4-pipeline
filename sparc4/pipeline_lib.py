@@ -829,7 +829,7 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
                                                        compute_k=compute_k,
                                                        fit_zero=fit_zero,
                                                        zero=zero)
-
+                    
                     pol_results = get_polarimetry_results(polarproduct,
                                                           source_index=p['TARGET_INDEX'],
                                                           min_aperture=p['MIN_APERTURE_FOR_POLARIMETRY'],
@@ -3555,7 +3555,8 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
         waveplate_angles[ii] = hdul[0].header["WANG{:04d}".format(ii)]
 
     # filter out nan data
-    keep = (np.isfinite(fos)) & (np.isfinite(fes))
+    keep = np.isfinite(waveplate_angles)
+    keep &= (np.isfinite(fos)) & (np.isfinite(fes))
     keep &= (np.isfinite(efos)) & (np.isfinite(efes))
 
     if len(fos[keep]) == 0 :
@@ -3586,6 +3587,7 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
         theta = QFloat(tbl['THETA'][0], tbl['ETHETA'][0])
         kcte = QFloat(tbl['K'][0], tbl['EK'][0])
         zero = QFloat(tbl['ZERO'][0], tbl['EZERO'][0])
+        n, m = tbl['NOBS'][0], tbl['NPAR'][0]
 
         # cast zi data into QFloat
         fo = QFloat(fos[keep], efos[keep])
@@ -3596,32 +3598,31 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
         if wave_plate == "halfwave":
             # initialize astropop SLSDualBeamPolarimetry object
             pol = SLSDualBeamPolarimetry(wave_plate, compute_k=True, zero=0)
-            observed_model = halfwave_model(
-                waveplate_angles[keep], qpol.nominal, upol.nominal)
-
+            observed_model = halfwave_model(waveplate_angles[keep], qpol.nominal, upol.nominal)
         elif wave_plate == "quarterwave":
             # initialize astropop SLSDualBeamPolarimetry object
-            pol = SLSDualBeamPolarimetry(
-                wave_plate, compute_k=False, zero=zero.nominal)
-            observed_model = quarterwave_model(
-                waveplate_angles[keep], qpol.nominal, upol.nominal, vpol.nominal, zero=zero.nominal)
+            pol = SLSDualBeamPolarimetry(wave_plate, compute_k=False, zero=zero.nominal)
+            observed_model = quarterwave_model(waveplate_angles[keep], qpol.nominal, upol.nominal, vpol.nominal, zero=zero.nominal)
 
-        # compute polarimetry
-        norm = pol.compute(
-            waveplate_angles[keep], fos[keep], fes[keep], f_ord_error=efos[keep], f_ext_error=efes[keep])
+        try :
+            # compute polarimetry
+            norm = pol.compute(waveplate_angles[keep], fos[keep], fes[keep], f_ord_error=efos[keep], f_ext_error=efes[keep])
 
-        zis[keep] = norm.zi.nominal
-        zierrs[keep] = norm.zi.std_dev
+            zis[keep] = norm.zi.nominal
+            zierrs[keep] = norm.zi.std_dev
 
-        # cast zi data into QFloat
-        zi = QFloat(zis[keep], zierrs[keep])
+            # cast zi data into QFloat
+            zi = QFloat(zis[keep], zierrs[keep])
 
-        n, m = tbl['NOBS'][0], tbl['NPAR'][0]
-        resids = zi.nominal - observed_model
-        sig_res = np.nanstd(resids)
-        chi2 = np.nansum((resids/zi.std_dev)**2) / (n - m)
-
-    # print(waveplate_angles[keep], zi, qpol, upol, ppol, theta, kcte)
+            resids = zi.nominal - observed_model
+            sig_res = np.nanstd(resids)
+            chi2 = np.nansum((resids/zi.std_dev)**2) / (n - m)
+            
+        except Exception as e :
+            print("WARNING: could not compute polarimetry: {}".format(e))
+            pass
+        
+        # print(waveplate_angles[keep], zi, qpol, upol, ppol, theta, kcte)
 
     # print results
     if verbose:
