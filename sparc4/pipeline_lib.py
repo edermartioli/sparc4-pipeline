@@ -3559,26 +3559,27 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
     keep &= (np.isfinite(fos)) & (np.isfinite(fes))
     keep &= (np.isfinite(efos)) & (np.isfinite(efes))
 
+    # get polarimetry results
+    qpol = QFloat(np.nan, np.nan)
+    upol = QFloat(np.nan, np.nan)
+    vpol = QFloat(np.nan, np.nan)
+    ppol = QFloat(np.nan, np.nan)
+    theta = QFloat(np.nan, np.nan)
+    kcte = QFloat(np.nan, np.nan)
+    zero = QFloat(np.nan, np.nan)
+    # cast zi data into QFloat
+    fo = QFloat(np.array([np.nan]), np.array([np.nan]))
+    fe = QFloat(np.array([np.nan]), np.array([np.nan]))
+    zi = QFloat(np.array([np.nan]), np.array([np.nan]))
+    n, m = 0, 0
+    sig_res = np.array([np.nan])
+    chi2 = np.nan
+    observed_model = zi
+        
     if len(fos[keep]) == 0 :
         print("WARNING: no useful polarization data for Source index: {}  and aperture: {} pix ".format(
             source_index, aperture_radius))
-        # get polarimetry results
-        qpol = QFloat(np.nan, np.nan)
-        upol = QFloat(np.nan, np.nan)
-        vpol = QFloat(np.nan, np.nan)
-        ppol = QFloat(np.nan, np.nan)
-        theta = QFloat(np.nan, np.nan)
-        kcte = QFloat(np.nan, np.nan)
-        zero = QFloat(np.nan, np.nan)
-        # cast zi data into QFloat
-        fo = QFloat(np.array([np.nan]), np.array([np.nan]))
-        fe = QFloat(np.array([np.nan]), np.array([np.nan]))
-        zi = QFloat(np.array([np.nan]), np.array([np.nan]))
-        n, m = 0, 0
-        sig_res = np.array([np.nan])
-        chi2 = np.nan
-        observed_model = zi
-    else:
+    else :
         # get polarimetry results
         qpol = QFloat(tbl['Q'][0], tbl['EQ'][0])
         upol = QFloat(tbl['U'][0], tbl['EU'][0])
@@ -3607,13 +3608,15 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
         try :
             # compute polarimetry
             norm = pol.compute(waveplate_angles[keep], fos[keep], fes[keep], f_ord_error=efos[keep], f_ext_error=efes[keep])
-
+    
+            # get zis
             zis[keep] = norm.zi.nominal
             zierrs[keep] = norm.zi.std_dev
 
             # cast zi data into QFloat
             zi = QFloat(zis[keep], zierrs[keep])
 
+            # get statistics
             resids = zi.nominal - observed_model
             sig_res = np.nanstd(resids)
             chi2 = np.nansum((resids/zi.std_dev)**2) / (n - m)
