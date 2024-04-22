@@ -3572,7 +3572,7 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
     fe = QFloat(np.array([np.nan]), np.array([np.nan]))
     zi = QFloat(np.array([np.nan]), np.array([np.nan]))
     n, m = 0, 0
-    sig_res = np.array([np.nan])
+    sig_res = np.nan
     chi2 = np.nan
     observed_model = zi
         
@@ -3639,7 +3639,7 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
         print("Angle of polarization theta: {}".format(theta))
         print("Free constant k: {}".format(kcte))
         print("Zero of polarization: {}".format(zero))
-        print("RMS of {} residuals: {:.5f}".format("zi", sig_res))
+        print("RMS of zi residuals: {}".format(sig_res))
         print("Reduced chi-square (n={}, DOF={}): {:.2f}".format(n, n-m, chi2))
 
     loc["WAVEPLATE_ANGLES"] = waveplate_angles[keep]
