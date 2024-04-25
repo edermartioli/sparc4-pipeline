@@ -35,4 +35,5 @@ Version 1.2 (2024-04-25)
 - New notebook to reduce the night of 20230605, which was the only one missing to complete the examples for the three nights of the minidata.
 - Updated user manual
 - Updated GitHub front page
+- Option "NIGTHS_INSIDE_CHANNELS_DIR" is now separated for raw and reduced data
 
