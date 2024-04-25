@@ -9,7 +9,7 @@
 
     Simple usage example:
 
-    python -W"ignore" tools/sparc4_queue.py --nights="20230604,20230605,20230606"
+    python tools/sparc4_queue.py --nights="20230604,20230605,20230606"
     
     """
 
