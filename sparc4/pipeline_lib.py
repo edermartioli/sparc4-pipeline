@@ -528,8 +528,10 @@ def init_s4_p(nightdir, datadir="", reducedir="", channels="", print_report=Fals
         root_reduce_dir = '{}/{}/'.format(p['ROOTREDUCEDIR'], nightdir)
         reduce_dir = '{}/sparc4acs{}/'.format(root_reduce_dir, p['CHANNELS'][j])
 
-        if p['NIGTHS_INSIDE_CHANNELS_DIR'] :
+        if p['RAW_NIGTHS_INSIDE_CHANNELS_DIR'] :
             night_ch_data_dir = '{}/sparc4acs{}/{}/'.format(p['ROOTDATADIR'], p['CHANNELS'][j], nightdir)
+            
+        if p['REDUCED_NIGTHS_INSIDE_CHANNELS_DIR'] :
             root_reduce_dir = '{}/sparc4acs{}/'.format(p['ROOTREDUCEDIR'],p['CHANNELS'][j])
             reduce_dir = '{}/{}/'.format(root_reduce_dir,nightdir)
 
