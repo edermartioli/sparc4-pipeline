@@ -317,9 +317,4 @@ COORD_SEARCH_RADIUS_IN_ARCSEC: 10
 #### GENERAL PROCESSING #####
 # whether or not to use memmap backend
 USE_MEMMAP: False
-
-# logging level
-
-
-
 #-------------------------------------
