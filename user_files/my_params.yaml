@@ -23,6 +23,9 @@ CHANNEL_LABELS: ['g','r','i','z']
 CHANNEL_COLORS: ["darkblue","green","orange","darkred"]
 
 #### NIGHT DATA BASE #####
+# DB file format: FITS or CSV
+DB_FILE_FORMAT: "CSV"
+
 # define SPARC4 keywords used to select reduction groups
 DB_KEYS: ["DATE-OBS", "EXPTIME", "RA", "DEC",
           "OBJECT", "OBSTYPE", "INSTMODE", "CHANNEL",
@@ -181,6 +184,10 @@ PHOT_THRESHOLD: 30
 #-------------------------------------
 
 #### POLARIMETRY ####
+
+# time out (integer seconds) to kill photometry when it hangs
+PHOTOMETRY_TIMEOUT: 60
+
 # set (maximum) number of waveplate positions in a polar sequence.
 MAX_NUMBER_OF_WPPOS_IN_SEQUENCE: 16
 # whether or not to use rolling polar sequence mode
@@ -294,11 +301,6 @@ PHOT_REF_CATALOG_NAME: "BEST_APERTURES"
 POLAR_REF_CATALOG_NAME: "CATALOG_POL_N_AP010"
 #-------------------------------------
 
-#### GENERAL PROCESSING #####
-# whether or not to use memmap backend
-USE_MEMMAP: False
-#-------------------------------------
-
 #### SCIENCE SPECIFIC #####
 # Define target index to calculate differential photometry in lightcurve plots
 TARGET_INDEX: 0
@@ -310,4 +312,14 @@ UPDATE_TARGET_INDEX_FROM_INPUT: True
 TARGET_INDEX_FROM_INPUT: 0
 # define search radius in arcsec for matching SIMBAD sources around the observed RA,DEC (from header)
 COORD_SEARCH_RADIUS_IN_ARCSEC: 10
+#-------------------------------------
+
+#### GENERAL PROCESSING #####
+# whether or not to use memmap backend
+USE_MEMMAP: False
+
+# logging level
+
+
+
 #-------------------------------------
