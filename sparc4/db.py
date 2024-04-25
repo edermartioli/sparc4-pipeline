@@ -13,7 +13,7 @@ from copy import deepcopy
 import numpy as np
 from astropy.io import fits
 from astropy.table import Table
-
+from astropy.io import ascii
 
 def create_db_from_observations(filelist, dbkeys=[], include_img_statistics=True, include_only_fullframe=True, valid_obstype_keys=["ZERO", "FLAT", "FOCUS", "DARK", "OBJECT"], output=""):
     """ SPARC4 pipeline module to create a database of observations
@@ -103,7 +103,10 @@ def create_db_from_file(db_filename):
     tbl : astropy.table
         data base in astropy table format
     """
-    tbl = Table(fits.getdata(db_filename, 1))
+    if db_filename.endswith(".fits") :
+        tbl = Table(fits.getdata(db_filename, 1))
+    else :
+        tbl = ascii.read(db_filename)
     return tbl
 
 

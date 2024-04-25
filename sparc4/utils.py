@@ -24,6 +24,12 @@ from astropy.wcs.utils import proj_plane_pixel_scales
 import photutils
 import numpy as np
 
+import time
+import signal
+from functools import wraps
+
+import logging
+
 def set_timecoords_keys(hdr, timezone=-3, timetype="", ra="", dec="",
                         set_airmass=True, time_key='DATE-OBS', exptimekey='EXPTIME'):
     """ Pipeline module to set time and coordinates keywords
@@ -356,112 +362,100 @@ def identify_files(p, night, print_report=True):
         nscipolar_l2 += len(scipolar_l2[j])
         nscipolar_l4 += len(scipolar_l4[j])
 
+    report_str = ""
+    report_str += "***************************************\n"
+    report_str += "********* Night: {} ***********\n".format(night)
+    report_str += "***************************************\n"
+    report_str += "Total number of images : {}\n".format(nimgs)
+    for j in range(len(channels)):
+        report_str += "Night dir: {}\n".format(data_directories[j])
+        report_str += "\tNumber of images in channel {}: {}\n".format(channels[j], len(inputdata[j]))
+        
+    report_str += "---------------------------------------\n"
+    report_str += "Total number of calibration images: {}\n".format(ndflats+nsflats+nzeros)
+    report_str += "\tNumber of zero images: {}\n".format(nzeros)
+    if nzeros:
+        for j in range(len(channels)):
+            report_str += "\t\t {} zero images in channel {}\n".format(len(zeros[j]), channels[j])
+
+    report_str += "\tNumber of dome flat images: {}\n".format(ndflats)
+    if ndflats:
+        for j in range(len(channels)):
+            report_str += "\t\t {} dome flat images in channel {}\n".format(len(dflats[j]), channels[j])
+
+    report_str += "\tNumber of sky flat images: {}\n".format(nsflats)
+    if nsflats:
+        for j in range(len(channels)):
+            report_str += "\t\t {} sky flat images in channel {}\n".format(len(sflats[j]), channels[j])
+
+    report_str += "\tNumber of dark images: {}\n".format(ndarks)
+    if ndarks:
+        for j in range(len(channels)):
+            report_str += "\t\t {} dark images in channel {}\n".format(len(darks[j]), channels[j])
+
+    report_str += "\tNumber of focus images: {}\n".format(nfoci)
+    if nfoci:
+        for j in range(len(channels)):
+            report_str += "\t\t {} focus images in channel {}\n".format(len(foci[j]), channels[j])
+
+    report_str += "---------------------------------------\n"
+    report_str += "Total number of science images: {}\n".format(nsci)
+    if nsci:
+        for j in range(len(channels)):
+            report_str += "\t {} science images in channel {}\n".format(len(sciences[j]), channels[j])
+
+    report_str += "\tTotal number of images in PHOT: {}\n".format(nsciphot)
+    if nsciphot:
+        for j in range(len(channels)):
+            report_str += "\t\t {} PHOT images in channel {}\n".format(len(sciphot[j]), channels[j])
+
+    report_str += "\tTotal number of images in POLAR: {}\n".format(nscipolar)
+    if nscipolar:
+        for j in range(len(channels)):
+            report_str += "\t\t {} POLAR images in channel {}\n".format(len(scipolar[j]), channels[j])
+
+    report_str += "\t\tNumber of POLAR images in L/2: {}\n".format(nscipolar_l2)
+    if nscipolar_l2:
+        for j in range(len(channels)):
+            report_str += "\t\t\t {} POLAR L/2 images in channel {}\n".format(len(scipolar_l2[j]), channels[j])
+    report_str += "\t\tNumber of POLAR images in L/4: {}\n".format(nscipolar_l4)
+    if nscipolar_l4:
+        for j in range(len(channels)):
+            report_str += "\t\t\t {} POLAR L/4 images in channel {}\n".format(len(scipolar_l4[j]), channels[j])
+    report_str += "---------------------------------------\n"
+    for j in range(len(channels)):
+        report_str += "Total number of objects observed in channel {}: {}\n".format(channels[j], len(objects[j]))
+
+        for object in objects[j]:
+            report_str += "\t{} has {} images in channel {}\n".format(object, len(objectsdata[j][object]), channels[j])
+
+        report_str += "\t\t {} objects observed in PHOT \n".format(len(objsInPhot[j]))
+            
+        for object in objsInPhot[j]:
+            report_str += "\t\t\t{} has {} images in PHOT\n".format(object, len(objsInPhotdata[j][object]))
+
+        report_str += "\t\t {} objects observed in POLAR \n".format(len(objsInPolar[j]))
+            
+        for object in objsInPolar[j]:
+            report_str += "\t\t\t{} has {} images\n".format(object, len(objsInPolardata[j][object]))
+
+        report_str += "\t\t {} objects observed in POLAR L/2\n".format(len(objsInPolarL2[j]))
+            
+        for object in objsInPolarL2[j]:
+            report_str += "\t\t\t{} has {} images\n".format(object, len(objsInPolarL2data[j][object]))
+
+        report_str += "\t\t {} objects observed in POLAR L/4\n".format(len(objsInPolarL4[j]))
+            
+        for object in objsInPolarL4[j]:
+            report_str += "\t\t\t{} has {} images\n".format(object, len(objsInPolarL4data[j][object]))
+        report_str += "---------------------------------------\n"
+    report_str += "***************************************\n"
+
+    p["NIGHT_REPORT"] = report_str
+    
     if print_report:
-        print("***************************************")
-        print("********* Night: {} ***********".format(night))
-        print("***************************************")
-        print("Total number of images : {}".format(nimgs))
-        for j in range(len(channels)):
-            print("Night dir: {}".format(data_directories[j]))
-            print("\tNumber of images in channel {}: {}".format(
-                channels[j], len(inputdata[j])))
-        print("---------------------------------------")
-        print("Total number of calibration images: {}".format(
-            ndflats+nsflats+nzeros))
-        print("\tNumber of zero images: {}".format(nzeros))
-        if nzeros:
-            for j in range(len(channels)):
-                print("\t\t {} zero images in channel {}".format(
-                    len(zeros[j]), channels[j]))
-
-        print("\tNumber of dome flat images: {}".format(ndflats))
-        if ndflats:
-            for j in range(len(channels)):
-                print("\t\t {} dome flat images in channel {}".format(
-                    len(dflats[j]), channels[j]))
-
-        print("\tNumber of sky flat images: {}".format(nsflats))
-        if nsflats:
-            for j in range(len(channels)):
-                print("\t\t {} sky flat images in channel {}".format(
-                    len(sflats[j]), channels[j]))
-
-        print("\tNumber of dark images: {}".format(ndarks))
-        if ndarks:
-            for j in range(len(channels)):
-                print("\t\t {} dark images in channel {}".format(
-                    len(darks[j]), channels[j]))
-
-        print("\tNumber of focus images: {}".format(nfoci))
-        if nfoci:
-            for j in range(len(channels)):
-                print("\t\t {} focus images in channel {}".format(
-                    len(foci[j]), channels[j]))
-
-        print("---------------------------------------")
-        print("Total number of science images: {}".format(nsci))
-        if nsci:
-            for j in range(len(channels)):
-                print("\t {} science images in channel {}".format(
-                    len(sciences[j]), channels[j]))
-
-        print("\tTotal number of images in PHOT: {}".format(nsciphot))
-        if nsciphot:
-            for j in range(len(channels)):
-                print("\t\t {} PHOT images in channel {}".format(
-                    len(sciphot[j]), channels[j]))
-
-        print("\tTotal number of images in POLAR: {}".format(nscipolar))
-        if nscipolar:
-            for j in range(len(channels)):
-                print("\t\t {} POLAR images in channel {}".format(
-                    len(scipolar[j]), channels[j]))
-
-        print("\t\tNumber of POLAR images in L/2: {}".format(nscipolar_l2))
-        if nscipolar_l2:
-            for j in range(len(channels)):
-                print(
-                    "\t\t\t {} POLAR L/2 images in channel {}".format(len(scipolar_l2[j]), channels[j]))
-        print("\t\tNumber of POLAR images in L/4: {}".format(nscipolar_l4))
-        if nscipolar_l4:
-            for j in range(len(channels)):
-                print(
-                    "\t\t\t {} POLAR L/4 images in channel {}".format(len(scipolar_l4[j]), channels[j]))
-        print("---------------------------------------")
-        for j in range(len(channels)):
-            print("Total number of objects observed in channel {}: {}".format(
-                channels[j], len(objects[j])))
-
-            for object in objects[j]:
-                print("\t{} has {} images in channel {}".format(
-                    object, len(objectsdata[j][object]), channels[j]))
-
-            print("\t\t {} objects observed in PHOT ".format(
-                len(objsInPhot[j])))
-            for object in objsInPhot[j]:
-                print("\t\t\t{} has {} images in PHOT".format(
-                    object, len(objsInPhotdata[j][object])))
-
-            print("\t\t {} objects observed in POLAR ".format(
-                len(objsInPolar[j])))
-            for object in objsInPolar[j]:
-                print("\t\t\t{} has {} images".format(
-                    object, len(objsInPolardata[j][object])))
-
-            print(
-                "\t\t {} objects observed in POLAR L/2".format(len(objsInPolarL2[j])))
-            for object in objsInPolarL2[j]:
-                print("\t\t\t{} has {} images".format(
-                    object, len(objsInPolarL2data[j][object])))
-
-            print(
-                "\t\t {} objects observed in POLAR L/4".format(len(objsInPolarL4[j])))
-            for object in objsInPolarL4[j]:
-                print("\t\t\t{} has {} images".format(
-                    object, len(objsInPolarL4data[j][object])))
-            print("---------------------------------------")
-        print("***************************************")
-
+        print(report_str)
+        
     return p
 
 
@@ -658,3 +652,76 @@ def check_astrometry(filename, fov_search_factor=2.0, apply_sparsify_filter=Fals
 
     return w
 
+
+def timeout(timeout_secs: int):
+    """ Pipeline decorator to apply a timeout in a function call
+    Parameters
+    ----------
+    timeout_secs : int
+        define time out in seconds
+
+    Returns
+    -------
+    wrapper :
+    
+    """
+
+    def wrapper(func):
+        @wraps(func)
+        def time_limited(*args, **kwargs):
+            # Register an handler for the timeout
+            def handler(signum, frame):
+                raise Exception(f"Timeout for function '{func.__name__}'")
+
+            # Register the signal function handler
+            signal.signal(signal.SIGALRM, handler)
+
+            # Define a timeout for your function
+            signal.alarm(timeout_secs)
+
+            result = None
+            try:
+                result = func(*args, **kwargs)
+            except Exception as exc:
+                raise exc
+            finally:
+                # disable the signal alarm
+                signal.alarm(0)
+
+            return result
+
+        return time_limited
+
+    return wrapper
+
+
+def start_logger(file_name="") :
+
+    """ Pipeline function to start logger
+    Parameters
+    ----------
+    file_name : str
+        define output logger file name
+
+    Returns
+    -------
+    logger : Logger object
+    
+    """
+
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s | %(levelname)s | %(message)s')
+
+    stdout_handler = logging.StreamHandler(sys.stdout)
+    stdout_handler.setLevel(logging.DEBUG)
+    stdout_handler.setFormatter(formatter)
+    logger.addHandler(stdout_handler)
+
+    if file_name != "" :
+        file_handler = logging.FileHandler(file_name)
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+    
+    return logger
