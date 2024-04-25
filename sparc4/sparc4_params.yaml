@@ -5,7 +5,7 @@
 #### DIRECTORIES #####
 ROOTDATADIR: "/Users/eder/Data/SPARC4/minidata"
 ROOTREDUCEDIR: "/Users/eder/Data/SPARC4/minidata/reduced"
-# Define directory tree structure.
+# Define directory tree structure for raw (to read) and reduced (to write) data location.
 # If True: $DATADIR/sparc4acs{1,2,3,4}/night/ or if False: $DATADIR/night/sparc4acs{1,2,3,4}/
 RAW_NIGTHS_INSIDE_CHANNELS_DIR: True
 REDUCED_NIGTHS_INSIDE_CHANNELS_DIR: False
