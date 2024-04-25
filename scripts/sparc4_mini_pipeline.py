@@ -86,7 +86,7 @@ for channel in p['SELECTED_CHANNELS']:
     s4pipelib.write_night_report(p, night_report_file_path, channel_index=j)
     
     # if db doesn't exist create one
-    if not os.path.exists(p['s4db_files'][j]) or options.force :
+    if not os.path.exists(p['s4db_files'][j]) or options.force or p['FORCE_DB_CREATION'] :
         # log messages:
         logger.info("Creating new database file: {}".format(p['s4db_files'][j]))
         
@@ -108,21 +108,17 @@ for channel in p['SELECTED_CHANNELS']:
         print("Copying input target list file {} to {}".format(options.target_list, p["TARGET_LIST_FILE"]))
         command = "cp {} {} ".format(options.target_list,p["TARGET_LIST_FILE"])
         os.system(command)
-    else :
-        # log messages:
-        logger.info("Generating target list and saving to file: {}".format(p["TARGET_LIST_FILE"]))
-
-        # If no target list file is provided, then create one from information in the data
-        target_list = s4pipelib.build_target_list_from_data(p['objects'][j], p['obj_skycoords'][j], search_radius_arcsec=p["COORD_SEARCH_RADIUS_IN_ARCSEC"], output=p["TARGET_LIST_FILE"])
-        if options.verbose :
-            # log messages:
-            if options.verbose :
-                print("Target list table:")
-                print(target_list)
+        
+    # log messages:
+    logger.info("Generating target list and saving to file: {}".format(p["TARGET_LIST_FILE"]))
+    # Add targets that has a SIMBAD match with either the OBJECT or RA/DEC key values
+    target_list = s4pipelib.build_target_list_from_data(p['objects'][j], p['obj_skycoords'][j], search_radius_arcsec=p["COORD_SEARCH_RADIUS_IN_ARCSEC"], target_list=options.target_list, output=p["TARGET_LIST_FILE"])
+    if options.verbose :
+        print("Target list table:")
+        print(target_list)
 
     # log messages:
     logger.info("Identifying detector modes")
-
     # detect all detector modes
     detector_modes = s4db.get_detector_modes_observed(db, science_only=True, detector_keys=p["DETECTOR_MODE_KEYWORDS"])
 
