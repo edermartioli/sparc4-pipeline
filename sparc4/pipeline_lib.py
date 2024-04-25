@@ -61,7 +61,7 @@ import yaml
 
 logger = s4utils.start_logger()
 
-def build_target_list_from_data(object_list=[], skycoords_list=[], search_radius_arcsec=10, update_ids=False, output="") :
+def build_target_list_from_data(object_list=[], skycoords_list=[], search_radius_arcsec=10, update_ids=False, target_list="", output="") :
 
     """ Pipeline module to build a target list based on a list of objects and coordinates obtained from the data
     Parameters
@@ -74,6 +74,8 @@ def build_target_list_from_data(object_list=[], skycoords_list=[], search_radius
         search radius (in units of arcseconds) for matching SIMBAD sources around the input list of skycoords
     update_ids: bool, optional
         whether or not to update object IDs with the MAIN ID a matching SIMBAD source
+    target_list: str, optional
+        input target list file name
     output: str, optional
         otuput csv file name for target list
     Returns
@@ -87,6 +89,16 @@ def build_target_list_from_data(object_list=[], skycoords_list=[], search_radius
     
     # initialize lists to feed output table
     ids, ras, decs = [], [], []
+    
+    if target_list != "" :
+        # read a table of input targets
+        intbl = ascii.read(target_list)
+        logger.info("Reading input target list {} with {} objects".format(target_list,len(intbl)))
+
+        for i in range(len(intbl)) :
+            ids.append(intbl["OBJECT_ID"][i])
+            ras.append(intbl["RA"][i])
+            decs.append(intbl["DEC"][i])
     
     # loop over all observed objects given as a list
     for obj_id in object_list :
@@ -772,7 +784,6 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
                                             polarimetry=polarimetry,
                                             plot=plot_stack)
 
-
             # set suffix for output time series filename
             ts_suffix = "{}_s4c{}_{}{}".format(nightdir, p['CHANNELS'][channel_index], obj.replace(" ", ""), polsuffix)
 
@@ -790,7 +801,6 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
             
             elif inst_mode == p['INSTMODE_POLARIMETRY_KEYVALUE'] :
                 addkeys = p['POLAR_KEYS_TO_ADD_HEADER_DATA_INTO_TSPRODUCT']
-                
                 for beam in p["CATALOG_BEAM_IDS"] :
                     list_of_catalogs = get_list_of_catalogs(p['PHOT_APERTURES_FOR_LIGHTCURVES'], inst_mode, polar_beam=beam)
                     lists_of_catalogs.append(list_of_catalogs)
@@ -803,15 +813,11 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
                 # add beam label to suffix
                 ts_suffix_tmp = "{}_{}".format(ts_suffix, p["CATALOG_BEAM_IDS"][kk])
                 
-                ############
-                # E. Martioli 11/11/2023 :
-                ## The sci_list below may contain both polar and phot data for
-                ##  the same object. This needs to be fixed!!
-                sci_list = p['OBJECT_REDUCED_IMAGES'][1:]
+                
                 
                 logger.info("Running photometric time series")
                 # run photometric time series
-                phot_ts_product = phot_time_series(sci_list,
+                phot_ts_product = phot_time_series(p['OBJECT_REDUCED_IMAGES'],
                                                ts_suffix=ts_suffix_tmp,
                                                reduce_dir=reduce_dir,
                                                time_key=p['TIME_KEYWORD_IN_PROC'],
@@ -819,7 +825,7 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
                                                catalog_names=lists_of_catalogs[kk],
                                                time_span_for_rms=p['TIME_SPAN_FOR_RMS'],
                                                keys_to_add_header_data = addkeys,
-                                               force=force)
+                                               force=p['FORCE_TIME_SERIES_EXECUTION'])
                 # append ts product to a list
                 ts_products.append(phot_ts_product)
             
@@ -886,7 +892,8 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
                                                        base_aperture=p['APERTURE_RADIUS_FOR_PHOTOMETRY_IN_POLAR'],
                                                        compute_k=compute_k,
                                                        fit_zero=fit_zero,
-                                                       zero=zero)
+                                                       zero=zero,
+                                                       force=p['FORCE_POLARIMETRY_COMPUTATION'])
                     
                     pol_results = get_polarimetry_results(polarproduct,
                                                           source_index=p['TARGET_INDEX'],
@@ -904,7 +911,7 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
                                                                 aperture_radius=p['APERTURE_RADIUS_FOR_PHOTOMETRY_IN_POLAR'],
                                                                 min_aperture=p['MIN_APERTURE_FOR_POLARIMETRY'],
                                                                 max_aperture=p['MAX_APERTURE_FOR_POLARIMETRY'],
-                                                                force=force)
+                                                                force=p['FORCE_TIME_SERIES_EXECUTION'])
                                                                 
                 # plot light curve
                 if plot_lc:
@@ -924,7 +931,8 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
                                                            base_aperture=p['APERTURE_RADIUS_FOR_PHOTOMETRY_IN_POLAR'],
                                                            compute_k=compute_k,
                                                            fit_zero=fit_zero,
-                                                           zero=zero)
+                                                           zero=zero,
+                                                           force=p['FORCE_POLARIMETRY_COMPUTATION'])
                 
     return p
 
@@ -1337,9 +1345,9 @@ def reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", match_fr
     # save original input list of files
     p['INPUT_LIST_OF_FILES'] = deepcopy(inputlist)
     # check whether the input reference image is in the input list
-    if ref_img not in inputlist:
-        # add ref image to the list
-        inputlist = [ref_img] + inputlist
+    #if ref_img not in inputlist:
+    # add ref image to the first element of input list
+    inputlist = [ref_img] + inputlist
 
     # make sure to get the correct index for the reference image in the new list
     p['REF_IMAGE_INDEX'] = inputlist.index(p['REFERENCE_IMAGE'])
@@ -1431,7 +1439,7 @@ def reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", match_fr
         logger.info('Calculating offsets ... ')
         p = compute_offsets(p, frames, obj_fg.files, auto_ref_selection=False)
 
-        # write ref image to header
+        # write ref image name to header
         info['REFIMG'] = (p['REFERENCE_IMAGE'], "reference image")
 
         # Perform aperture photometry and store reduced data into products
@@ -1487,10 +1495,11 @@ def reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", match_fr
                 # call function to generate final product
                 s4p.scienceImageProduct(obj_fg.files[i], img_data=img_data, info=info, catalogs=frame_catalogs,polarimetry=polarimetry,filename=obj_red_images[i], catalog_beam_ids=p['CATALOG_BEAM_IDS'],wcs_header=frame_wcs_header,time_key=p["TIME_KEY"], ra=ra, dec=dec)
 
+    # save as new or append list of reduced images to p dict, discarding the first element = redundant ref img
     if 'OBJECT_REDUCED_IMAGES' not in p.keys():
-        p['OBJECT_REDUCED_IMAGES'] = obj_red_images
+        p['OBJECT_REDUCED_IMAGES'] = obj_red_images[1:]
     else:
-        for i in range(len(obj_red_images)):
+        for i in range(1,len(obj_red_images)):
             if obj_red_images[i] not in p['OBJECT_REDUCED_IMAGES']:
                 p['OBJECT_REDUCED_IMAGES'].append(obj_red_images[i])
     return p
@@ -1619,8 +1628,7 @@ def stack_science_images(p, inputlist, reduce_dir="./", force=False, stack_suffi
 
     logger.info('Registering science frames and stacking them ... ')
 
-    p['SELECTED_FILE_INDICES_FOR_STACK'] = np.arange(
-        p['FINAL_NFILES_FOR_STACK'])
+    p['SELECTED_FILE_INDICES_FOR_STACK'] = np.arange(p['FINAL_NFILES_FOR_STACK'])
 
     # Register images, generate global catalog and generate stack image
     p = run_register_frames(p, frames, obj_fg.files, info, output_stack=output_stack, force=force, polarimetry=polarimetry)

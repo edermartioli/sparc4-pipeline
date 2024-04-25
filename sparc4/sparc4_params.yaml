@@ -26,6 +26,9 @@ CHANNEL_COLORS: ["darkblue","green","orange","darkred"]
 # DB file format: FITS or CSV
 DB_FILE_FORMAT: "CSV"
 
+# to force the creation of a new fresh db. Useful when adding/removing raw files
+FORCE_DB_CREATION: False
+
 # define SPARC4 keywords used to select reduction groups
 DB_KEYS: ["DATE-OBS", "EXPTIME", "RA", "DEC",
           "OBJECT", "OBSTYPE", "INSTMODE", "CHANNEL",
@@ -185,6 +188,9 @@ PHOT_THRESHOLD: 30
 
 #### POLARIMETRY ####
 
+# force computation of polarimetry. Useful when new data arrived
+FORCE_POLARIMETRY_COMPUTATION: False
+
 # time out (integer seconds) to kill photometry when it hangs
 PHOTOMETRY_TIMEOUT: 60
 
@@ -273,6 +279,9 @@ ASTROM_REF_IMGS: ['20230503_s4c1_CR1_astrometryRef_stack.fits',
 #-------------------------------------
 
 #### TIME SERIES ####
+# force creation of time series. Useful when new data arrived
+FORCE_TIME_SERIES_EXECUTION: False
+
 # set header keyword to get time in processed frames
 #TIME_KEYWORD_IN_PROC: 'DATE-OBS'
 TIME_KEYWORD_IN_PROC: 'BJD'
