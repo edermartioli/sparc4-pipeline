@@ -149,27 +149,27 @@ for channel in p['SELECTED_CHANNELS']:
             logger.info("Start reduction of science data in {} mode".format(p_phot['INSTMODE_PHOTOMETRY_KEYVALUE']))
         
             # reduce science data in photometric mode
-            p_phot = s4pipelib.reduce_sci_data(db, p_phot, j, p_phot['INSTMODE_PHOTOMETRY_KEYVALUE'], detector_modes[key], options.nightdir, reduce_dir, polar_mode=None, fit_zero=False, detector_mode_key=key, calw_mode="OFF", match_frames=p['MATCH_FRAMES'], force=options.force, plot_stack=options.plot, plot_lc=options.plot, plot_polar=False)
+            p_phot = s4pipelib.reduce_sci_data(db, p_phot, j, p_phot['INSTMODE_PHOTOMETRY_KEYVALUE'], detector_modes[key], options.nightdir, reduce_dir, polar_mode=None, fit_zero=False, detector_mode_key=key, calw_modes=["OFF","None"], match_frames=p['MATCH_FRAMES'], force=options.force, plot_stack=options.plot, plot_lc=options.plot, plot_polar=False)
         except Exception as e:
             # log messages:
             logger.warn("Could not reduce {} mode, detector mode {} : {}".format(p_phot['INSTMODE_PHOTOMETRY_KEYVALUE'], key, e))
         
         try:
             # log messages:
-            logger.info("Start reduction of science data in {} mode".format(p_phot['INSTMODE_POLARIMETRY_KEYVALUE']))
+            logger.info("Start reduction of science data in {} {} mode".format(p_polarl2['INSTMODE_POLARIMETRY_KEYVALUE'], p_polarl2['POLARIMETRY_L2_KEYVALUE']))
 
             # reduce science data in polarimetric L2 mode
-            p_polarl2 = s4pipelib.reduce_sci_data(db, p_polarl2, j, p_polarl2['INSTMODE_POLARIMETRY_KEYVALUE'], detector_modes[key], options.nightdir, reduce_dir, polar_mode=p_polarl2['POLARIMETRY_L2_KEYVALUE'], fit_zero=False, detector_mode_key=key, calw_mode=p_polarl2['CALW_MODE'], match_frames=p['MATCH_FRAMES'], force=options.force, plot_stack=options.plot, plot_lc=options.plot, plot_polar=p["PLOT_POLARIMETRY_FIT"])
+            p_polarl2 = s4pipelib.reduce_sci_data(db, p_polarl2, j, p_polarl2['INSTMODE_POLARIMETRY_KEYVALUE'], detector_modes[key], options.nightdir, reduce_dir, polar_mode=p_polarl2['POLARIMETRY_L2_KEYVALUE'], fit_zero=False, detector_mode_key=key, calw_modes=p_polarl2['CALW_MODES'], match_frames=p['MATCH_FRAMES'], force=options.force, plot_stack=options.plot, plot_lc=options.plot, plot_polar=p["PLOT_POLARIMETRY_FIT"])
         except Exception as e:
             # log messages:
             logger.warn("Could not reduce {}-{} mode, detector mode {} : {}".format(p_polarl2['INSTMODE_POLARIMETRY_KEYVALUE'], p_polarl2['POLARIMETRY_L2_KEYVALUE'], key, e))
         
         try:
             # log messages:
-            logger.info("Start reduction of science data in {} mode".format(p_phot['INSTMODE_POLARIMETRY_KEYVALUE']))
+            logger.info("Start reduction of science data in {} {} mode".format(p_polarl4['INSTMODE_POLARIMETRY_KEYVALUE'], p_polarl4['POLARIMETRY_L4_KEYVALUE']))
 
             # reduce science data in  polarimetric L4 mode
-            p_polarl4 = s4pipelib.reduce_sci_data(db, p_polarl4, j, p_polarl4['INSTMODE_POLARIMETRY_KEYVALUE'], detector_modes[key], options.nightdir, reduce_dir, polar_mode=p_polarl4['POLARIMETRY_L4_KEYVALUE'], fit_zero=p['FIT_ZERO_OF_WPPOS_IN_L4'], detector_mode_key=key, calw_mode=p_polarl4['CALW_MODE'], match_frames=p['MATCH_FRAMES'], force=options.force, plot_stack=options.plot, plot_lc=options.plot, plot_polar=p_polarl4["PLOT_POLARIMETRY_FIT"])
+            p_polarl4 = s4pipelib.reduce_sci_data(db, p_polarl4, j, p_polarl4['INSTMODE_POLARIMETRY_KEYVALUE'], detector_modes[key], options.nightdir, reduce_dir, polar_mode=p_polarl4['POLARIMETRY_L4_KEYVALUE'], fit_zero=p['FIT_ZERO_OF_WPPOS_IN_L4'], detector_mode_key=key, calw_modes=p_polarl4['CALW_MODES'], match_frames=p['MATCH_FRAMES'], force=options.force, plot_stack=options.plot, plot_lc=options.plot, plot_polar=p_polarl4["PLOT_POLARIMETRY_FIT"])
         except Exception as e:
             # log messages:
             logger.warn("Could not reduce {}-{} mode, detector mode {} : {}".format(p_polarl4['INSTMODE_POLARIMETRY_KEYVALUE'], p_polarl4['POLARIMETRY_L4_KEYVALUE'], key, e))
