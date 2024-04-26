@@ -36,4 +36,4 @@ Version 1.2 (2024-04-25)
 - Updated user manual
 - Updated GitHub front page
 - Option "NIGTHS_INSIDE_CHANNELS_DIR" is now separated for raw and reduced data
-
+- Fixed bug to adapt pipeline to a change in the CALW key value from OFF->None
