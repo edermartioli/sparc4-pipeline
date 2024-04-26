@@ -313,7 +313,7 @@ def plot_diff_light_curve(filename, target=0, comps=[], output="", nsig=100,
 
 def plot_light_curve(filename, target=0, comps=[], output="", nsig=10,
                      plot_coords=True, plot_rawmags=True, plot_sum=True,
-                     plot_comps=True, catalog_name="BEST_APERTURES"):
+                     plot_comps=True, catalog_name=1):
     """ Plot light curve
 
     Parameters

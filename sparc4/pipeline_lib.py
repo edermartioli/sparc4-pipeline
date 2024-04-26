@@ -741,7 +741,8 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
     objs = list(objs["OBJECT"])
     
     # get list of all calibration wheel modes found in observations
-    calws_obs = s4db.get_calib_wheel_modes(db)
+    calws_obs = s4db.get_calib_wheel_modes(db, polar_only=False)
+
     # initialize final list of calws
     calws = []
     # filter modes by input
@@ -756,7 +757,7 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
         obj = objs[k]
 
         logger.info("Reducing data for object: {}".format(obj))
-
+        
         # loop over calibration wheel modes: OFF, POLARIZER, or DEPOLARIZER
         for j in range(len(calws)) :
             calw = calws[j]
@@ -2765,7 +2766,7 @@ def phot_time_series(sci_list,
                      catalog_names=[],
                      time_span_for_rms=5,
                      keys_to_add_header_data=[],
-                     best_apertures=True,
+                     best_apertures=False,
                      force=True):
     """ Pipeline module to calculate photometry differential time series for a given list of sparc4 sci image products
 
@@ -2919,8 +2920,7 @@ def phot_time_series(sci_list,
                 if m_rms < minrms[i]:
                     minrms[i] = m_rms
                     selected_apertures[i] = apertures[key]
-                    loc_tbl["APRADIUS"] = np.full_like(
-                        loc_tbl["MAG"], apertures[key])
+                    loc_tbl["APRADIUS"] = np.full_like(loc_tbl["MAG"], apertures[key])
                     selected_data[i] = loc_tbl
 
         # add selected data into data container
