@@ -669,7 +669,7 @@ def get_list_of_catalogs(apertures, inst_mode="PHOT", polar_beam="") :
     return list_of_catalogs
     
 
-def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, reduce_dir, polar_mode=None, fit_zero=False, detector_mode_key="", obj=None, calw_mode="ALL", match_frames=True, force=False, plot_stack=False, plot_lc=False, plot_polar=False):
+def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, reduce_dir, polar_mode=None, fit_zero=False, detector_mode_key="", obj=None, calw_modes=["OFF","None"], match_frames=True, force=False, plot_stack=False, plot_lc=False, plot_polar=False):
     """ Pipeline module to run the reduction of science data
 
     Parameters
@@ -698,8 +698,8 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
         keyword name of detector mode
     obj : str (optional)
         object name to reduce only data for this object
-    calw_mode : str (optional)
-        define  al wheel mode to reduce only data for this mode
+    calw_modes : list of str (optional)
+        define list of wheel modes to restrcit data reduction for these modes
     match_frames : bool
         match images using stack as reference
     force : bool
@@ -740,13 +740,16 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
     # cast output table of objects observed into a list
     objs = list(objs["OBJECT"])
     
-    calws = ["OFF"]
-    if polarimetry :
-        # get list of calibration wheel modes
-        calws = s4db.get_calib_wheel_modes(db)
-        if calw_mode != "ALL":
-            calws = calws[calws['CALW'] == calw_mode]
-        calws = list(calws["CALW"])
+    # get list of all calibration wheel modes found in observations
+    calws_obs = s4db.get_calib_wheel_modes(db)
+    # initialize final list of calws
+    calws = []
+    # filter modes by input
+    for i in range(len(calws_obs)) :
+        calw = calws_obs[i][0]
+        if calw not in calws :
+            if calw in calw_modes :
+                calws.append(calw)
 
     # loop over each object to run the reduction
     for k in range(len(objs)):
@@ -758,7 +761,7 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
         for j in range(len(calws)) :
             calw = calws[j]
             calwsuffix = ""
-            if calw != "OFF" :
+            if calw != "OFF" and calw != "None" :
                 calwsuffix = calw
                 
             logger.info("Reducing data for calibration wheel mode: {}".format(calw))
