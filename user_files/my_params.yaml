@@ -30,6 +30,9 @@ DB_FILE_FORMAT: "CSV"
 # to force the creation of a new fresh db. Useful when adding/removing raw files
 FORCE_DB_CREATION: False
 
+# list of mandatory header keywords. If any of these are not found in image header, then image is ignored
+MANDATORY_KEYWORDS: ["DATE-OBS", "EXPTIME", "RA", "DEC", "OBJECT", "OBSTYPE"]
+          
 # define SPARC4 keywords used to select reduction groups
 DB_KEYS: ["DATE-OBS", "EXPTIME", "RA", "DEC",
           "OBJECT", "OBSTYPE", "INSTMODE", "CHANNEL",
@@ -55,7 +58,7 @@ FULL_FRAMES_ONLY: True
 PATTERN_TO_INCLUDE_DATA: '*.fits'
 
 # patterns to exclude data
-PATTERNS_TO_EXCLUDE_DATA: ['*test*.fits', '*lixo*.fits']
+PATTERNS_TO_EXCLUDE_DATA: ['*lixo*.fits']
 #-------------------------------------
 
 #### CALIBRATIONS #####
@@ -119,7 +122,7 @@ APPLY_BIAS_CORRECTION: True
 APPLY_FLATFIELD_CORRECTION: True
 
 # APPLY FLAT PER WAVEPLATE POSITION
-APPLY_FLAT_PER_WPPOS: False
+APPLY_FLAT_PER_WPPOS: True
 
 # Whether or not to allow using a flat obtained in PHOT mode to correct POLAR images if no POLAR flats were taken.
 ALLOW_USING_PHOTFLAT_TO_CORRECT_POLAR: True
@@ -143,12 +146,12 @@ MATCH_FRAMES: True
 METHOD_TO_SELECT_FILES_FOR_STACK: 'FIRST_FRAMES' # 'MAX_FLUXES' or 'FIRST_FRAMES'
 
 # select stack method
-#SCI_STACK_METHOD: 'median'
-SCI_STACK_METHOD: 'mean'
+SCI_STACK_METHOD: 'median'
+#SCI_STACK_METHOD: 'mean'
 SCI_STACK_SIGMA_CLIP: 10
 
 # define number of files for stack
-NFILES_FOR_STACK: 16
+NFILES_FOR_STACK: 30
 # define saturation limit in ADU to avoid using saturated images in the stack
 #SATURATION_LIMIT: 32000
 SATURATION_LIMIT: 100000
@@ -182,7 +185,7 @@ PHOT_MIN_OFFSET_FOR_SKYOUTERRADIUS: 10
 # Define a list of aperture radii to perform photometry
 #PHOT_APERTURES: [2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30]
 #PHOT_APERTURES: [5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]
-PHOT_APERTURES: [6,8,10,12,14,16]
+PHOT_APERTURES: [5,8,10,12,15,20,25]
 
 # Threshold in number of sigmas to detect sources, where sigma = background error
 PHOT_THRESHOLD: 30
@@ -210,9 +213,9 @@ MATCH_PAIRS_TOLERANCE: 3.0
 POS_MODEL_SAMPLING: 1.0
 
 # set minimum aperture (pixels) to search for best polar results
-MIN_APERTURE_FOR_POLARIMETRY: 6
+MIN_APERTURE_FOR_POLARIMETRY: 5
 # set maximum aperture (pixels) to search for best polar results
-MAX_APERTURE_FOR_POLARIMETRY: 16
+MAX_APERTURE_FOR_POLARIMETRY: 25
 
 # set aperture radius (in pixels) to calculate photometry in polar data
 APERTURE_RADIUS_FOR_PHOTOMETRY_IN_POLAR: 10
@@ -297,9 +300,7 @@ TIME_SPAN_FOR_RMS: 10.0
 
 # Set a list of aperture radii to include in the time series
 # WARNING: This must be a sub set of photometry apertures defined in PHOT_APERTURES
-#PHOT_APERTURES_FOR_LIGHTCURVES: [2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30]
-#PHOT_APERTURES_FOR_LIGHTCURVES: [5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]
-PHOT_APERTURES_FOR_LIGHTCURVES: [6,8,10,12,14,16]
+PHOT_APERTURES_FOR_LIGHTCURVES: [5,8,10,12,15,20,25]
 
 # List of additional keyword data to be included in the photometric time series for PHOT mode
 PHOT_KEYS_TO_ADD_HEADER_DATA_INTO_TSPRODUCT: []
@@ -316,7 +317,8 @@ POLAR_REF_CATALOG_NAME: "CATALOG_POL_N_AP010"
 # Define target index to calculate differential photometry in lightcurve plots
 TARGET_INDEX: 0
 # List of indexes of comparison stars to calculate differential photometry in lightcurve plots
-COMPARISONS: [1, 2, 3, 4, 5, 6]
+#COMPARISONS: [1, 2, 3, 4, 5, 6]
+COMPARISONS: [1]
 # whether or not to update the target index from input - if False the TARGET_INDEX is kept as above
 UPDATE_TARGET_INDEX_FROM_INPUT: True
 # define target index from input list
