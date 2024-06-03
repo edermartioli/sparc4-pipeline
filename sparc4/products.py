@@ -175,7 +175,7 @@ def readScienceImageCatalogs(input):
     return catalogs
 
 
-def scienceImageProduct(original_image, img_data=[], info={}, catalogs=[], polarimetry=False,  skip_ref_catalogs=True, filename="", catalog_beam_ids=["S", "N"], wcs_header=None, time_key="DATE-OBS", ra="", dec=""):
+def scienceImageProduct(original_image, img_data=[], info={}, catalogs=[], polarimetry=False, filename="", catalog_beam_ids=["S", "N"], wcs_header=None, time_key="DATE-OBS", ra="", dec=""):
     """ Create a Science FITS image product
 
     Parameters
@@ -206,8 +206,6 @@ def scienceImageProduct(original_image, img_data=[], info={}, catalogs=[], polar
                 8 : not a star, issues in the photometry
     polarimetry : bool
         Boolean to set polarimetry product
-    skip_ref_catalogs : bool
-        Boolean to skip the first catalog in the list (for photometry) or the first two catalogs in the list (for polarimetry).
     filename : str, optional
         The output file name to save product. If empty, file won't be saved.
     catalog_beam_ids : list
@@ -259,13 +257,7 @@ def scienceImageProduct(original_image, img_data=[], info={}, catalogs=[], polar
 
     hdus = [primary_hdu]
 
-    ini_catalog = 0
-    if skip_ref_catalogs and polarimetry:
-        ini_catalog = 2
-    elif skip_ref_catalogs:
-        ini_catalog = 1
-
-    for j in range(ini_catalog, len(catalogs)):
+    for j in range(len(catalogs)):
         # create empty header for catalog extension
         catalog_header = fits.PrimaryHDU().header
 
@@ -294,41 +286,16 @@ def scienceImageProduct(original_image, img_data=[], info={}, catalogs=[], polar
         cat_label = "UNLABELED_CATALOG"
 
         if polarimetry:
-            if j == 0:
-                catalog_header.set(
-                    "POLBEAM", catalog_beam_ids[0], "Polar beam: [N]orth or [S]outh")
-                cat_label = "REF_CATALOG_POL_{}_AP{:03d}".format(
-                    catalog_beam_ids[0], aperture_value)
-                pass
-            elif j == 1:
-                catalog_header.set(
-                    "POLBEAM", catalog_beam_ids[1], "Polar beam: [N]orth or [S]outh")
-                cat_label = "REF_CATALOG_POL_{}_AP{:03d}".format(
-                    catalog_beam_ids[1], aperture_value)
-                pass
+            if (j % 2) == 0:
+                catalog_header.set("POLBEAM", catalog_beam_ids[0], "Polar beam: [N]orth or [S]outh")
+                cat_label = "CATALOG_POL_{}_AP{:03d}".format(catalog_beam_ids[0], aperture_value)
             else:
-                if (j % 2) == 0:
-                    catalog_header.set(
-                        "POLBEAM", catalog_beam_ids[0], "Polar beam: [N]orth or [S]outh")
-                    # cat_label = "CATALOG_POL_{}_{:04d}".format(catalog_beam_ids[0],int(j/2-1))
-                    cat_label = "CATALOG_POL_{}_AP{:03d}".format(
-                        catalog_beam_ids[0], aperture_value)
-                else:
-                    catalog_header.set(
-                        "POLBEAM", catalog_beam_ids[1], "Polar beam: [N]orth or [S]outh")
-                    # cat_label = "CATALOG_POL_{}_{:04d}".format(catalog_beam_ids[1],int((j-1)/2-1))
-                    cat_label = "CATALOG_POL_{}_AP{:03d}".format(
-                        catalog_beam_ids[1], aperture_value)
+                catalog_header.set("POLBEAM", catalog_beam_ids[1], "Polar beam: [N]orth or [S]outh")
+                cat_label = "CATALOG_POL_{}_AP{:03d}".format(catalog_beam_ids[1], aperture_value)
         else:
-            if j == 0:
-                cat_label = "REF_CATALOG_PHOT_AP{:03d}".format(aperture_value)
-                pass
-            else:
-                # cat_label = "CATALOG_PHOT_{:04d}".format(j-1)
-                cat_label = "CATALOG_PHOT_AP{:03d}".format(aperture_value)
+            cat_label = "CATALOG_PHOT_AP{:03d}".format(aperture_value)
 
-        hdu_catalog = fits.TableHDU(
-            data=catalog_array, header=catalog_header, name=cat_label)
+        hdu_catalog = fits.TableHDU(data=catalog_array, header=catalog_header, name=cat_label)
 
         # set each column unit
         column_units = ["", "DEG", "DEG", "PIXEL", "PIXEL","PIXEL", "PIXEL", "MAG", "MAG", "MAG", "MAG", "PIXEL", ""]
@@ -336,8 +303,7 @@ def scienceImageProduct(original_image, img_data=[], info={}, catalogs=[], polar
         # add description for each column in the header
         for i in range(len(column_units)):
             if column_units[i] != "":
-                hdu_catalog.header.comments["TTYPE{:d}".format(
-                    i+1)] = "units of {}".format(column_units[i])
+                hdu_catalog.header.comments["TTYPE{:d}".format(i+1)] = "units of {}".format(column_units[i])
 
         # append catalog hdu to hdulist
         hdus.append(hdu_catalog)
@@ -709,15 +675,13 @@ def polarProduct(polar_catalogs, info={}, filename=""):
         catalog_header = fits.PrimaryHDU().header
 
         # set aperture radius in header of extension
-        catalog_header.set(
-            "APRADIUS", polar_catalogs[aperture_key]["APER"][0], "aperture radius in pixels")
+        catalog_header.set("APRADIUS", polar_catalogs[aperture_key]["APER"][0], "aperture radius in pixels")
 
-        # cast polar catalog dictionary into a astropy Table
+        # cast polar catalog dictionary into an astropy Table
         tbl_catalog = Table(polar_catalogs[aperture_key])
 
         # stare in a catalog hdu
-        hdu_catalog = fits.BinTableHDU(
-            data=tbl_catalog, header=catalog_header, name=aperture_key)
+        hdu_catalog = fits.BinTableHDU(data=tbl_catalog, header=catalog_header, name=aperture_key)
 
         # append catalog hdu to hdulist
         hdus.append(hdu_catalog)

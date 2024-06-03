@@ -15,7 +15,7 @@ from astropy.io import fits
 from astropy.table import Table
 from astropy.io import ascii
 
-def create_db_from_observations(filelist, dbkeys=[], include_img_statistics=True, include_only_fullframe=True, valid_obstype_keys=["ZERO", "FLAT", "FOCUS", "DARK", "OBJECT"], output=""):
+def create_db_from_observations(filelist, dbkeys=[], include_img_statistics=True, include_only_fullframe=True, valid_obstype_keys=["ZERO", "FLAT", "FOCUS", "DARK", "OBJECT"], mandatory_keys=[], output=""):
     """ SPARC4 pipeline module to create a database of observations
     Parameters
     ----------
@@ -27,6 +27,8 @@ def create_db_from_observations(filelist, dbkeys=[], include_img_statistics=True
         boolean to include image statistics in the database (slower)
     valid_obstype_keys : list of str
         list of valide obstype key values
+    mandatory_keys : list of str
+        list of mandatory keywords
     output : str, optional
         output db FITS file name
 
@@ -58,12 +60,20 @@ def create_db_from_observations(filelist, dbkeys=[], include_img_statistics=True
 
             if include_only_fullframe:
                 if hdr["NAXIS1"] != 1024 or hdr["NAXIS2"] != 1024:
+                    print("Full image is required, skipping image file {}".format(filelist[i]))
                     continue
             if "OBSTYPE" in hdr.keys() :
                 if hdr["OBSTYPE"] not in valid_obstype_keys :
+                    print("OBSTYPE={} is not in list of valid keys, skipping image file {}".format(hdr["OBSTYPE"],filelist[i]))
                     continue
             else :
+                print("Keyword OBSTYPE not found, skipping image file {}".format(filelist[i]))
                 continue
+                
+            for j in range(len(mandatory_keys)) :
+                if mandatory_keys[j] not in hdr.keys() :
+                    print("Mandatory keyword {} not found, skipping image file {}".format(mandatory_keys[j],filelist[i]))
+                    continue
         except:
             print("Skipping image file {}".format(filelist[i]))
             continue
@@ -81,12 +91,14 @@ def create_db_from_observations(filelist, dbkeys=[], include_img_statistics=True
 
         for key in dbkeys:
             tbldata[key].append(hdr[key])
+    
+    tbl = None
+    if len(tbldata["FILE"]) :
+        # initialize dict as data container
+        tbl = Table(tbldata)
 
-    # initialize dict as data container
-    tbl = Table(tbldata)
-
-    if output != "":
-        tbl.write(output, overwrite=True)
+        if output != "":
+            tbl.write(output, overwrite=True)
 
     return tbl
 
@@ -323,7 +335,7 @@ def get_file_list(tbl, object_id=None, inst_mode=None, polar_mode=None, obstype=
         tbl = tbl[tbl['CALW'] == calwheel_mode]
 
     if wppos != None:
-        tbl = tbl[tbl["WPPOS"] == wppos]
+        tbl = tbl[tbl["WPPOS"] == str(wppos)]
         
     outlist = []
     for i in range(len(tbl)):

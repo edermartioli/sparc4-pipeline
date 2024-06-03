@@ -137,13 +137,13 @@ def build_target_list_from_data(object_list=[], skycoords_list=[], search_radius
             coord = SkyCoord(coords[0], coords[1], unit=(u.hourangle, u.deg), frame='icrs')
         
             # query SIMBAD repository to match an object by coordinates
-            results = Simbad.query_region(coord, radius = search_radius_arcsec * (1/3600) * u.deg)
+            results = Simbad.query_region(coord, radius = search_radius_arcsec * (1./3600.) * u.deg)
     
             if results is None :
                 continue
                 
             for i in range(len(results)) :
-                id = results[i]["MAIN_ID"][0]
+                id = results[i]["MAIN_ID"]
                 res_coord = SkyCoord(results[i]["RA"], results[i]["DEC"], unit=(u.hourangle, u.deg), frame='icrs')
 
                 if (id in ids) or (res_coord.ra.deg in ras and res_coord.dec.deg in decs):
@@ -1182,7 +1182,7 @@ def run_master_flat_calibrations(p, db, nightdir, data_dir, reduce_dir, channel,
     polar_l2_flat_list = s4db.get_file_list(db, inst_mode=p['INSTMODE_POLARIMETRY_KEYVALUE'], polar_mode=p['POLARIMETRY_L2_KEYVALUE'], obstype=p['FLAT_OBSTYPE_KEYVALUE'], detector_mode=detector_mode)
     # create a list of dome flats for current detector mode and for polarimetry L4 mode
     polar_l4_flat_list = s4db.get_file_list(db, inst_mode=p['INSTMODE_POLARIMETRY_KEYVALUE'], polar_mode=p['POLARIMETRY_L4_KEYVALUE'], obstype=p['FLAT_OBSTYPE_KEYVALUE'], detector_mode=detector_mode)
-        
+
     if len(phot_flat_list):
         # calculate master dome flat for photometry mode
         flats["phot_master_flat"] = "{}/{}_s4c{}{}_MasterDomeFlat.fits".format(reduce_dir, nightdir, channel, detector_mode_key)
@@ -1214,6 +1214,7 @@ def run_master_flat_calibrations(p, db, nightdir, data_dir, reduce_dir, channel,
         for wppos in range(1,17) :
             # create a master flat for each waveplate position
             polar_l2_wppos_flat_list = s4db.get_file_list(db, inst_mode=p['INSTMODE_POLARIMETRY_KEYVALUE'], polar_mode=p['POLARIMETRY_L2_KEYVALUE'], obstype=p['FLAT_OBSTYPE_KEYVALUE'], detector_mode=detector_mode, wppos=wppos)
+            
             if len(polar_l2_wppos_flat_list) :
                 master_flat_file = "{}/{}_s4c{}{}_POLAR_L2_WPPOS{:02d}_MasterDomeFlat.fits".format(reduce_dir, nightdir, channel, detector_mode_key, wppos)
                 # log messages:
@@ -2117,9 +2118,13 @@ def run_aperture_photometry(img_data, x, y, aperture_radius, r_ann, err_data=Non
             logger.warn("{}".format(e))
             pass
     
+    if exptime == 0 :
+        logger.warn("Invalid value of EXPTIME=0, resetting EXPTIME=1.0")
+        exptime = 1.0
+        
     x, y = ap_phot['x'], ap_phot['y']
-    flux = ap_phot['flux']
-    flux_error = ap_phot['flux_error']
+    flux = ap_phot['flux'] / exptime
+    flux_error = ap_phot['flux_error'] / exptime
     sky = np.array(ap_phot['bkg']) / exptime
     sky_error = np.array(ap_phot['bkg_stddev']) / exptime
     fwhm = np.array(ap_phot['fwhm'])
@@ -2129,11 +2134,15 @@ def run_aperture_photometry(img_data, x, y, aperture_radius, r_ann, err_data=Non
         mag, mag_error = np.full_like(flux, np.nan), np.full_like(flux, np.nan)
         smag, smag_error = np.full_like(flux, np.nan), np.full_like(flux, np.nan)
         for i in range(len(flux)):
-            umag = uflux_to_magnitude(ufloat(flux[i], flux_error[i]))
-            mag[i], mag_error[i] = umag.nominal_value, umag.std_dev
-            uskymag = uflux_to_magnitude(ufloat(sky[i], sky_error[i]))
-            smag[i], smag_error[i] = uskymag.nominal_value, uskymag.std_dev
-
+            try:
+                umag = uflux_to_magnitude(ufloat(flux[i], flux_error[i]))
+                uskymag = uflux_to_magnitude(ufloat(sky[i], sky_error[i]))
+                mag[i], mag_error[i] = umag.nominal_value, umag.std_dev
+                smag[i], smag_error[i] = uskymag.nominal_value, uskymag.std_dev
+            except Exception as e:
+                logger.warn("{}".format(e))
+                continue
+                
         return x, y, mag, mag_error, smag, smag_error, fwhm, flags
     else:
         return x, y, flux, flux_error, sky, sky_error, fwhm, flags
@@ -2648,11 +2657,14 @@ def build_catalogs(p, data, hdr, catalogs=[], xshift=0., yshift=0., solve_astrom
     #print("******* DEBUG ASTROMETRY **********")
     #print("WCS:\n{}".format(p['WCS']))
  
+    # create a copy of input catalogs
+    new_catalogs = deepcopy(catalogs)
+ 
     if stackmode:
-        catalogs = []
+        new_catalogs = []
 
     # When no catalog is provided, generate a new one (usually on stack image)
-    if catalogs == []:
+    if new_catalogs == []:
     
         # calculate background
         bkg, rms = background(data, global_bkg=False)
@@ -2664,14 +2676,13 @@ def build_catalogs(p, data, hdr, catalogs=[], xshift=0., yshift=0., solve_astrom
         fwhm = sources.meta['astropop fwhm']
 
         # set aperture radius from
-        aperture_radius = p['PHOT_FIXED_APERTURE']
-        r_ann = set_sky_aperture(p, aperture_radius)
+        r_ann = set_sky_aperture(p, p['PHOT_FIXED_APERTURE'])
     
         logger.info("Creating new catalog of detected sources:")
 
         # The step below is important to solve astrometry before add targets from user or object header key
         # print("Running aperture photometry with aperture_radius={} r_ann={}".format(aperture_radius,r_ann))
-        catalogs, p = generate_catalogs(p, data, hdr, sources, fwhm, catalogs=[], aperture_radius=aperture_radius, r_ann=r_ann, polarimetry=polarimetry, solve_astrometry=p["SOLVE_ASTROMETRY_IN_STACK"], exptime=exptime, readnoise=readnoise)
+        new_catalogs, p = generate_catalogs(p, data, hdr, sources, fwhm, catalogs=[], aperture_radius=p['PHOT_FIXED_APERTURE'], r_ann=r_ann, polarimetry=polarimetry, solve_astrometry=p["SOLVE_ASTROMETRY_IN_STACK"], exptime=exptime, readnoise=readnoise)
         
         if p['TARGET_LIST_FILE'] != "" :
             # run routine to add targets from user's list to the sources
@@ -2679,13 +2690,13 @@ def build_catalogs(p, data, hdr, catalogs=[], xshift=0., yshift=0., solve_astrom
             
             if len(target_sky_coords) :
                 # generate catalogs again, now with the new targets added
-                catalogs, p = generate_catalogs(p, data, hdr, sources, fwhm, catalogs=[], aperture_radius=aperture_radius, r_ann=r_ann, polarimetry=polarimetry, solve_astrometry=p["SOLVE_ASTROMETRY_IN_STACK"], exptime=exptime, readnoise=readnoise, sortbyflux=False)
+                new_catalogs, p = generate_catalogs(p, data, hdr, sources, fwhm, catalogs=[], aperture_radius=p['PHOT_FIXED_APERTURE'], r_ann=r_ann, polarimetry=polarimetry, solve_astrometry=p["SOLVE_ASTROMETRY_IN_STACK"], exptime=exptime, readnoise=readnoise, sortbyflux=False)
 
                 if p['UPDATE_TARGET_INDEX_FROM_INPUT'] :
                     # use current wcs to generate the set of pixel coordinates of input targets
                     targets_pixel_coords = np.array(p["WCS"].world_to_pixel_values(target_sky_coords))
                     # read catalog x,y pixel coordinates
-                    catalog = catalogs[0]
+                    catalog = new_catalogs[0]
                     src_x, src_y = np.array([]), np.array([])
                     for src in catalog.keys() :
                         src_x = np.append(src_x,catalog[src][3])
@@ -2699,6 +2710,8 @@ def build_catalogs(p, data, hdr, catalogs=[], xshift=0., yshift=0., solve_astrom
         if p['MULTI_APERTURES']:
             logger.info("Running photometry for multiple apertures:")
 
+            new_catalogs = []
+            
             for i in range(len(p['PHOT_APERTURES'])):
                 aperture_radius = p['PHOT_APERTURES'][i]
                 logger.info("Aperture radius of {} pixels: {} of {} :".format(aperture_radius,i+1,len(p['PHOT_APERTURES'])))
@@ -2706,13 +2719,13 @@ def build_catalogs(p, data, hdr, catalogs=[], xshift=0., yshift=0., solve_astrom
                 r_ann = set_sky_aperture(p, aperture_radius)
 
                 # print("Running aperture photometry with aperture_radius={} r_ann={}".format(aperture_radius,r_ann))
-                catalogs, p = generate_catalogs(p, data, hdr, sources, fwhm, catalogs, aperture_radius=aperture_radius, r_ann=r_ann, polarimetry=polarimetry, exptime=exptime, readnoise=readnoise)
+                new_catalogs, p = generate_catalogs(p, data, hdr, sources, fwhm, new_catalogs, aperture_radius=aperture_radius, r_ann=r_ann, polarimetry=polarimetry, exptime=exptime, readnoise=readnoise)
                 
     else:
         # Here's when a catalog is provided:
         logger.info("Running aperture photometry for catalogs with an offset of dx={} dy={}".format(xshift, yshift))
         
-        ras, decs, x, y = read_catalog_coords(catalogs[0])
+        ras, decs, x, y = read_catalog_coords(deepcopy(catalogs[0]))
         pixel_coords = np.ndarray((len(x), 2))
         sky_coords = np.ndarray((len(ras), 2))
         for i in range(len(x)) :
@@ -2730,8 +2743,9 @@ def build_catalogs(p, data, hdr, catalogs=[], xshift=0., yshift=0., solve_astrom
         p['WCS_HEADER'] = p['WCS'].to_header(relax=True)
         
         for j in range(len(catalogs)):
+        
             # load coordinates from an input catalog
-            ras, decs, x, y = read_catalog_coords(catalogs[j])
+            ras, decs, x, y = read_catalog_coords(deepcopy(catalogs[j]))
 
             # apply shifts
             if np.isfinite(xshift):
@@ -2742,16 +2756,22 @@ def build_catalogs(p, data, hdr, catalogs=[], xshift=0., yshift=0., solve_astrom
             aperture_radius = catalogs[j]['0'][11]
             r_ann = set_sky_aperture(p, aperture_radius)
 
-            #print("Running aperture photometry for catalog={} xshift={} yshift={} with aperture_radius={} r_ann={}".format(j,xshift,yshift,aperture_radius,r_ann))
-
+            # reset copy of catalogs data
+            for i in range(len(catalogs[j])):
+                new_catalogs[j]["{}".format(i)] = (i, ras[i], decs[i], x[i], y[i], np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, aperture_radius, 0)
+                
+            #logger.info("Running aperture photometry for catalog={}/{} xshift={} yshift={} with aperture_radius={} r_ann={}".format(j+1,len(catalogs),xshift,yshift,aperture_radius,r_ann))
+            
             # run aperture photometry
             x, y, mag, mag_error, smag, smag_error, fwhms, flags = run_aperture_photometry(data, x, y, aperture_radius, r_ann, output_mag=True, exptime=exptime, recenter=p["RECENTER_APER_FOR_PHOTOMETRY"], readnoise=readnoise, use_astropop=p["USE_ASTROPOP_PHOTOMETRY"])
 
+            #logger.info("Photometry of source=0: x={:.2f} y={:.2f} mag={:.5f} emag={:.5f} smag={:.5f} esmag={:.5f} fwhm={:.2f} flag={}".format(x[0], y[0], mag[0], mag_error[0], smag[0], smag_error[0], fwhms[0], flags[0]))
+            
             # save data back into the catalog
             for i in range(len(mag)):
-                catalogs[j]["{}".format(i)] = (i, ras[i], decs[i], x[i], y[i], fwhms[i], fwhms[i], mag[i], mag_error[i], smag[i], smag_error[i], aperture_radius, flags[i])
+                new_catalogs[j]["{}".format(i)] = (i, ras[i], decs[i], x[i], y[i], fwhms[i], fwhms[i], mag[i], mag_error[i], smag[i], smag_error[i], aperture_radius, flags[i])
 
-    return p, catalogs
+    return p, new_catalogs
 
 
 def phot_time_series(sci_list,
@@ -2994,18 +3014,16 @@ def load_list_of_sci_image_catalogs(sci_list, wppos_key="WPPOS", polarimetry=Fal
             hdulist = fits.open(sci_list[i])
 
             wppos = int(hdulist[0].header[wppos_key])
-            waveplate_angles = np.append(
-                waveplate_angles, get_waveplate_angles(wppos-1))
+            waveplate_angles = np.append(waveplate_angles, get_waveplate_angles(wppos-1))
 
             phot1data, phot2data = [], []
 
             for ext in range(1, len(hdulist)):
                 if (ext % 2) != 0:
-                    if i == 0:
-                        apertures = np.append(
-                            apertures, hdulist[ext].data[0][11])
+                    if i == 0 :
+                        apertures = np.append(apertures, hdulist[ext].data[0][11])
                         nsources = len(hdulist[ext].data)
-
+                
                     phot1data.append(Table(hdulist[ext].data))
                     phot2data.append(Table(hdulist[ext+1].data))
                 else:
@@ -3181,12 +3199,17 @@ def get_qflux(beam, filename, aperture_index, source_index, magkey="MAG", emagke
         return flux+/-flux_err information from input catalog
     """
 
-    umag = ufloat(beam[filename][aperture_index][magkey][source_index],
-                  beam[filename][aperture_index][emagkey][source_index])
+    qflux = QFloat(np.nan, np.nan)
+    
+    try :
+        umag = ufloat(beam[filename][aperture_index][magkey][source_index],beam[filename][aperture_index][emagkey][source_index])
 
-    uflux = 10**(-0.4*umag)
+        uflux = 10**(-0.4*umag)
 
-    qflux = QFloat(uflux.nominal_value, uflux.std_dev)
+        qflux = QFloat(uflux.nominal_value, uflux.std_dev)
+
+    except Exception as e:
+        logger.warn("Could not retrieve flux data for file={} aperture_index={} source_index={} : {}".format(filename,aperture_index,source_index,e))
 
     return qflux
 
@@ -3245,24 +3268,19 @@ def get_photometric_data_for_polar_catalog(beam1, beam2, sci_list, aperture_inde
     for k in range(len(sci_list)):
 
         if k == 0:
-            ra, dec = beam1[sci_list[0]
-                            ][i]["RA"][j], beam1[sci_list[0]][i]["DEC"][j]
-            x1, y1 = beam1[sci_list[0]
-                           ][i]["X"][j], beam1[sci_list[0]][i]["Y"][j]
-            x2, y2 = beam2[sci_list[0]
-                           ][i]["X"][j], beam2[sci_list[0]][i]["Y"][j]
+            ra, dec = beam1[sci_list[0]][i]["RA"][j], beam1[sci_list[0]][i]["DEC"][j]
+            x1, y1 = beam1[sci_list[0]][i]["X"][j], beam1[sci_list[0]][i]["Y"][j]
+            x2, y2 = beam2[sci_list[0]][i]["X"][j], beam2[sci_list[0]][i]["Y"][j]
 
         flux1 += get_qflux(beam1, sci_list[k], i, j)
         flux2 += get_qflux(beam2, sci_list[k], i, j)
 
-        skyflux1 += get_qflux(beam1, sci_list[k],
-                              i, j, magkey="SKYMAG", emagkey="ESKYMAG")
-        skyflux2 += get_qflux(beam2, sci_list[k],
-                              i, j, magkey="SKYMAG", emagkey="ESKYMAG")
+        skyflux1 += get_qflux(beam1, sci_list[k],i, j, magkey="SKYMAG", emagkey="ESKYMAG")
+        skyflux2 += get_qflux(beam2, sci_list[k],i, j, magkey="SKYMAG", emagkey="ESKYMAG")
 
         flag1 += beam1[sci_list[k]][i]["FLAG"][j]
         flag2 += beam2[sci_list[k]][i]["FLAG"][j]
-
+            
         fwhms = np.append(fwhms, beam1[sci_list[k]][i]["FWHMX"][j])
         fwhms = np.append(fwhms, beam1[sci_list[k]][i]["FWHMY"][j])
         fwhms = np.append(fwhms, beam2[sci_list[k]][i]["FWHMX"][j])
@@ -3332,12 +3350,10 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
         return output_filename
 
     # get data from a list of science image products
-    beam1, beam2, waveplate_angles, apertures, nsources = load_list_of_sci_image_catalogs(
-        sci_list, wppos_key=wppos_key, polarimetry=True)
+    beam1, beam2, waveplate_angles, apertures, nsources = load_list_of_sci_image_catalogs(sci_list, wppos_key=wppos_key, polarimetry=True)
 
     logger.info("Number of sources in catalog: {}".format(nsources))
-    logger.info("Number of apertures: {}  varying from {} to {} in steps of {} pix".format(len(
-        apertures), apertures[0], apertures[-1], np.abs(np.nanmedian(apertures[1:]-apertures[:-1]))))
+    logger.info("Number of apertures: {}  varying from {} to {} in steps of {} pix".format(len(apertures), apertures[0], apertures[-1], np.abs(np.nanmedian(apertures[1:]-apertures[:-1]))))
 
     # set number of free parameters equals 2: u and q
     number_of_free_params = 2
@@ -3357,8 +3373,7 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
         number_of_free_params += 1
 
     # initialize astropop SLSDualBeamPolarimetry object
-    pol = SLSDualBeamPolarimetry(
-        wave_plate, compute_k=compute_k, zero=zero, iter_tolerance=1e-6)
+    pol = SLSDualBeamPolarimetry(wave_plate, compute_k=compute_k, zero=zero, iter_tolerance=1e-6)
 
     # create an empty dict to store polar catalogs
     polar_catalogs = {}
@@ -3397,8 +3412,7 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
         for j in range(nsources):
 
             # retrieve photometric information in a pair of polar catalog
-            ra, dec, x1, y1, x2, y2, mag, mag_err, fwhm, skymag, skymag_err, photflag = get_photometric_data_for_polar_catalog(
-                beam1, beam2, sci_list, aperture_index=i, source_index=j)
+            ra, dec, x1, y1, x2, y2, mag, mag_err, fwhm, skymag, skymag_err, photflag = get_photometric_data_for_polar_catalog(beam1, beam2, sci_list, aperture_index=i, source_index=j)
 
             n_fo, n_fe = [], []
             en_fo, en_fe = [], []
@@ -3438,39 +3452,47 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
             ptot, ptot_err = np.nan, np.nan
             theta, theta_err = np.nan, np.nan
             k_factor, k_factor_err = np.nan, np.nan
-            zero_err = np.nan
+            zero, zero_err = np.nan, np.nan
 
             observed_model = np.full_like(waveplate_angles[keep], np.nan)
 
             try:
                 # compute polarimetry
-                norm = pol.compute(
-                    waveplate_angles[keep], n_fo[keep], n_fe[keep], f_ord_error=en_fo[keep], f_ext_error=en_fe[keep])
+                norm = pol.compute(waveplate_angles[keep], n_fo[keep], n_fe[keep], f_ord_error=en_fo[keep], f_ext_error=en_fe[keep])
 
                 if wave_plate == 'halfwave':
-                    observed_model = halfwave_model(
-                        waveplate_angles[keep], norm.q.nominal, norm.u.nominal)
+                    observed_model = halfwave_model(waveplate_angles[keep], norm.q.nominal, norm.u.nominal)
 
                 elif wave_plate == 'quarterwave':
-                    observed_model = quarterwave_model(
-                        waveplate_angles[keep], norm.q.nominal, norm.u.nominal, norm.v.nominal, zero=norm.zero.nominal)
+                    observed_model = quarterwave_model(waveplate_angles[keep], norm.q.nominal, norm.u.nominal, norm.v.nominal, zero=norm.zero.nominal)
 
                 zi[keep] = norm.zi.nominal
                 zi_err[keep] = norm.zi.std_dev
 
-                chi2 = np.nansum(((norm.zi.nominal - observed_model)/norm.zi.std_dev)
-                                 ** 2) / (number_of_observations - number_of_free_params)
+                chi2 = np.nansum(((norm.zi.nominal - observed_model)/norm.zi.std_dev)** 2) / (number_of_observations - number_of_free_params)
 
                 polar_flag = 0
 
-                qpol, q_err = norm.q.nominal, norm.q.std_dev
-                upol, u_err = norm.u.nominal, norm.u.std_dev
-                if wave_plate == 'quarterwave':
+                if type(norm.q.nominal) is float :
+                    qpol, q_err = norm.q.nominal, norm.q.std_dev
+                    
+                if type(norm.u.nominal) is float :
+                    upol, u_err = norm.u.nominal, norm.u.std_dev
+                    
+                if wave_plate == 'quarterwave' and type(norm.v.nominal) is float:
                     vpol, v_err = norm.v.nominal, norm.v.std_dev
-                ptot, ptot_err = norm.p.nominal, norm.p.std_dev
-                theta, theta_err = norm.theta.nominal, norm.theta.std_dev
-                k_factor = norm.k
-                zero, zero_err = norm.zero.nominal, norm.zero.std_dev
+                    
+                if type(norm.p.nominal) is float :
+                    ptot, ptot_err = norm.p.nominal, norm.p.std_dev
+                
+                if type(norm.theta.nominal) is float :
+                    theta, theta_err = norm.theta.nominal, norm.theta.std_dev
+
+                if type(norm.k) is float :
+                    k_factor = norm.k
+                    
+                if type(norm.zero.nominal) is float :
+                    zero, zero_err = norm.zero.nominal, norm.zero.std_dev
 
             except Exception as e:
                 logger.warn("Could not calculate polarimetry for source_index={} and aperture={} pixels: {}".format(j, apertures[i],e))
@@ -3488,7 +3510,7 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
                           zero, zero_err,
                           number_of_observations, number_of_free_params,
                           chi2, polar_flag]
-
+            
             for ii in range(len(n_fo)):
                 var_values.append(n_fo[ii])
                 var_values.append(en_fo[ii])
@@ -3496,8 +3518,7 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
                 var_values.append(en_fe[ii])
 
             for ii in range(len(variables)):
-                polar_catalogs[aperture_keys[i]][variables[ii]] = np.append(
-                    polar_catalogs[aperture_keys[i]][variables[ii]], var_values[ii])
+                polar_catalogs[aperture_keys[i]][variables[ii]] = np.append(polar_catalogs[aperture_keys[i]][variables[ii]], var_values[ii])
 
     if save_output:
         info = {}

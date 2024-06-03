@@ -267,7 +267,12 @@ def identify_files(p, night, print_report=True):
         objsInPolarL4data.append({})
 
         for i in range(len(inputdata[j])):
-            header = fits.getheader(inputdata[j][i])
+            try :
+                header = fits.getheader(inputdata[j][i])
+            except :
+                print("WARNING: could not open header. Skipping image: {} ".format(inputdata[j][i]))
+                continue
+                
             if header["OBSTYPE"] == p['OBJECT_OBSTYPE_KEYVALUE']:
                 if "INSTMODE" in header.keys():
                     # print(j,i,inputdata[j][i]," has INSTMODE")
