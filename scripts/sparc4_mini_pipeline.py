@@ -90,13 +90,18 @@ for channel in p['SELECTED_CHANNELS']:
         # log messages:
         logger.info("Creating new database file: {}".format(p['s4db_files'][j]))
         
-        db = s4db.create_db_from_observations(p['filelists'][j], p['DB_KEYS'], include_img_statistics=p['INCLUDE_IMG_STATISTICS'],include_only_fullframe=p['FULL_FRAMES_ONLY'], valid_obstype_keys=p['OBSTYPE_VALID_KEYVALUES'], output=p['s4db_files'][j])
+        db = s4db.create_db_from_observations(p['filelists'][j], p['DB_KEYS'], include_img_statistics=p['INCLUDE_IMG_STATISTICS'],include_only_fullframe=p['FULL_FRAMES_ONLY'], valid_obstype_keys=p['OBSTYPE_VALID_KEYVALUES'], mandatory_keys=p['MANDATORY_KEYWORDS'], output=p['s4db_files'][j])
     else:
         # log messages:
         logger.info("Loading database from existing file: {}".format(p['s4db_files'][j]))
         
         db = s4db.create_db_from_file(p['s4db_files'][j])
-
+    
+    if db is None :
+        # log messages:
+        logger.warn("No files detected for reduction of channel {}, skipping channel.".format(channel))
+        continue
+        
     # Create target list file name for a given night and channel
     p["TARGET_LIST_FILE"] = os.path.join(reduce_dir,"{}_sparc4acs{}_target_list.csv".format(options.nightdir, p['CHANNELS'][j]))
 
@@ -164,15 +169,15 @@ for channel in p['SELECTED_CHANNELS']:
             # log messages:
             logger.warn("Could not reduce {}-{} mode, detector mode {} : {}".format(p_polarl2['INSTMODE_POLARIMETRY_KEYVALUE'], p_polarl2['POLARIMETRY_L2_KEYVALUE'], key, e))
         
-        try:
-            # log messages:
-            logger.info("Start reduction of science data in {} {} mode".format(p_polarl4['INSTMODE_POLARIMETRY_KEYVALUE'], p_polarl4['POLARIMETRY_L4_KEYVALUE']))
+        #try:
+        # log messages:
+        #    logger.info("Start reduction of science data in {} {} mode".format(p_polarl4['INSTMODE_POLARIMETRY_KEYVALUE'], p_polarl4['POLARIMETRY_L4_KEYVALUE']))
 
-            # reduce science data in  polarimetric L4 mode
-            p_polarl4 = s4pipelib.reduce_sci_data(db, p_polarl4, j, p_polarl4['INSTMODE_POLARIMETRY_KEYVALUE'], detector_modes[key], options.nightdir, reduce_dir, polar_mode=p_polarl4['POLARIMETRY_L4_KEYVALUE'], fit_zero=p['FIT_ZERO_OF_WPPOS_IN_L4'], detector_mode_key=key, calw_modes=p_polarl4['CALW_MODES'], match_frames=p['MATCH_FRAMES'], force=options.force, plot_stack=options.plot, plot_lc=options.plot, plot_polar=p_polarl4["PLOT_POLARIMETRY_FIT"])
-        except Exception as e:
-            # log messages:
-            logger.warn("Could not reduce {}-{} mode, detector mode {} : {}".format(p_polarl4['INSTMODE_POLARIMETRY_KEYVALUE'], p_polarl4['POLARIMETRY_L4_KEYVALUE'], key, e))
+        # reduce science data in  polarimetric L4 mode
+        p_polarl4 = s4pipelib.reduce_sci_data(db, p_polarl4, j, p_polarl4['INSTMODE_POLARIMETRY_KEYVALUE'], detector_modes[key], options.nightdir, reduce_dir, polar_mode=p_polarl4['POLARIMETRY_L4_KEYVALUE'], fit_zero=p['FIT_ZERO_OF_WPPOS_IN_L4'], detector_mode_key=key, calw_modes=p_polarl4['CALW_MODES'], match_frames=p['MATCH_FRAMES'], force=options.force, plot_stack=options.plot, plot_lc=options.plot, plot_polar=p_polarl4["PLOT_POLARIMETRY_FIT"])
+        #except Exception as e:
+        # log messages:
+        #    logger.warn("Could not reduce {}-{} mode, detector mode {} : {}".format(p_polarl4['INSTMODE_POLARIMETRY_KEYVALUE'], p_polarl4['POLARIMETRY_L4_KEYVALUE'], key, e))
         
         # log messages:
         logger.info("Finished reducing channel {} detector mode {} ".format(channel,key))
