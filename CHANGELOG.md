@@ -37,3 +37,14 @@ Version 1.2 (2024-04-25)
 - Updated GitHub front page
 - Option "NIGTHS_INSIDE_CHANNELS_DIR" is now separated for raw and reduced data
 - Fixed bug to adapt pipeline to a change in the CALW key value from OFF->None
+
+
+Version 1.3 (2024-06-03)
+------------------------
+- Bug fixes
+- fixed index in Simbad results for target list
+- Cast WPPOS value (int) into string to mask table for flat per waveplate position
+- Initializing zero=None and loading this initial value that was not recognized because it was not a float
+- Crash on image proc missing catalog. The bug was resolved by removing the reference catalog that was created with a different name when there were duplicate entries. Some other bugs were fixed in creating and reading catalogs.
+- Fixed bug that was generating an error when there were no images to be reduced
+- Divided flux by exptime in new photometry
