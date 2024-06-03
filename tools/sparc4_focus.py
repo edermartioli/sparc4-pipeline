@@ -225,6 +225,7 @@ for channel in p['SELECTED_CHANNELS']:
     print("******************************")
 
     data_dir = p['data_directories'][j]
+    reduce_dir = p['reduce_directories'][j]
 
     pattern = "{}/*_{}.fits".format(data_dir,options.seq_suffix)
     
