@@ -1428,7 +1428,7 @@ def reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", match_fr
                     processing.subtract_bias(frame, bias, inplace=True)
                 if p["APPLY_FLATFIELD_CORRECTION"] :
                     if p["APPLY_FLAT_PER_WPPOS"] and polarimetry :
-                        wppos = frames[i].header['WPPOS']
+                        wppos = int(frames[i].header['WPPOS'])
                         master_flat = p["wppos{:02d}_master_flat".format(wppos)]
                         if os.path.exists(master_flat) :
                             info['FLATFILE'] = (master_flat, 'flat file name')
