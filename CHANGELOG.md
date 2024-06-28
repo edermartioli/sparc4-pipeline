@@ -48,3 +48,4 @@ Version 1.3 (2024-06-03)
 - Crash on image proc missing catalog. The bug was resolved by removing the reference catalog that was created with a different name when there were duplicate entries. Some other bugs were fixed in creating and reading catalogs.
 - Fixed bug that was generating an error when there were no images to be reduced
 - Divided flux by exptime in new photometry
+- Included new method "BY_SIMILARITY" to match frames for stack 
