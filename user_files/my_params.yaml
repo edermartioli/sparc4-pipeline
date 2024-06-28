@@ -143,7 +143,7 @@ UPSAMPLEFACTOR: 4
 MATCH_FRAMES: True
 
 # method to select files for stack
-METHOD_TO_SELECT_FILES_FOR_STACK: 'FIRST_FRAMES' # 'MAX_FLUXES' or 'FIRST_FRAMES'
+METHOD_TO_SELECT_FILES_FOR_STACK: 'BY_SIMILARITY' # 'MAX_FLUXES', 'FIRST_FRAMES', or 'BY_SIMILARITY'
 
 # select stack method
 SCI_STACK_METHOD: 'median'
@@ -154,7 +154,7 @@ SCI_STACK_SIGMA_CLIP: 10
 NFILES_FOR_STACK: 30
 # define saturation limit in ADU to avoid using saturated images in the stack
 #SATURATION_LIMIT: 32000
-SATURATION_LIMIT: 100000
+SATURATION_LIMIT: 64000
 #-------------------------------------
 
 #### PHOTOMETRY ####
@@ -188,7 +188,7 @@ PHOT_MIN_OFFSET_FOR_SKYOUTERRADIUS: 10
 PHOT_APERTURES: [5,8,10,12,15,20,25]
 
 # Threshold in number of sigmas to detect sources, where sigma = background error
-PHOT_THRESHOLD: 30
+PHOT_THRESHOLD: 100
 #-------------------------------------
 
 #### POLARIMETRY ####
