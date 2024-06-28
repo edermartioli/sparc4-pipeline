@@ -7,7 +7,7 @@
 
     Laboratório Nacional de Astrofísica - LNA/MCTI
 
-    Simple usage example:
+    Simple usage examples:
 
     python -W"ignore" /Volumes/Samsung_T5/sparc4-pipeline/scripts/opd_mini_pipeline.py --bias=/Volumes/Samsung_T5/Data/OPD/WASP-132/raw/*ZERO.fits --flat=/Volumes/Samsung_T5/Data/OPD/WASP-132/raw/*FLAT.fits --science=/Volumes/Samsung_T5/Data/OPD/WASP-132/raw/*WASP-132.fits --reducedir=/Volumes/Samsung_T5/Data/OPD/WASP-132/reduced/ --time_key="DATE" --object="WASP-132" -pv
 
@@ -16,6 +16,8 @@
     python -W"ignore" /Volumes/Samsung_T5/sparc4-pipeline/scripts/opd_mini_pipeline.py --bias=/Volumes/Samsung_T5/Data/OPD/WASP-108/bias*.fits --flat=/Volumes/Samsung_T5/Data/OPD/WASP-108/flat*.fits --science=/Volumes/Samsung_T5/Data/OPD/WASP-108/wasp108b*.fits --reducedir=/Volumes/Samsung_T5/Data/OPD/WASP-108/reduced/ --time_key="DATE-OBS" --object="WASP-108" -vp
     
     python -W"ignore" scripts/opd_mini_pipeline.py --bias=/Users/eder/Data/OPD/WASP-108/raw/bias*.fits --flat=/Users/eder/Data/OPD/WASP-108/raw/flat*.fits --science=/Users/eder/Data/OPD/WASP-108/raw/wasp108*.fits --reducedir=/Users/eder/Data/OPD/WASP-108/reduced/ --time_key="DATE-OBS" --object="WASP-108" -vp
+    
+    python -W"ignore" scripts/opd_mini_pipeline.py --bias=/Users/eder/Data/OPD/HATS-29/raw/bias*.fits --flat=/Users/eder/Data/OPD/HATS-29/raw/flat*.fits --science=/Users/eder/Data/OPD/HATS-29/raw/hats29*.fits --reducedir=/Users/eder/Data/OPD/HATS-29/reduced/ --time_key="DATE-OBS" --object="HATS-29" -vp
     """
 
 import glob
@@ -37,6 +39,7 @@ parser.add_option("-o", "--object", dest="object", help="object id", type='strin
 parser.add_option("-t", "--time_key", dest="time_key", help="time keyword", type='string', default="DATE-OBS")
 parser.add_option("-a", "--ra", dest="ra", help="RA", type='string', default="")
 parser.add_option("-d", "--dec", dest="dec", help="Dec", type='string', default="")
+parser.add_option("-m", "--params", dest="params",help="Input parameters yaml file",type='string',default="")
 parser.add_option("-f", action="store_true", dest="force", help="Force reduction", default=False)
 parser.add_option("-p", action="store_true", dest="plot", help="plot", default=False)
 parser.add_option("-v", action="store_true", dest="verbose", help="verbose", default=False)
@@ -68,7 +71,7 @@ p = s4pipelib.run_master_calibration(p,
                                      obstype='bias',
                                      reduce_dir=options.reducedir,
                                      force=options.force)
-
+                            
 if options.plot:
     # plot master bias
     s4plt.plot_cal_frame(p["master_bias"], percentile=99.5, combine_rows=True, combine_cols=True)
@@ -120,7 +123,6 @@ p = s4pipelib.stack_and_reduce_sci_images(p,
                                           force=options.force,
                                           match_frames=True,
                                           polarimetry=False,
-                                          verbose=options.verbose,
                                           plot=options.plot)
 
 ts_suffix = "{}".format(object_id.replace(" ", ""))
@@ -145,8 +147,8 @@ target = p['TARGET_INDEX']
 comps = p['COMPARISONS']
 
 # Uncomment below to override deafult target/comparison definitions
-#target = 0
-#comps = [1, 2, 3]
+target = 5
+comps = [2, 3, 4, 6, 7]
 
 s4plt.plot_light_curve(phot_ts_product,
                        target=target,
