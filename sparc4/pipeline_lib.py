@@ -56,6 +56,7 @@ from astropy.wcs.utils import fit_wcs_from_points
 from astropop.catalogs import gaia
 from astroquery.vizier import Vizier
 from astroquery.gaia import Gaia
+from scipy import stats
 
 import yaml
 
@@ -1685,6 +1686,109 @@ def select_files_for_stack(p, inputlist, saturation_limit=32768, imagehdu=0):
         sort = np.flip(np.argsort(peaks))
         
         p['REF_IMAGE_INDEX'] = ref_img_idx
+   
+    elif p['METHOD_TO_SELECT_FILES_FOR_STACK'] == 'BY_SIMILARITY' :
+    
+        # define max number of sources to include in the similarity calculation
+        max_n_sources = 8
+        skip_n_brightest = 3
+    
+        meanflux = np.array([])
+        #bkgs, rmss, nsources = np.array([]), np.array([]), np.array([])
+        xs,ys,fs = [], [], []
+        
+        for j in range(max_n_sources) :
+            xs.append(np.array([]))
+            ys.append(np.array([]))
+            fs.append(np.array([]))
+
+        for i in range(len(inputlist)):
+            img = fits.getdata(inputlist[i], imagehdu)
+            
+            # calculate background
+            bkg, rms = background(img, global_bkg=False)
+            
+            # calculate global background value
+            #mbkg = np.nanmedian(bkg)
+
+            # remove background
+            red_img = img - bkg
+            
+            # detect sources
+            sources = starfind(red_img, threshold=100, background=0., noise=rms)
+            
+            # sort fluxes
+            sortfluxmask = np.flip(np.argsort(sources['flux']))
+
+            # reset max_n_sources to avoid iteration over index limit
+            if len(sources) < max_n_sources :
+                max_n_sources = len(sources)
+
+            # select brightest sources
+            selected_sources = sources[sortfluxmask][:max_n_sources]
+
+            # append elements to vector
+            #bkgs = np.append(bkgs, mbkg)
+            #rmss = np.append(rmss, rms)
+            meanflux = np.append(meanflux, np.nanmean(selected_sources['flux']))
+            #nsources = np.append(nsources, len(sources))
+
+            for j in range(max_n_sources) :
+                if j < len(sources) :
+                    xs[j] = np.append(xs[j],selected_sources['x'][j])
+                    ys[j] = np.append(ys[j],selected_sources['y'][j])
+                    fs[j] = np.append(fs[j],selected_sources['flux'][j])
+                else :
+                    xs[j] = np.append(xs[j],0.)
+                    ys[j] = np.append(ys[j],0.)
+                    fs[j] = np.append(fs[j],0.)
+                
+            print("Checking image {} of {}: {} -> nsources: {}  bkg: {} ".format(i+1,len(inputlist),os.path.basename(inputlist[i]),len(sources),np.mean(bkg)))
+            
+        #global_median_bkg = np.nanmedian(bkgs)
+        #global_median_rms = np.nanmedian(rmss)
+        global_median_flux = np.nanmedian(meanflux)
+        global_mad_flux =  stats.median_abs_deviation(meanflux - global_median_flux, scale="normal")
+        #global_median_nsrc = np.nanmedian(nsources)
+        global_median_x, global_median_y, global_median_f = [], [], []
+        global_std_x, global_std_y, global_std_f = [], [], []
+
+        for j in range(max_n_sources) :
+            global_median_x.append(np.nanmedian(xs[j]))
+            global_median_y.append(np.nanmedian(ys[j]))
+            global_median_f.append(np.nanmedian(fs[j]))
+            
+            mad_x, mad_y, mad_f = 0. ,0., 0.
+            if global_median_x[j] != 0 and global_median_y[j] != 0 and global_median_f[j] != 0:
+                mad_x = stats.median_abs_deviation(xs[j]-global_median_x[j], scale="normal")
+                mad_y = stats.median_abs_deviation(ys[j]-global_median_y[j], scale="normal")
+                mad_f = stats.median_abs_deviation(fs[j]-global_median_f[j], scale="normal")
+                                
+            global_std_x.append(mad_x)
+            global_std_y.append(mad_y)
+            global_std_f.append(mad_f)
+                
+        simi_fac = np.array([])
+        
+        for i in range(len(inputlist)):
+            sf = 0
+            
+            #sf += ((bkgs[i] - global_median_bkg)/global_median_rms)**2
+            sf += ((meanflux[i] - global_median_flux)/global_mad_flux)**2
+            for j in range(skip_n_brightest,max_n_sources) :
+                if xs[j][i] != 0 and ys[j][i] != 0 and fs[j][i] != 0 :
+                    sf += ((xs[j][i] - global_median_x[j])/global_std_x[j])**2
+                    sf += ((ys[j][i] - global_median_y[j])/global_std_y[j])**2
+                    sf += ((fs[j][i] - global_median_f[j])/global_std_f[j])**2
+            sf = np.sqrt(sf)
+            
+            if np.isfinite(sf) :
+                simi_fac = np.append(simi_fac,sf)
+            else :
+                simi_fac = np.append(simi_fac,1e30)
+
+        sort = np.argsort(simi_fac)
+        p['REF_IMAGE_INDEX'] = 0
         
     else :
         logger.error("Sort_method = {} not recognized, select a valid method.".format(p['METHOD_TO_SELECT_FILES_FOR_STACK']))
@@ -2226,10 +2330,12 @@ def set_wcs_from_astrom_ref_image(ref_filename, header):
     wcs_hdr['DATE-OBS'] = header["DATE-OBS"]
     
     # deleted wcs header keywords from ref image
-    del wcs_hdr['MJD-OBS']
-    del wcs_hdr['LONPOLE']
-    del wcs_hdr['LATPOLE']
-      
+    if 'MJD-OBS' in wcs_hdr :
+        del wcs_hdr['MJD-OBS']
+    if 'LONPOLE' in wcs_hdr :
+        del wcs_hdr['LONPOLE']
+    if 'LATPOLE' in wcs_hdr :
+        del wcs_hdr['LATPOLE']
     # update wcs object
     w = WCS(wcs_hdr,naxis=2)
 
@@ -3386,8 +3492,8 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
                  'Q', 'EQ', 'U', 'EU', 'V', 'EV',
                  'P', 'EP', 'THETA', 'ETHETA',
                  'K', 'EK', 'ZERO', 'EZERO', 'NOBS', 'NPAR',
-                 'CHI2', 'POLARFLAG']
-
+                 'CHI2', 'RMS', 'TSIGMA', 'POLARFLAG']
+                 
     for i in range(len(sci_list)):
         variables.append('FO{:04d}'.format(i))
         variables.append('EFO{:04d}'.format(i))
@@ -3453,7 +3559,8 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
             theta, theta_err = np.nan, np.nan
             k_factor, k_factor_err = np.nan, np.nan
             zero, zero_err = np.nan, np.nan
-
+            z_rms, theor_sigma = np.nan, np.nan
+            
             observed_model = np.full_like(waveplate_angles[keep], np.nan)
 
             try:
@@ -3493,6 +3600,12 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
                     
                 if type(norm.zero.nominal) is float :
                     zero, zero_err = norm.zero.nominal, norm.zero.std_dev
+       
+                if type(norm.rms) is float :
+                    z_rms = norm.rms
+                    
+                if type(norm.theor_sigma) is float :
+                    theor_sigma = norm.theor_sigma
 
             except Exception as e:
                 logger.warn("Could not calculate polarimetry for source_index={} and aperture={} pixels: {}".format(j, apertures[i],e))
@@ -3509,7 +3622,7 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
                           k_factor, k_factor_err,
                           zero, zero_err,
                           number_of_observations, number_of_free_params,
-                          chi2, polar_flag]
+                          chi2, z_rms, theor_sigma, polar_flag]
             
             for ii in range(len(n_fo)):
                 var_values.append(n_fo[ii])
@@ -3689,6 +3802,8 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
     n, m = 0, 0
     sig_res = np.nan
     chi2 = np.nan
+    rms = np.nan
+    theor_sigma = np.nan
     observed_model = zi
         
     if len(fos[keep]) == 0 :
@@ -3702,6 +3817,7 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
         theta = QFloat(tbl['THETA'][0], tbl['ETHETA'][0])
         kcte = QFloat(tbl['K'][0], tbl['EK'][0])
         zero = QFloat(tbl['ZERO'][0], tbl['EZERO'][0])
+        rms, theor_sigma = tbl['RMS'][0], tbl['TSIGMA'][0]
         n, m = tbl['NOBS'][0], tbl['NPAR'][0]
 
         # cast zi data into QFloat
@@ -3734,6 +3850,7 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
             resids = zi.nominal - observed_model
             sig_res = np.nanstd(resids)
             chi2 = np.nansum((resids/zi.std_dev)**2) / (n - m)
+            theor_sigma = norm.theor_sigma
             
         except Exception as e :
             logger.warn("Could not compute polarimetry: {}".format(e))
@@ -3770,6 +3887,7 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
     loc["ZERO"] = zero
     loc["CHI2"] = chi2
     loc["RMS"] = sig_res
+    loc["TSIGMA"] = theor_sigma
     loc["NOBS"] = n
     loc["NPAR"] = m
 
@@ -4119,6 +4237,8 @@ def polar_time_series(sci_pol_list,
     tsdata['NOBS'] = np.array([])
     tsdata['NPAR'] = np.array([])
     tsdata['CHI2'] = np.array([])
+    tsdata['RMS'] = np.array([])
+    tsdata['TSIGMA'] = np.array([])
 
     ti, tf = 0, 0
 
@@ -4177,6 +4297,8 @@ def polar_time_series(sci_pol_list,
             tsdata['NOBS'] = np.append(tsdata['NOBS'], polar['NOBS'])
             tsdata['NPAR'] = np.append(tsdata['NPAR'], polar['NPAR'])
             tsdata['CHI2'] = np.append(tsdata['CHI2'], polar['CHI2'])
+            tsdata['RMS'] = np.append(tsdata['RMS'], polar['RMS'])
+            tsdata['TSIGMA'] = np.append(tsdata['TSIGMA'], polar['TSIGMA'])
 
         hdul.close()
         del hdul
