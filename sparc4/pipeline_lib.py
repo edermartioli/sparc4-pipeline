@@ -1584,7 +1584,7 @@ def stack_science_images(p, inputlist, reduce_dir="./", force=False, stack_suffi
     p['REF_OBJECT_HEADER'] = fits.getheader(p['REFERENCE_IMAGE'])
 
     # first select best files for stack
-    p = select_files_for_stack(p, inputlist, saturation_limit=p['SATURATION_LIMIT'], imagehdu=0)
+    p = select_files_for_stack(p, inputlist, saturation_limit=p['SATURATION_LIMIT'], imagehdu=0, max_number_of_files=p['SIMIL_MAX_NFILES'], max_n_sources=p['SIMIL_MAX_NSOURCES'], skip_n_brightest=p['SIMIL_SKIP_N_BRIGHTEST'])
 
     # select FITS files in the minidata directory and build database
     obj_fg = FitsFileGroup(files=p['SELECTED_FILES_FOR_STACK'])
@@ -1644,7 +1644,7 @@ def stack_science_images(p, inputlist, reduce_dir="./", force=False, stack_suffi
     return p
 
 
-def select_files_for_stack(p, inputlist, saturation_limit=32768, imagehdu=0):
+def select_files_for_stack(p, inputlist, saturation_limit=32768, imagehdu=0, max_number_of_files = 100, max_n_sources = 8, skip_n_brightest = 3, src_detect_threshold=100):
     """ Pipeline module to select a sub-set of frames for stack
 
     Parameters
@@ -1657,6 +1657,14 @@ def select_files_for_stack(p, inputlist, saturation_limit=32768, imagehdu=0):
         saturation flux limit, images with any max value above or equal this value will be ignored
     imagehdu : int or string, optional
         HDU index/name containing the image data
+    max_number_of_files : int, optional
+        maximum number of files to compare similarity and select for stack
+    max_n_sources : int, optional
+        maximum number of sources to compare similarity
+    skip_n_brightest : int, optional
+        number of brigthest objects to skip for similarity calculations
+    src_detect_threshold : int, optional
+        number of sigmas threshold to detect sources for similarity calculations
 
     Returns
     -------
@@ -1689,34 +1697,49 @@ def select_files_for_stack(p, inputlist, saturation_limit=32768, imagehdu=0):
    
     elif p['METHOD_TO_SELECT_FILES_FOR_STACK'] == 'BY_SIMILARITY' :
     
-        # define max number of sources to include in the similarity calculation
-        max_n_sources = 8
-        skip_n_brightest = 3
-    
-        meanflux = np.array([])
+        nfiles = len(inputlist)
+
+        meanflux = np.full(nfiles, np.nan)
+        
         #bkgs, rmss, nsources = np.array([]), np.array([]), np.array([])
         xs,ys,fs = [], [], []
         
         for j in range(max_n_sources) :
-            xs.append(np.array([]))
-            ys.append(np.array([]))
-            fs.append(np.array([]))
+            xs.append(np.full_like(meanflux,np.nan))
+            ys.append(np.full_like(meanflux,np.nan))
+            fs.append(np.full_like(meanflux,np.nan))
+        
+        idx = np.arange(nfiles)
+        np.random.shuffle(idx)
 
-        for i in range(len(inputlist)):
-            img = fits.getdata(inputlist[i], imagehdu)
+        if len(inputlist) < max_number_of_files :
+            max_number_of_files = len(inputlist)
+
+        for i in range(max_number_of_files):
+        
+            # read image data
+            img = fits.getdata(inputlist[idx[i]], imagehdu)
             
             # calculate background
             bkg, rms = background(img, global_bkg=False)
+            mbkg = np.median(bkg)
             
-            # calculate global background value
-            #mbkg = np.nanmedian(bkg)
-
             # remove background
             red_img = img - bkg
             
-            # detect sources
-            sources = starfind(red_img, threshold=100, background=0., noise=rms)
-            
+            nsources = 0
+            keep = red_img > 10 * rms
+            if len(red_img[keep]) < 100 :
+                logger.info("STACK: skipping image {} of {}: i={} {} -> NSOURCES: {}  bkg: {} meanflux: {} ".format(i+1,max_number_of_files,idx[i],os.path.basename(inputlist[idx[i]]), 0, mbkg, 0))
+                continue
+            try :
+                # detect sources
+                sources = starfind(red_img, threshold=src_detect_threshold, background=0., noise=rms)
+                nsources = len(sources)
+            except :
+                logger.info("STACK: skipping image {} of {}: i={} {} -> NSOURCES: {}  bkg: {} meanflux: {} ".format(i+1,max_number_of_files,idx[i],os.path.basename(inputlist[idx[i]]), 0, mbkg, 0))
+                continue
+                
             # sort fluxes
             sortfluxmask = np.flip(np.argsort(sources['flux']))
 
@@ -1728,28 +1751,18 @@ def select_files_for_stack(p, inputlist, saturation_limit=32768, imagehdu=0):
             selected_sources = sources[sortfluxmask][:max_n_sources]
 
             # append elements to vector
-            #bkgs = np.append(bkgs, mbkg)
-            #rmss = np.append(rmss, rms)
-            meanflux = np.append(meanflux, np.nanmean(selected_sources['flux']))
-            #nsources = np.append(nsources, len(sources))
+            meanflux[idx[i]] = np.nanmean(selected_sources['flux'])
 
             for j in range(max_n_sources) :
                 if j < len(sources) :
-                    xs[j] = np.append(xs[j],selected_sources['x'][j])
-                    ys[j] = np.append(ys[j],selected_sources['y'][j])
-                    fs[j] = np.append(fs[j],selected_sources['flux'][j])
-                else :
-                    xs[j] = np.append(xs[j],0.)
-                    ys[j] = np.append(ys[j],0.)
-                    fs[j] = np.append(fs[j],0.)
+                    xs[j][idx[i]] = selected_sources['x'][j]
+                    ys[j][idx[i]] = selected_sources['y'][j]
+                    fs[j][idx[i]] = selected_sources['flux'][j]
                 
-            print("Checking image {} of {}: {} -> nsources: {}  bkg: {} ".format(i+1,len(inputlist),os.path.basename(inputlist[i]),len(sources),np.mean(bkg)))
-            
-        #global_median_bkg = np.nanmedian(bkgs)
-        #global_median_rms = np.nanmedian(rmss)
+            logger.info("STACK: checking image {} of {}: i={} {} -> NSOURCES: {}  bkg: {} meanflux: {} ".format(i+1,max_number_of_files,idx[i],os.path.basename(inputlist[idx[i]]),len(sources), mbkg, meanflux[idx[i]]))
+
         global_median_flux = np.nanmedian(meanflux)
         global_mad_flux =  stats.median_abs_deviation(meanflux - global_median_flux, scale="normal")
-        #global_median_nsrc = np.nanmedian(nsources)
         global_median_x, global_median_y, global_median_f = [], [], []
         global_std_x, global_std_y, global_std_f = [], [], []
 
@@ -1758,34 +1771,32 @@ def select_files_for_stack(p, inputlist, saturation_limit=32768, imagehdu=0):
             global_median_y.append(np.nanmedian(ys[j]))
             global_median_f.append(np.nanmedian(fs[j]))
             
-            mad_x, mad_y, mad_f = 0. ,0., 0.
+            mad_x, mad_y, mad_f = np.nan , np.nan, np.nan
             if global_median_x[j] != 0 and global_median_y[j] != 0 and global_median_f[j] != 0:
-                mad_x = stats.median_abs_deviation(xs[j]-global_median_x[j], scale="normal")
-                mad_y = stats.median_abs_deviation(ys[j]-global_median_y[j], scale="normal")
-                mad_f = stats.median_abs_deviation(fs[j]-global_median_f[j], scale="normal")
+                mask = (np.isfinite(xs[j])) & (np.isfinite(ys[j])) & (np.isfinite(fs[j]))
+                mad_x = stats.median_abs_deviation(xs[j][mask]-global_median_x[j], scale="normal")
+                mad_y = stats.median_abs_deviation(ys[j][mask]-global_median_y[j], scale="normal")
+                mad_f = stats.median_abs_deviation(fs[j][mask]-global_median_f[j], scale="normal")
                                 
             global_std_x.append(mad_x)
             global_std_y.append(mad_y)
             global_std_f.append(mad_f)
                 
-        simi_fac = np.array([])
+        simi_fac = np.full_like(meanflux,np.nan)
         
-        for i in range(len(inputlist)):
+        for i in range(max_number_of_files) :
             sf = 0
             
             #sf += ((bkgs[i] - global_median_bkg)/global_median_rms)**2
-            sf += ((meanflux[i] - global_median_flux)/global_mad_flux)**2
+            sf += ((meanflux[idx[i]] - global_median_flux)/global_mad_flux)**2
             for j in range(skip_n_brightest,max_n_sources) :
-                if xs[j][i] != 0 and ys[j][i] != 0 and fs[j][i] != 0 :
-                    sf += ((xs[j][i] - global_median_x[j])/global_std_x[j])**2
-                    sf += ((ys[j][i] - global_median_y[j])/global_std_y[j])**2
-                    sf += ((fs[j][i] - global_median_f[j])/global_std_f[j])**2
+                if np.isfinite(xs[j][idx[i]]) and np.isfinite(ys[j][idx[i]]) and np.isfinite(fs[j][idx[i]]) :
+                    sf += ((xs[j][idx[i]] - global_median_x[j])/global_std_x[j])**2
+                    sf += ((ys[j][idx[i]] - global_median_y[j])/global_std_y[j])**2
+                    sf += ((fs[j][idx[i]] - global_median_f[j])/global_std_f[j])**2
             sf = np.sqrt(sf)
             
-            if np.isfinite(sf) :
-                simi_fac = np.append(simi_fac,sf)
-            else :
-                simi_fac = np.append(simi_fac,1e30)
+            simi_fac[idx[i]] = sf
 
         sort = np.argsort(simi_fac)
         p['REF_IMAGE_INDEX'] = 0
@@ -1800,26 +1811,21 @@ def select_files_for_stack(p, inputlist, saturation_limit=32768, imagehdu=0):
     logger.info("Reference image: {}".format(p['REFERENCE_IMAGE']))
     
     sorted_files = []
-    newsort = []
     # first add reference image
     sorted_files.append(p['REFERENCE_IMAGE'])
-    newsort.append(p['REF_IMAGE_INDEX'])
     # then add all valid images to the list of images for stack
     for i in sort:
         if inputlist[i] != p['REFERENCE_IMAGE']:
             sorted_files.append(inputlist[i])
-            newsort.append(i)
-    newsort = np.array(newsort)
 
     # Now select up to <N files for stack as defined in the parameters file and save list to the param dict
-    if len(sorted_files) > p['NFILES_FOR_STACK']:
+    if len(sorted_files) > p['NFILES_FOR_STACK'] :
         p['SELECTED_FILES_FOR_STACK'] = sorted_files[:p['NFILES_FOR_STACK']]
-        # p['SELECTED_FILE_INDICES_FOR_STACK'] = newsort[:p['NFILES_FOR_STACK']]
         p['FINAL_NFILES_FOR_STACK'] = p['NFILES_FOR_STACK']
     else:
-        p['FINAL_NFILES_FOR_STACK'] = len(sorted_files)
         p['SELECTED_FILES_FOR_STACK'] = sorted_files
-        # p['SELECTED_FILE_INDICES_FOR_STACK'] = newsort
+        p['FINAL_NFILES_FOR_STACK'] = len(sorted_files)
+
 
     return p
 

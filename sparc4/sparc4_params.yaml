@@ -145,9 +145,18 @@ MATCH_FRAMES: True
 # method to select files for stack
 METHOD_TO_SELECT_FILES_FOR_STACK: 'BY_SIMILARITY' # 'MAX_FLUXES', 'FIRST_FRAMES', or 'BY_SIMILARITY'
 
-# select stack method
+# The following three parameters are used by the BY_SIMILARITY method only:
+# set maximum number of files to compare similarity and select for stack. If too large can be slow
+SIMIL_MAX_NFILES: 300
+# set maximum number of sources to compare similarity. If too large can be slow and unprecise
+SIMIL_MAX_NSOURCES: 8
+# set number of brigthest objects to skip for similarity calculations. Useful to discard saturated sources
+SIMIL_SKIP_N_BRIGHTEST: 3
+
+# set stack method
 SCI_STACK_METHOD: 'median'
 #SCI_STACK_METHOD: 'mean'
+# set number of sigmas to clip in case of 'mean' method
 SCI_STACK_SIGMA_CLIP: 10
 
 # define number of files for stack
