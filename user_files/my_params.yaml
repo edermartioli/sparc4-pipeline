@@ -148,6 +148,8 @@ METHOD_TO_SELECT_FILES_FOR_STACK: 'BY_SIMILARITY' # 'MAX_FLUXES', 'FIRST_FRAMES'
 # The following three parameters are used by the BY_SIMILARITY method only:
 # set maximum number of files to compare similarity and select for stack. If too large can be slow
 SIMIL_MAX_NFILES: 300
+# to shuffle input list of images
+SIMIL_SHUFFLE: True
 # set maximum number of sources to compare similarity. If too large can be slow and unprecise
 SIMIL_MAX_NSOURCES: 8
 # set number of brigthest objects to skip for similarity calculations. Useful to discard saturated sources
