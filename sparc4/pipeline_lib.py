@@ -1583,7 +1583,7 @@ def stack_science_images(p, inputlist, reduce_dir="./", force=False, stack_suffi
     p['REF_OBJECT_HEADER'] = fits.getheader(p['REFERENCE_IMAGE'])
 
     # first select best files for stack
-    p = select_files_for_stack(p, inputlist, saturation_limit=p['SATURATION_LIMIT'], imagehdu=0, max_number_of_files=p['SIMIL_MAX_NFILES'], max_n_sources=p['SIMIL_MAX_NSOURCES'], skip_n_brightest=p['SIMIL_SKIP_N_BRIGHTEST'])
+    p = select_files_for_stack(p, inputlist, saturation_limit=p['SATURATION_LIMIT'], imagehdu=0, max_number_of_files=p['SIMIL_MAX_NFILES'], shuffle=p['SIMIL_SHUFFLE'], max_n_sources=p['SIMIL_MAX_NSOURCES'], skip_n_brightest=p['SIMIL_SKIP_N_BRIGHTEST'])
 
     # select FITS files in the minidata directory and build database
     obj_fg = FitsFileGroup(files=p['SELECTED_FILES_FOR_STACK'])
@@ -1643,7 +1643,7 @@ def stack_science_images(p, inputlist, reduce_dir="./", force=False, stack_suffi
     return p
 
 
-def select_files_for_stack(p, inputlist, saturation_limit=32768, imagehdu=0, max_number_of_files = 100, max_n_sources = 8, skip_n_brightest = 3, src_detect_threshold=100):
+def select_files_for_stack(p, inputlist, saturation_limit=32768, imagehdu=0, max_number_of_files = 100, shuffle=True, max_n_sources = 8, skip_n_brightest = 3, src_detect_threshold=100):
     """ Pipeline module to select a sub-set of frames for stack
 
     Parameters
@@ -1658,12 +1658,15 @@ def select_files_for_stack(p, inputlist, saturation_limit=32768, imagehdu=0, max
         HDU index/name containing the image data
     max_number_of_files : int, optional
         maximum number of files to compare similarity and select for stack
+    shuffle : bool, optional
+        to shuffle list of input images for similarity calculations
     max_n_sources : int, optional
         maximum number of sources to compare similarity
     skip_n_brightest : int, optional
         number of brigthest objects to skip for similarity calculations
     src_detect_threshold : int, optional
         number of sigmas threshold to detect sources for similarity calculations
+
 
     Returns
     -------
@@ -1709,7 +1712,9 @@ def select_files_for_stack(p, inputlist, saturation_limit=32768, imagehdu=0, max
             fs.append(np.full_like(meanflux,np.nan))
         
         idx = np.arange(nfiles)
-        np.random.shuffle(idx)
+        
+        if shuffle :
+            np.random.shuffle(idx)
 
         if len(inputlist) < max_number_of_files :
             max_number_of_files = len(inputlist)
@@ -1727,7 +1732,7 @@ def select_files_for_stack(p, inputlist, saturation_limit=32768, imagehdu=0, max
             red_img = img - bkg
             
             nsources = 0
-            keep = red_img > 10 * rms
+            keep = red_img > 6 * rms
             if len(red_img[keep]) < 100 :
                 logger.info("STACK: skipping image {} of {}: i={} {} -> NSOURCES: {}  bkg: {} meanflux: {} ".format(i+1,max_number_of_files,idx[i],os.path.basename(inputlist[idx[i]]), 0, mbkg, 0))
                 continue
@@ -2157,12 +2162,16 @@ def calculate_aperture_radius(p, data):
     # calculate background
     bkg, rms = background(data, global_bkg=False)
 
-    # detect sources
-    sources = starfind(data, threshold=p['PHOT_THRESHOLD'], background=bkg, noise=rms)
-
-    # get fwhm
-    fwhm = sources.meta['astropop fwhm']
-
+    try :
+        # detect sources
+        sources = starfind(data, threshold=p['PHOT_THRESHOLD'], background=bkg, noise=rms)
+        # get fwhm
+        fwhm = sources.meta['astropop fwhm']
+    except Exception as e:
+        # set fwhm=3 by default
+        fwhm = 3.
+        logger.warn("Could not detect sources. Assuming FWHM = 3: error: {}".format(e))
+    
     p["PHOT_APERTURE_RADIUS"] = p["PHOT_APERTURE_N_X_FWHM"] * fwhm
     p["PHOT_SKYINNER_RADIUS"] = p["PHOT_SKYINNER_N_X_FWHM"] * fwhm
     p["PHOT_SKYOUTER_RADIUS"] = p["PHOT_SKYOUTER_N_X_FWHM"] * fwhm
@@ -2779,10 +2788,14 @@ def build_catalogs(p, data, hdr, catalogs=[], xshift=0., yshift=0., solve_astrom
     
         # calculate background
         bkg, rms = background(data, global_bkg=False)
-
-        # detect sources
-        sources = starfind(data, threshold=p["PHOT_THRESHOLD"], background=bkg, noise=rms)
-        
+    
+        try :
+            # detect sources
+            sources = starfind(data, threshold=p["PHOT_THRESHOLD"], background=bkg, noise=rms)
+        except Exception as e:
+            logger.warn("Could not build catalog of sources -- ERROR on astropop.starfind() -> {}".format(e))
+            return p, new_catalogs
+            
         # get fwhm
         fwhm = sources.meta['astropop fwhm']
 
