@@ -338,8 +338,11 @@ def get_file_list(tbl, object_id=None, inst_mode=None, polar_mode=None, obstype=
         tbl = tbl[tbl["WPPOS"] == str(wppos)]
         
     outlist = []
-    for i in range(len(tbl)):
-        outlist.append(str(tbl["FILE"][i]))
+    if len(tbl) == len(tbl.columns) and len(tbl["FILE"][0]) == 1:
+        outlist.append(str(tbl["FILE"]))
+    else :
+        for i in range(len(tbl)):
+            outlist.append(str(tbl["FILE"][i]))
 
     return outlist
 

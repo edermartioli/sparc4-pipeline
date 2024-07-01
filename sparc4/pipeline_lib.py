@@ -1009,8 +1009,7 @@ def run_master_calibration(p, inputlist=[], output="", obstype='bias', data_dir=
     logger.info(f'{obstype} files: {len(filter_fg)}')
 
     # get frames
-    frames = list(filter_fg.framedata(
-        unit='adu', use_memmap_backend=p['USE_MEMMAP']))
+    frames = list(filter_fg.framedata(unit='adu', use_memmap_backend=p['USE_MEMMAP']))
 
     # extract gain from the first image
     if float(frames[0].header['GAIN']) != 0:
@@ -3610,8 +3609,8 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
                 if type(norm.rms) is float :
                     z_rms = norm.rms
                     
-                if type(norm.theor_sigma) is float :
-                    theor_sigma = norm.theor_sigma
+                if type(norm.theor_sigma['p']) is float :
+                    theor_sigma = norm.theor_sigma['p']
 
             except Exception as e:
                 logger.warn("Could not calculate polarimetry for source_index={} and aperture={} pixels: {}".format(j, apertures[i],e))
@@ -3856,7 +3855,7 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
             resids = zi.nominal - observed_model
             sig_res = np.nanstd(resids)
             chi2 = np.nansum((resids/zi.std_dev)**2) / (n - m)
-            theor_sigma = norm.theor_sigma
+            theor_sigma = norm.theor_sigma['p']
             
         except Exception as e :
             logger.warn("Could not compute polarimetry: {}".format(e))
@@ -3900,11 +3899,10 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
     # plot polarization data and best-fit model
     if plot:
         # set title to appear in the plot header
-        title_label = r"Source index: {}    aperture: {} pix    $\chi^2$: {:.2f}    RMS: {:.4f}".format(
+        title_label = r"Source index: {}    aperture: {} pix    $\chi^2$: {:.2f}    RMS: {:.6f}".format(
             source_index, aperture_radius, chi2, sig_res)
 
-        s4plt.plot_polarimetry_results(
-            loc, title_label=title_label, wave_plate=wave_plate)
+        s4plt.plot_polarimetry_results(loc, title_label=title_label, wave_plate=wave_plate)
 
     hdul.close()
 
@@ -4304,6 +4302,9 @@ def polar_time_series(sci_pol_list,
             tsdata['NPAR'] = np.append(tsdata['NPAR'], polar['NPAR'])
             tsdata['CHI2'] = np.append(tsdata['CHI2'], polar['CHI2'])
             tsdata['RMS'] = np.append(tsdata['RMS'], polar['RMS'])
+            
+            if type(polar['TSIGMA']) is not float :
+                polar['TSIGMA'] = 0.
             tsdata['TSIGMA'] = np.append(tsdata['TSIGMA'], polar['TSIGMA'])
 
         hdul.close()

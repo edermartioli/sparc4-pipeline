@@ -746,8 +746,7 @@ def polarTimeSeriesProduct(tsdata, info={}, filename=""):
     hdu_array = [primary_hdu]
 
     # create catalog polarimetry hdu for current source
-    catalog_polar_hdu = fits.BinTableHDU(
-        data=Table(tsdata), name="POLAR_TIMESERIES")
+    catalog_polar_hdu = fits.BinTableHDU(data=Table(tsdata), name="POLAR_TIMESERIES")
 
     # append hdu
     hdu_array.append(catalog_polar_hdu)
