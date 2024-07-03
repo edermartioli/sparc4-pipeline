@@ -727,7 +727,7 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
 
     # get list of objects observed
     objs = s4db.get_targets_observed(db, inst_mode=inst_mode, polar_mode=polar_mode, detector_mode=detector_mode)
-    if obj != None:
+    if obj is None:
         objs = objs[objs['OBJECT'] == obj]
 
     # if table of objects observed is empty, print a message and leave

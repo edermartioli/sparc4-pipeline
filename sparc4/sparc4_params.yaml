@@ -27,8 +27,8 @@ CHANNEL_COLORS: ["darkblue","green","orange","darkred"]
 # DB file format: FITS or CSV
 DB_FILE_FORMAT: "CSV"
 
-# to force the creation of a new fresh db. Useful when adding/removing raw files
-FORCE_DB_CREATION: False
+# to force creation of a fresh new db. Useful when adding/removing raw files
+FORCE_DB_CREATION: True
 
 # list of mandatory header keywords. If any of these are not found in image header, then image is ignored
 MANDATORY_KEYWORDS: ["DATE-OBS", "EXPTIME", "RA", "DEC", "OBJECT", "OBSTYPE"]
@@ -58,7 +58,7 @@ FULL_FRAMES_ONLY: True
 PATTERN_TO_INCLUDE_DATA: '*.fits'
 
 # patterns to exclude data
-PATTERNS_TO_EXCLUDE_DATA: ['*lixo*.fits']
+PATTERNS_TO_EXCLUDE_DATA: ['*test*.fits','*lixo*.fits']
 #-------------------------------------
 
 #### CALIBRATIONS #####
@@ -149,15 +149,15 @@ METHOD_TO_SELECT_FILES_FOR_STACK: 'BY_SIMILARITY' # 'MAX_FLUXES', 'FIRST_FRAMES'
 # set maximum number of files to compare similarity and select for stack. If too large can be slow
 SIMIL_MAX_NFILES: 300
 # to shuffle input list of images
-SIMIL_SHUFFLE: True
+SIMIL_SHUFFLE: False
 # set maximum number of sources to compare similarity. If too large can be slow and unprecise
-SIMIL_MAX_NSOURCES: 8
+SIMIL_MAX_NSOURCES: 7
 # set number of brigthest objects to skip for similarity calculations. Useful to discard saturated sources
-SIMIL_SKIP_N_BRIGHTEST: 3
+SIMIL_SKIP_N_BRIGHTEST: 2
 
 # set stack method
-SCI_STACK_METHOD: 'median'
-#SCI_STACK_METHOD: 'mean'
+#SCI_STACK_METHOD: 'median'
+SCI_STACK_METHOD: 'mean'
 # set number of sigmas to clip in case of 'mean' method
 SCI_STACK_SIGMA_CLIP: 10
 
@@ -232,7 +232,7 @@ MAX_APERTURE_FOR_POLARIMETRY: 25
 APERTURE_RADIUS_FOR_PHOTOMETRY_IN_POLAR: 10
 
 # whether or not to fit the zero of waveplate in L/4 mode. If False, then use fixed value given by ZERO_OF_WAVEPLATE
-FIT_ZERO_OF_WPPOS_IN_L4: True
+FIT_ZERO_OF_WPPOS_IN_L4: False
 
 # Set zero of polarimetry calibrated from standards
 ZERO_OF_WAVEPLATE: 108.7
