@@ -49,3 +49,5 @@ Version 1.3 (2024-06-03)
 - Fixed bug that was generating an error when there were no images to be reduced
 - Divided flux by exptime in new photometry
 - Included new method "BY_SIMILARITY" to match frames for stack 
+- Fixed bugs in flat correction per wp position
+- Included plot_polarimetry_map routine 
