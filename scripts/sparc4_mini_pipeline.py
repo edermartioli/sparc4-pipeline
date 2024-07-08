@@ -85,7 +85,7 @@ for channel in p['SELECTED_CHANNELS']:
 
     # create a night report
     s4pipelib.write_night_report(p, night_report_file_path, channel_index=j)
-    
+
     # if db doesn't exist create one
     if not os.path.exists(p['s4db_files'][j]) or options.force or p['FORCE_DB_CREATION'] :
         # log messages:
