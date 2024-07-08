@@ -727,7 +727,8 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
 
     # get list of objects observed
     objs = s4db.get_targets_observed(db, inst_mode=inst_mode, polar_mode=polar_mode, detector_mode=detector_mode)
-    if obj is None:
+    
+    if obj is not None and len(objs):
         objs = objs[objs['OBJECT'] == obj]
 
     # if table of objects observed is empty, print a message and leave
@@ -1026,8 +1027,7 @@ def run_master_calibration(p, inputlist=[], output="", obstype='bias', data_dir=
         processing.gain_correct(frame, gain, inplace=True)
 
     # combine
-    master = imcombine(frames, method=method,
-                       use_memmap_backend=p['USE_MEMMAP'])
+    master = imcombine(frames, method=method, use_memmap_backend=p['USE_MEMMAP'])
 
     # get statistics
     stats = master.statistics()
@@ -1065,6 +1065,43 @@ def run_master_calibration(p, inputlist=[], output="", obstype='bias', data_dir=
     mastercal = s4p.masterCalibration(filter_fg.files, img_data=img_data,err_data=err_data, mask_data=mask_data,info=info, filename=output)
 
     return p
+
+def get_shuffled_short_list(inputlist, max_n_files=300) :
+
+    """ Pipeline module to shuffle and limit number of files in an input list of files
+
+    Parameters
+    ----------
+    inputlist : list
+        list of file paths
+    max_n_files : int, optional
+        Maximum number of files to limit out list
+
+    Returns
+    -------
+    outlist : list
+        shuffled and limited out list of file paths
+    """
+    
+    # get number of files from input list
+    nfiles = len(inputlist)
+    
+    # prevent from going over the inputlist size
+    if len(inputlist) < max_n_files :
+        max_n_files = len(inputlist)
+    
+    # get list indexes
+    idx = np.arange(nfiles)
+    
+    # shuffle indexes
+    np.random.shuffle(idx)
+    
+    # build output list
+    outlist = []
+    for i in range(max_n_files) :
+        outlist.append(inputlist[idx[i]])
+
+    return outlist
 
 
 def run_master_zero_calibration(p, db, nightdir, data_dir, reduce_dir, channel, detector_mode, detector_mode_key, force=True) :
@@ -1190,7 +1227,7 @@ def run_master_flat_calibrations(p, db, nightdir, data_dir, reduce_dir, channel,
         # log messages:
         logger.info("Calculating master flat for PHOT mode and saving to file: {}".format(flats["phot_master_flat"]))
 
-        p_phot = run_master_calibration(p_phot, inputlist=phot_flat_list, output=flats["phot_master_flat"], obstype='flat', data_dir=data_dir, reduce_dir=reduce_dir, normalize=True, force=force)
+        p_phot = run_master_calibration(p_phot, inputlist=get_shuffled_short_list(phot_flat_list,max_n_files=p["MAX_NUMBER_OF_FLAT_FRAMES_TO_USE"]), output=flats["phot_master_flat"], obstype='flat', data_dir=data_dir, reduce_dir=reduce_dir, normalize=True, force=force)
         
         p_phot["master_flat"] = flats["phot_master_flat"]
     else :
@@ -1206,7 +1243,7 @@ def run_master_flat_calibrations(p, db, nightdir, data_dir, reduce_dir, channel,
         # log messages:
         logger.info("Calculating master flat for POLAR L2 mode and saving to file: {}".format(flats["polar_l2_master_flat"]))
 
-        p_polarl2 = run_master_calibration(p_polarl2, inputlist=polar_l2_flat_list, output=flats["polar_l2_master_flat"], obstype='flat', data_dir=data_dir, reduce_dir=reduce_dir, normalize=True, force=force)
+        p_polarl2 = run_master_calibration(p_polarl2, inputlist=get_shuffled_short_list(polar_l2_flat_list,max_n_files=p["MAX_NUMBER_OF_FLAT_FRAMES_TO_USE"]), output=flats["polar_l2_master_flat"], obstype='flat', data_dir=data_dir, reduce_dir=reduce_dir, normalize=True, force=force)
         
         p_polarl2["master_flat"] = flats["polar_l2_master_flat"]
         
@@ -1219,7 +1256,7 @@ def run_master_flat_calibrations(p, db, nightdir, data_dir, reduce_dir, channel,
                 master_flat_file = "{}/{}_s4c{}{}_POLAR_L2_WPPOS{:02d}_MasterDomeFlat.fits".format(reduce_dir, nightdir, channel, detector_mode_key, wppos)
                 # log messages:
                 logger.info("Calculating master flat for POLAR L2 mode WPPOS={} and saving to file: {}".format(wppos,master_flat_file))
-                p_polarl2_wppos = run_master_calibration(p_polarl2, inputlist=polar_l2_wppos_flat_list, output=master_flat_file, obstype='flat', data_dir=data_dir, reduce_dir=reduce_dir, normalize=True, force=force)
+                _ = run_master_calibration(p_polarl2, inputlist=get_shuffled_short_list(polar_l2_wppos_flat_list,max_n_files=p["MAX_NUMBER_OF_FLAT_FRAMES_TO_USE"]), output=master_flat_file, obstype='flat', data_dir=data_dir, reduce_dir=reduce_dir, normalize=True, force=force)
                 
             p_polarl2["wppos{:02d}_master_flat".format(wppos)] = "None"
         
@@ -1229,18 +1266,19 @@ def run_master_flat_calibrations(p, db, nightdir, data_dir, reduce_dir, channel,
         # log messages:
         logger.info("Calculating master flat for POLAR L2 mode and saving to file: {}".format(flats["polar_l4_master_flat"]))
 
-        p_polarl4 = run_master_calibration(p_polarl4, inputlist=polar_l4_flat_list, output=flats["polar_l4_master_flat"], obstype='flat', data_dir=data_dir, reduce_dir=reduce_dir, normalize=True, force=force)
+        p_polarl4 = run_master_calibration(p_polarl4, inputlist=get_shuffled_short_list(polar_l4_flat_list,max_n_files=p["MAX_NUMBER_OF_FLAT_FRAMES_TO_USE"]), output=flats["polar_l4_master_flat"], obstype='flat', data_dir=data_dir, reduce_dir=reduce_dir, normalize=True, force=force)
         p_polarl4["master_flat"] = flats["polar_l4_master_flat"]
         
         master_flat_file = "None"
         for wppos in range(1,17) :
             # create a master flat for each waveplate position
             polar_l4_wppos_flat_list = s4db.get_file_list(db, inst_mode=p['INSTMODE_POLARIMETRY_KEYVALUE'], polar_mode=p['POLARIMETRY_L4_KEYVALUE'], obstype=p['FLAT_OBSTYPE_KEYVALUE'], detector_mode=detector_mode, wppos=wppos)
+            
             if len(polar_l4_wppos_flat_list) :
                 master_flat_file = "{}/{}_s4c{}{}_POLAR_L4_WPPOS{:02d}_MasterDomeFlat.fits".format(reduce_dir, nightdir, channel, detector_mode_key, wppos)
                 # log messages:
                 logger.info("Calculating master flat for POLAR L2 mode WPPOS={} and saving to file: {}".format(wppos,master_flat_file))
-                p_polarl4_wppos = run_master_calibration(p_polarl4, inputlist=polar_l4_wppos_flat_list, output=master_flat_file, obstype='flat', data_dir=data_dir, reduce_dir=reduce_dir, normalize=True, force=force)
+                _ = run_master_calibration(p_polarl4, inputlist=get_shuffled_short_list(polar_l4_wppos_flat_list,max_n_files=p["MAX_NUMBER_OF_FLAT_FRAMES_TO_USE"]), output=master_flat_file, obstype='flat', data_dir=data_dir, reduce_dir=reduce_dir, normalize=True, force=force)
             p_polarl4["wppos{:02d}_master_flat".format(wppos)] = master_flat_file
             
        
@@ -1417,6 +1455,8 @@ def reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", match_fr
 
         logger.info('Calibrating science frames (CR, gain, bias, flat) ... ')
 
+        flat_applied = []
+
         # Perform calibration
         for i, frame in enumerate(frames):
             logger.info("Calibrating science frame {} of {} : {} ".format(i+1, len(frames), os.path.basename(obj_fg.files[i])))
@@ -1425,22 +1465,29 @@ def reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", match_fr
                     processing.cosmics_lacosmic(frame, inplace=True)
                 processing.gain_correct(frame, gain, inplace=True)
                 if p["APPLY_BIAS_CORRECTION"] :
+                    logger.info("Subtracting bias using Master Zero frame : {} ".format(p["master_bias"]))
                     processing.subtract_bias(frame, bias, inplace=True)
                 if p["APPLY_FLATFIELD_CORRECTION"] :
                     if p["APPLY_FLAT_PER_WPPOS"] and polarimetry :
                         wppos = int(frames[i].header['WPPOS'])
                         master_flat = p["wppos{:02d}_master_flat".format(wppos)]
                         if os.path.exists(master_flat) :
-                            info['FLATFILE'] = (master_flat, 'flat file name')
+                            logger.info("Applying flat-field correction using Master Flat frame : {} ".format(master_flat))
                             flat_pol_wppos = s4p.getFrameFromMasterCalibration(master_flat)
                             processing.flat_correct(frame, flat_pol_wppos, inplace=True)
+                            flat_applied.append(master_flat)
                         else :
-                            info['FLATFILE'] = (p["master_flat"], 'flat file name')
+                            logger.info("Applying flat-field correction using Master Flat frame : {} ".format(p["master_flat"]))
                             processing.flat_correct(frame, flat, inplace=True)
+                            flat_applied.append(p["master_flat"])
                     else :
-                        info['FLATFILE'] = (p["master_flat"], 'flat file name')
+                        logger.info("Applying flat-field correction using Master Flat frame : {} ".format(p["master_flat"]))
                         processing.flat_correct(frame, flat, inplace=True)
+                        flat_applied.append(p["master_flat"])
+                else :
+                    flat_applied.append("None")
             else:
+                flat_applied.append("")
                 pass
 
         logger.info('Calculating offsets ... ')
@@ -1452,24 +1499,27 @@ def reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", match_fr
         # Perform aperture photometry and store reduced data into products
         for i, frame in enumerate(frames):
 
-            logger.info("Processing file: {}".format(os.path.basename(obj_fg.files[i])))
-            
-            info['XSHIFT'] = (0., "register x shift (pixel)")
-            info['XSHIFTST'] = ("OK", "x shift status")
-            info['YSHIFT'] = (0., "register y shift (pixel)")
-            info['YSHIFTST'] = ("OK", "y shift status")
-            if match_frames:
-                if np.isfinite(p["XSHIFTS"][i]):
-                    info['XSHIFT'] = (p["XSHIFTS"][i], "register x shift (pixel)")
-                else:
-                    info['XSHIFTST'] = ("UNDEFINED", "x shift status")
-
-                if np.isfinite(p["YSHIFTS"][i]):
-                    info['YSHIFT'] = (p["YSHIFTS"][i], "register y shift (pixel)")
-                else:
-                    info['YSHIFTST'] = ("UNDEFINED", "y shift status")
-
             if not obj_red_status[i] or force:
+            
+                info['FLATFILE'] = (flat_applied[i], 'flat file name')
+            
+                logger.info("Processing file: {}".format(os.path.basename(obj_fg.files[i])))
+            
+                info['XSHIFT'] = (0., "register x shift (pixel)")
+                info['XSHIFTST'] = ("OK", "x shift status")
+                info['YSHIFT'] = (0., "register y shift (pixel)")
+                info['YSHIFTST'] = ("OK", "y shift status")
+                if match_frames:
+                    if np.isfinite(p["XSHIFTS"][i]):
+                        info['XSHIFT'] = (p["XSHIFTS"][i], "register x shift (pixel)")
+                    else:
+                        info['XSHIFTST'] = ("UNDEFINED", "x shift status")
+
+                    if np.isfinite(p["YSHIFTS"][i]):
+                        info['YSHIFT'] = (p["YSHIFTS"][i], "register y shift (pixel)")
+                    else:
+                        info['YSHIFTST'] = ("UNDEFINED", "y shift status")
+            
                 # get data arrays
                 img_data = np.array(frame.data)
                 #err_data = np.array(frame.get_uncertainty())
@@ -2229,6 +2279,9 @@ def run_aperture_photometry(img_data, x, y, aperture_radius, r_ann, err_data=Non
             recenter_limit=5 # recenter accepted up to 5 pixels
 
         ap_phot = aperture_photometry(img_data, x, y, r=aperture_radius, r_ann=r_ann, gain=1.0, bkg_method='mmm', recenter_method=recenter_method, recenter_limit=recenter_limit)
+        
+        # E. Martioli Jul 8 2024 -- Below is a dirty fix since astropop does not return 'fwhm' values.
+        ap_phot['fwhm'] = np.full_like(ap_phot['flux'],0.)
     else :
         try:
             ap_phot = aperture_photometry_wrapper(img_data, x, y,  err_data=err_data, aperture_radius=aperture_radius, r_in=r_ann[0], r_out=r_ann[1], read_noise=readnoise, recenter=recenter)
@@ -3911,8 +3964,18 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
 
     # plot polarization data and best-fit model
     if plot:
+    
+        polar_mode_label = "L2"
+        if wave_plate == "quarterwave" :
+            polar_mode_label = "L4"
+
+        channel_index = int(hdul[0].header['CHANNEL'])
+        bands = ["g","r","i","z"]
+
+        title_label = r"Object: {}  date: {}  mode: {} S4C{} ({}-band)".format(hdul[0].header['OBJECT'],hdul[0].header['DATE-OBS'][:10],polar_mode_label,channel_index,bands[channel_index-1])
+        title_label += "\n"
         # set title to appear in the plot header
-        title_label = r"Source index: {}    aperture: {} pix    $\chi^2$: {:.2f}    RMS: {:.6f}".format(
+        title_label += r"Source index: {}    aperture: {} pix    $\chi^2$: {:.2f}    RMS: {:.6f}".format(
             source_index, aperture_radius, chi2, sig_res)
 
         s4plt.plot_polarimetry_results(loc, title_label=title_label, wave_plate=wave_plate)

@@ -146,19 +146,20 @@ def get_targets_observed(intbl, inst_mode=None, polar_mode=None, calwheel_mode=N
     
     tbl = tbl[tbl["OBSTYPE"] == "OBJECT"]
 
-    if detector_mode != None:
+    if detector_mode is not None:
         for key in detector_mode.keys():
             tbl = tbl[tbl[key] == detector_mode[key]]
 
-    if polar_mode != None:
+    if polar_mode is not None:
         tbl = tbl[tbl['WPSEL'] == polar_mode]
 
-    if inst_mode != None:
+    if inst_mode is not None:
         tbl = tbl[tbl['INSTMODE'] == inst_mode]
 
-    if calwheel_mode != None:
+    if calwheel_mode is not None:
         tbl = tbl[tbl['CALW'] == calwheel_mode]
 
+    print(tbl)
     targets = []
     if len(tbl) != 0 :
         targets = tbl.group_by("OBJECT").groups.keys
@@ -311,32 +312,32 @@ def get_file_list(tbl, object_id=None, inst_mode=None, polar_mode=None, obstype=
 
     # tbl, inst_mode="PHOT", polar_mode="NONE", obstype="ZERO", detector_mode={"PREAMP": "Gain 2","READRATE": 1,"EMMODE": 'Conventional',"EMGAIN": 2}
 
-    if object_id != None:
+    if object_id is not None:
         tbl = tbl[tbl["OBJECT"] == object_id]
 
     if skyflat:
         tbl = tbl[(tbl["OBSTYPE"] == 'SFLAT') | (tbl["OBSTYPE"] == 'SKYFLAT') | (
             tbl["OBJECT"] == 'SFLAT') | (tbl["OBJECT"] == 'SKYFLAT')]
 
-    if (obstype != None) and (obstype in ["ZERO", "FLAT", "OBJECT"]):
+    if (obstype is not None) and (obstype in ["ZERO", "FLAT", "OBJECT"]):
         tbl = tbl[tbl["OBSTYPE"] == obstype]
 
-    if detector_mode != None:
+    if detector_mode is not None:
         for key in detector_mode.keys():
             tbl = tbl[tbl[key] == detector_mode[key]]
 
-    if polar_mode != None:
+    if polar_mode is not None:
         tbl = tbl[tbl['WPSEL'] == polar_mode]
 
-    if inst_mode != None:
+    if inst_mode is not None:
         tbl = tbl[tbl['INSTMODE'] == inst_mode]
 
-    if calwheel_mode != None:
+    if calwheel_mode is not None:
         tbl = tbl[tbl['CALW'] == calwheel_mode]
 
-    if wppos != None:
-        tbl = tbl[tbl["WPPOS"] == str(wppos)]
-        
+    if wppos is not None:
+        tbl = tbl[tbl["WPPOS"] == wppos]
+
     outlist = []
     if len(tbl) == len(tbl.columns) and len(tbl["FILE"][0]) == 1:
         outlist.append(str(tbl["FILE"]))

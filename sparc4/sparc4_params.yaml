@@ -92,7 +92,11 @@ POLARIMETRY_L4_KEYVALUE: 'L4'
 
 # set maximum number of zero frames to use to avoid memory issues
 # WARNING: it will take the first zeros and ignore the rest
-MAX_NUMBER_OF_ZERO_FRAMES_TO_USE: 1000
+MAX_NUMBER_OF_ZERO_FRAMES_TO_USE: 300
+
+# set maximum number of flat frames to use to avoid memory issues
+# WARNING: it will randomly select N flats and ignore the rest
+MAX_NUMBER_OF_FLAT_FRAMES_TO_USE: 300
 
 # set maximum number of science frames for each reduction loop
 # it avoids memory issues for long lists
@@ -203,7 +207,6 @@ PHOT_THRESHOLD: 100
 #-------------------------------------
 
 #### POLARIMETRY ####
-
 # force computation of polarimetry. Useful when new data arrived
 FORCE_POLARIMETRY_COMPUTATION: False
 

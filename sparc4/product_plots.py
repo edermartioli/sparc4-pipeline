@@ -21,6 +21,7 @@ from astropy.wcs import WCS
 from astropy.wcs.utils import proj_plane_pixel_scales
 from regions import CircleSkyRegion
 
+import sparc4.pipeline_lib as s4pipelib
 
 def plot_cal_frame(filename, output="", percentile=99.5, xcut=512, ycut=512,
                    combine_rows=False, combine_cols=False,
@@ -817,3 +818,79 @@ def plot_polar_time_series(filename, target=0, comps=[], output="", nsig=10, plo
     
     plt.show()
 
+
+def plot_polarimetry_map(stack_product, polar_product, min_aperture=0, max_aperture=1024, percentile=99.5,ref_catalog="CATALOG_POL_N_AP010", src_label_offset=30, arrow_size_scale=None, title_label=""):
+    """ Pipeline module to plot polarimetry map
+
+    Parameters
+    ----------
+    stack_product : str
+        path to stack image product
+    polar_product : str
+        path to polarimetry product
+        
+    Returns
+    -------
+    None
+    """
+
+    hdul = fits.open(stack_product)
+    img_data = hdul["PRIMARY"].data
+    x_o, y_o = hdul["CATALOG_POL_N_AP010"].data['x'], hdul["CATALOG_POL_N_AP010"].data['y']
+    x_e, y_e = hdul["CATALOG_POL_S_AP010"].data['x'], hdul["CATALOG_POL_S_AP010"].data['y']
+
+    hdr = fits.getheader(polar_product)
+    nsources = hdr["NSOURCES"]
+
+    pol, epol = [], []
+    pa, epa = [], []
+    q ,u = [], []
+
+    for i in range(nsources) :
+        pol_results = s4pipelib.get_polarimetry_results(polar_product,
+                                                        source_index=i,
+                                                        min_aperture=min_aperture,
+                                                        max_aperture=max_aperture,
+                                                        plot=False,
+                                                        verbose=False)
+
+        pol.append(pol_results["P"].nominal*100)
+        epol.append(pol_results["P"].std_dev*100)
+        pa.append(pol_results["THETA"].nominal)
+        epa.append(pol_results["THETA"].std_dev)
+    
+        q.append(pol_results["Q"].nominal*100)
+        u.append(pol_results["U"].nominal*100)
+    
+    q = np.array(q)
+    u = np.array(u)
+
+    src_idxs = np.arange(nsources)
+
+    plt.figure(figsize=(10, 10))
+    plt.imshow(img_data, vmin=np.percentile(img_data, 100-percentile), vmax=np.percentile(img_data, percentile), origin='lower')
+    
+    mean_aper = np.mean(hdul[ref_catalog].data['APER'])
+    plt.plot(x_o, y_o, 'wo', ms=mean_aper, fillstyle='none', lw=1.5, alpha=0.7)
+    plt.plot(x_e, y_e, 'wo', ms=mean_aper, fillstyle='none', lw=1.5, alpha=0.7)
+
+    
+    if arrow_size_scale is None :
+        # calculate scale to define size of arrows
+        totp = np.sqrt(q**2+u**2)
+        arrow_size_scale = (np.nanmax(totp) + np.nanmin(totp))/(2*100)  # average between maximum and minimum divided by 100
+    
+    plt.quiver(x_o, y_o, -q, u, color='w', units='xy', scale=arrow_size_scale, width=4, headwidth=4, headlength=4, headaxislength=3, alpha=1, zorder=2)
+
+    for i in range(len(x_o)):
+        x = [x_o[i], x_e[i]]
+        y = [y_o[i], y_e[i]]
+        plt.plot(x, y, '-o', color="gray", zorder=1)
+        plt.annotate(f"{i}", [np.mean(x)-src_label_offset, np.mean(y)+src_label_offset], color="gray",zorder=3)
+    
+    if title_label != "":
+        plt.title(title_label)
+    
+    plt.xlabel("col [pix]")
+    plt.ylabel("row [pix]")
+    plt.show()
