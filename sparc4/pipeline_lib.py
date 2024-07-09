@@ -1245,8 +1245,6 @@ def run_master_flat_calibrations(p, db, nightdir, data_dir, reduce_dir, channel,
 
         p_polarl2 = run_master_calibration(p_polarl2, inputlist=get_shuffled_short_list(polar_l2_flat_list,max_n_files=p["MAX_NUMBER_OF_FLAT_FRAMES_TO_USE"]), output=flats["polar_l2_master_flat"], obstype='flat', data_dir=data_dir, reduce_dir=reduce_dir, normalize=True, force=force)
         
-        p_polarl2["master_flat"] = flats["polar_l2_master_flat"]
-        
         master_flat_file = "None"
         for wppos in range(1,17) :
             # create a master flat for each waveplate position
@@ -1259,6 +1257,9 @@ def run_master_flat_calibrations(p, db, nightdir, data_dir, reduce_dir, channel,
                 _ = run_master_calibration(p_polarl2, inputlist=get_shuffled_short_list(polar_l2_wppos_flat_list,max_n_files=p["MAX_NUMBER_OF_FLAT_FRAMES_TO_USE"]), output=master_flat_file, obstype='flat', data_dir=data_dir, reduce_dir=reduce_dir, normalize=True, force=force)
                 
             p_polarl2["wppos{:02d}_master_flat".format(wppos)] = "None"
+            
+        p_polarl2["master_flat"] = flats["polar_l2_master_flat"]
+
         
     if len(polar_l4_flat_list):
         # calculate master dome flat
@@ -1267,7 +1268,6 @@ def run_master_flat_calibrations(p, db, nightdir, data_dir, reduce_dir, channel,
         logger.info("Calculating master flat for POLAR L2 mode and saving to file: {}".format(flats["polar_l4_master_flat"]))
 
         p_polarl4 = run_master_calibration(p_polarl4, inputlist=get_shuffled_short_list(polar_l4_flat_list,max_n_files=p["MAX_NUMBER_OF_FLAT_FRAMES_TO_USE"]), output=flats["polar_l4_master_flat"], obstype='flat', data_dir=data_dir, reduce_dir=reduce_dir, normalize=True, force=force)
-        p_polarl4["master_flat"] = flats["polar_l4_master_flat"]
         
         master_flat_file = "None"
         for wppos in range(1,17) :
@@ -1281,7 +1281,9 @@ def run_master_flat_calibrations(p, db, nightdir, data_dir, reduce_dir, channel,
                 _ = run_master_calibration(p_polarl4, inputlist=get_shuffled_short_list(polar_l4_wppos_flat_list,max_n_files=p["MAX_NUMBER_OF_FLAT_FRAMES_TO_USE"]), output=master_flat_file, obstype='flat', data_dir=data_dir, reduce_dir=reduce_dir, normalize=True, force=force)
             p_polarl4["wppos{:02d}_master_flat".format(wppos)] = master_flat_file
             
-       
+        p_polarl4["master_flat"] = flats["polar_l4_master_flat"]
+
+
     if len(polar_l2_flat_list) == 0 :
         if p_polarl2["ALLOW_INTERCHANGE_L2L4_FLATS"] and "polar_l4_master_flat" in flats.keys() :
             p_polarl2["master_flat"] = flats["polar_l4_master_flat"]
@@ -1385,7 +1387,7 @@ def reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", match_fr
         bias = s4p.getFrameFromMasterCalibration(p["master_bias"])
 
     if p["APPLY_FLATFIELD_CORRECTION"] :
-        flat = s4p.getFrameFromMasterCalibration(p["master_flat"])
+        masterflat = s4p.getFrameFromMasterCalibration(p["master_flat"])
 
     # save original input list of files
     p['INPUT_LIST_OF_FILES'] = deepcopy(inputlist)
@@ -1450,7 +1452,8 @@ def reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", match_fr
                 'BIASSUB': (p["APPLY_BIAS_CORRECTION"] , 'bias subtracted'),
                 'BIASFILE': (p["master_bias"], 'bias file name'),
                 'FLATCORR': (p["APPLY_FLATFIELD_CORRECTION"], 'flat corrected'),
-                'FLATFILE': (p["master_flat"], 'flat file name')
+                'FLATWPOS': (p["APPLY_FLAT_PER_WPPOS"], 'flat corrected per WP pos'),
+                'MFLAT': (p["master_flat"], 'master flat file name')
                 }
 
         logger.info('Calibrating science frames (CR, gain, bias, flat) ... ')
@@ -1478,11 +1481,11 @@ def reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", match_fr
                             flat_applied.append(master_flat)
                         else :
                             logger.info("Applying flat-field correction using Master Flat frame : {} ".format(p["master_flat"]))
-                            processing.flat_correct(frame, flat, inplace=True)
+                            processing.flat_correct(frame, masterflat, inplace=True)
                             flat_applied.append(p["master_flat"])
                     else :
                         logger.info("Applying flat-field correction using Master Flat frame : {} ".format(p["master_flat"]))
-                        processing.flat_correct(frame, flat, inplace=True)
+                        processing.flat_correct(frame, masterflat, inplace=True)
                         flat_applied.append(p["master_flat"])
                 else :
                     flat_applied.append("None")
@@ -1624,7 +1627,7 @@ def stack_science_images(p, inputlist, reduce_dir="./", force=False, stack_suffi
         bias = s4p.getFrameFromMasterCalibration(p["master_bias"])
 
     if p["APPLY_FLATFIELD_CORRECTION"] :
-        flat = s4p.getFrameFromMasterCalibration(p["master_flat"])
+        masterflat = s4p.getFrameFromMasterCalibration(p["master_flat"])
 
     # set base image as the reference image, which will be replaced
     # later if run "select_files_for_stack"
@@ -1643,13 +1646,11 @@ def stack_science_images(p, inputlist, reduce_dir="./", force=False, stack_suffi
 
     logger.info("Loading science frames to memory ... ")
     # get frames
-    frames = list(obj_fg.framedata(
-        unit='adu', use_memmap_backend=p['USE_MEMMAP']))
+    frames = list(obj_fg.framedata(unit='adu', use_memmap_backend=p['USE_MEMMAP']))
 
     # extract gain from the first image
     if float(frames[0].header['GAIN']) != 0:
-        gain = float(frames[0].header['GAIN'])*u.electron / \
-            u.adu  # using quantities is better for safety
+        gain = float(frames[0].header['GAIN'])*u.electron/u.adu  # using quantities is better for safety
     else:
         gain = 3.3*u.electron/u.adu
 
@@ -1658,6 +1659,34 @@ def stack_science_images(p, inputlist, reduce_dir="./", force=False, stack_suffi
     # set units of reduced data
     data_units = 'electron'
 
+    logger.info('Calibrating science frames (CR, gain, bias, flat) for stack ... ')
+
+    # Perform calibration
+    for i, frame in enumerate(frames):
+        
+        logger.info("Calibrating science frame {} of {} : {} ".format(i+1, len(frames), os.path.basename(obj_fg.files[i])))
+        
+        if p["DETECT_AND_REJECT_COSMIC_RAYS"] :
+            processing.cosmics_lacosmic(frame, inplace=True)
+        
+        processing.gain_correct(frame, gain, inplace=True)
+        
+        if p["APPLY_BIAS_CORRECTION"] :
+            processing.subtract_bias(frame, bias, inplace=True)
+            
+        if p["APPLY_FLATFIELD_CORRECTION"] :
+            if p["APPLY_FLAT_PER_WPPOS"] and polarimetry :
+                wppos = int(frames[i].header['WPPOS'])
+                master_flat = p["wppos{:02d}_master_flat".format(wppos)]
+                if os.path.exists(master_flat) :
+                    flat_pol_wppos = s4p.getFrameFromMasterCalibration(master_flat)
+                    processing.flat_correct(frame, flat_pol_wppos, inplace=True)
+                else :
+                    processing.flat_correct(frame, masterflat, inplace=True)
+            else :
+                processing.flat_correct(frame, masterflat, inplace=True)
+        
+
     # write information into an info dict
     info = {'BUNIT': ('{}'.format(data_units), 'data units'),
             'DRSINFO': ('astropop', 'data reduction software'),
@@ -1665,23 +1694,11 @@ def stack_science_images(p, inputlist, reduce_dir="./", force=False, stack_suffi
             'BIASSUB': (True, 'bias subtracted'),
             'BIASFILE': (p["master_bias"], 'bias file name'),
             'FLATCORR': (True, 'flat corrected'),
-            'FLATFILE': (p["master_flat"], 'flat file name'),
+            'FLATWPOS': (p["APPLY_FLAT_PER_WPPOS"], 'flat corrected per WP pos'),
+            'MFLAT': (p["master_flat"], 'master flat file name'),
             'REFIMG': (p['REFERENCE_IMAGE'], 'reference image for stack'),
             'NIMGSTCK': (p['FINAL_NFILES_FOR_STACK'], 'number of images for stack')
             }
-
-    logger.info('Calibrating science frames (CR, gain, bias, flat) ... ')
-
-    # Perform calibration
-    for i, frame in enumerate(frames):
-        logger.info("Calibrating science frame {} of {} : {} ".format(i+1, len(frames), os.path.basename(obj_fg.files[i])))
-        if p["DETECT_AND_REJECT_COSMIC_RAYS"] :
-            processing.cosmics_lacosmic(frame, inplace=True)
-        processing.gain_correct(frame, gain, inplace=True)
-        if p["APPLY_BIAS_CORRECTION"] :
-            processing.subtract_bias(frame, bias, inplace=True)
-        if p["APPLY_FLATFIELD_CORRECTION"] :
-            processing.flat_correct(frame, flat, inplace=True)
 
     logger.info('Registering science frames and stacking them ... ')
 
