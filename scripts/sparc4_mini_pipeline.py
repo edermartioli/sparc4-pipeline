@@ -154,7 +154,7 @@ for channel in p['SELECTED_CHANNELS']:
     
         # Run master flat for PHOT, POLAR_L2 and POLAR_L4 modes
         p_phot, p_polarl2, p_polarl4 = s4pipelib.run_master_flat_calibrations(p, db, options.nightdir, data_dir, reduce_dir, p['CHANNELS'][j], detector_modes[key], key, force=options.force)
-    
+  
         try:
             # log messages:
             logger.info("Start reduction of science data in {} mode".format(p_phot['INSTMODE_PHOTOMETRY_KEYVALUE']))
