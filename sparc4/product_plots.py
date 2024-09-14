@@ -632,7 +632,7 @@ def plot_2d(x, y, z, LIM=None, LAB=None, z_lim=None, use_index_in_y=False, title
     plt.close()
 
 
-def plot_polar_time_series(filename, target=0, comps=[], output="", nsig=10, plot_total_polarization=True, plot_polarization_angle=True, plot_comps=True, plot_sum=True) :
+def plot_polar_time_series(filename, target=0, comps=[], output="", nsig=10, plot_total_polarization=True, plot_polarization_angle=True, plot_comps=True, plot_sum=True, plot=True) :
 
     """ Tool to plot polarimetric time series
 
@@ -649,6 +649,9 @@ def plot_polar_time_series(filename, target=0, comps=[], output="", nsig=10, plo
     None
     """
 
+    # initialize results dict container
+    results = Table()
+    
     # open time series fits file
     hdul = fits.open(filename)
 
@@ -670,6 +673,13 @@ def plot_polar_time_series(filename, target=0, comps=[], output="", nsig=10, plo
     time = target_tbl['TIME']
     mintime, maxtime = np.min(time), np.max(time)
 
+    x1 = target_tbl['X1']
+    y1 = target_tbl['Y1']
+    x2 = target_tbl['X2']
+    y2 = target_tbl['Y2']
+    fwhm = target_tbl['FWHM']
+    mag_offset = 0.1
+
     # set minimum number of rows: 1 for photometry and 1 for polarimetry
     nrows = 2
 
@@ -686,8 +696,9 @@ def plot_polar_time_series(filename, target=0, comps=[], output="", nsig=10, plo
         # for linear components of polarization (Q and U) we need one more row
         nrows += 1
         
-    # set plot frame
-    fig, axs = plt.subplots(nrows, figsize=(12, 6), sharex=True, sharey=False)
+    if plot :
+        # set plot frame
+        fig, axs = plt.subplots(nrows, figsize=(12, 6), sharex=True, sharey=False)
        
     ##############################
     # START PLOTTING PHOTOMETRY  #
@@ -702,6 +713,8 @@ def plot_polar_time_series(filename, target=0, comps=[], output="", nsig=10, plo
     
     cm, ecm = [], []
     sumag = np.zeros_like(m)
+    sumag_var = np.zeros_like(m)
+
     for i in range(len(comps)):
         comp_tbl = tbl[tbl["SRCINDEX"] == comps[i]]
 
@@ -711,6 +724,7 @@ def plot_polar_time_series(filename, target=0, comps=[], output="", nsig=10, plo
         ecm.append(ecmag)
 
         sumag += 10**(-0.4*cmag)
+        sumag_var += ecmag*ecmag
 
         mdm = np.nanmedian(cmag - m)
         dm = (cmag - m) - mdm
@@ -719,19 +733,24 @@ def plot_polar_time_series(filename, target=0, comps=[], output="", nsig=10, plo
         keep = np.isfinite(dm)
         keep &= np.abs(dm) < nsig*rms
 
-        if plot_comps:
+        results['diffmag_C{:05d}'.format(i)] = dm
+        results['diffmag_err_C{:05d}'.format(i)] = edm
+
+        if plot_comps and plot:
             axs[axindex].errorbar(time[keep], dm[keep], yerr=edm[keep], fmt='.', alpha=0.3,label=r"C{} $\Delta$mag={:.3f} $\sigma$={:.2f} mmag".format(comps[i], mdm, rms*1000))
 
     sumag = -2.5*np.log10(sumag)
     mdm = np.nanmedian(sumag - m)
     dm = (sumag - m) - mdm
+    sumag_err = np.sqrt(sumag_var)
+    
     rms = np.nanmedian(np.abs(dm)) / 0.67449
     keep = np.isfinite(dm)
     keep &= np.abs(dm) < nsig*rms
-    if plot_sum:
+    if plot_sum and plot:
         axs[axindex].errorbar(time[keep], dm[keep], yerr=em[keep], fmt='k.', label=r"SUM $\Delta$mag={:.3f} $\sigma$={:.2f} mmag".format(mdm, rms*1000))
 
-    if plot_comps or plot_sum:
+    if plot and (plot_comps or plot_sum) :
         axs[axindex].set_ylabel(r"$\Delta$mag", fontsize=16)
         axs[axindex].tick_params(axis='y', labelsize=14)
         axs[axindex].legend(fontsize=10)
@@ -739,6 +758,20 @@ def plot_polar_time_series(filename, target=0, comps=[], output="", nsig=10, plo
         axs[axindex].tick_params(which='minor', length=3, width=0.7, direction='in', bottom=True, top=True, left=True, right=True)
         axs[axindex].tick_params(which='major', length=7, width=1.2,direction='in', bottom=True, top=True, left=True, right=True)
     
+    
+    results['TIME'] = time
+    results['x1'] = x1
+    results['y1'] = y1
+    results['x2'] = x2
+    results['y2'] = y2
+    results['fwhm'] = fwhm
+    results['mag'] = m
+    results['mag_err'] = em
+    
+    results['magsum'] = sumag
+    results['magsum_err'] = sumag_err
+    results['diffmagsum'] = dm
+
     ##############################
     # START PLOTTING POLARIMETRY #
     ##############################
@@ -752,13 +785,14 @@ def plot_polar_time_series(filename, target=0, comps=[], output="", nsig=10, plo
         cpmedian = np.nanmedian(circ_polarization)
         cprms = np.nanmedian(np.abs(circ_polarization - cpmedian)) / 0.67449
     
-        axs[axindex].errorbar(time, circ_polarization*100, yerr=circ_polarization_error*100, fmt='k.', label=r"V[{}] = {:.3f}$\pm${:.3f} %".format(target, cpmedian*100, cprms*100))
-        axs[axindex].set_ylabel(r"V (%)", fontsize=16)
-        axs[axindex].tick_params(axis='y', labelsize=14)
-        axs[axindex].legend(fontsize=10)
-        axs[axindex].minorticks_on()
-        axs[axindex].tick_params(which='minor', length=3, width=0.7, direction='in', bottom=True, top=True, left=True, right=True)
-        axs[axindex].tick_params(which='major', length=7, width=1.2,direction='in', bottom=True, top=True, left=True, right=True)
+        if plot :
+            axs[axindex].errorbar(time, circ_polarization*100, yerr=circ_polarization_error*100, fmt='k.', label=r"V[{}] = {:.3f}$\pm${:.3f} %".format(target, cpmedian*100, cprms*100))
+            axs[axindex].set_ylabel(r"V (%)", fontsize=16)
+            axs[axindex].tick_params(axis='y', labelsize=14)
+            axs[axindex].legend(fontsize=10)
+            axs[axindex].minorticks_on()
+            axs[axindex].tick_params(which='minor', length=3, width=0.7, direction='in', bottom=True, top=True, left=True, right=True)
+            axs[axindex].tick_params(which='major', length=7, width=1.2,direction='in', bottom=True, top=True, left=True, right=True)
     
     if plot_total_polarization :
         plot1_key='P'
@@ -779,14 +813,17 @@ def plot_polar_time_series(filename, target=0, comps=[], output="", nsig=10, plo
 
     pmedian = np.nanmedian(polarization)
     prms = np.nanmedian(np.abs(polarization - pmedian)) / 0.67449
+    if plot :
+        axs[axindex].errorbar(time, polarization*100, yerr=polarization_error*100, fmt='k.', label=r"{}[{}] = {:.3f}$\pm${:.3f} %".format(plot1_key,target,pmedian*100, prms*100))
+        axs[axindex].set_ylabel(r"{} (%)".format(plot1_key), fontsize=16)
+        axs[axindex].tick_params(axis='y', labelsize=14)
+        axs[axindex].legend(fontsize=10)
+        axs[axindex].minorticks_on()
+        axs[axindex].tick_params(which='minor', length=3, width=0.7, direction='in', bottom=True, top=True, left=True, right=True)
+        axs[axindex].tick_params(which='major', length=7, width=1.2,direction='in', bottom=True, top=True, left=True, right=True)
     
-    axs[axindex].errorbar(time, polarization*100, yerr=polarization_error*100, fmt='k.', label=r"{}[{}] = {:.3f}$\pm${:.3f} %".format(plot1_key,target,pmedian*100, prms*100))
-    axs[axindex].set_ylabel(r"{} (%)".format(plot1_key), fontsize=16)
-    axs[axindex].tick_params(axis='y', labelsize=14)
-    axs[axindex].legend(fontsize=10)
-    axs[axindex].minorticks_on()
-    axs[axindex].tick_params(which='minor', length=3, width=0.7, direction='in', bottom=True, top=True, left=True, right=True)
-    axs[axindex].tick_params(which='major', length=7, width=1.2,direction='in', bottom=True, top=True, left=True, right=True)
+    results['polarization_1'] = np.array(polarization,dtype=float)
+    results['polarization_1_err'] = np.array(polarization_error,dtype=float)
     
     # PLOT second polarization component (THETA or U)
     y2 = target_tbl[plot2_key]
@@ -799,24 +836,30 @@ def plot_polar_time_series(filename, target=0, comps=[], output="", nsig=10, plo
         if plot_polarization_angle :
             # plot polarization angle (theta)
             axindex += 1
-            axs[axindex].errorbar(time, y2, yerr=y2err, fmt='k.', label=r"$\theta$[{}] = {:.1f}$\pm${:.1f} deg".format(target, y2median, y2rms))
-            axs[axindex].set_ylabel(r"$\theta$ (deg)", fontsize=16)
+            if plot :
+                axs[axindex].errorbar(time, y2, yerr=y2err, fmt='k.', label=r"$\theta$[{}] = {:.1f}$\pm${:.1f} deg".format(target, y2median, y2rms))
+                axs[axindex].set_ylabel(r"$\theta$ (deg)", fontsize=16)
     else :
         # plot U
         axindex += 1
-        axs[axindex].errorbar(time, y2*100, yerr=y2err*100, fmt='k.', label=r"{}[{}] = {:.3f}$\pm${:.3f} %".format(plot2_key,target,y2median*100, y2rms*100))
-        axs[axindex].set_ylabel(r"{} (%)".format(plot2_key), fontsize=16)
-        
-    axs[axindex].legend(fontsize=10)
+        if plot :
+            axs[axindex].errorbar(time, y2*100, yerr=y2err*100, fmt='k.', label=r"{}[{}] = {:.3f}$\pm${:.3f} %".format(plot2_key,target,y2median*100, y2rms*100))
+            axs[axindex].set_ylabel(r"{} (%)".format(plot2_key), fontsize=16)
 
-    axs[axindex].tick_params(axis='x', labelsize=14)
-    axs[axindex].tick_params(axis='y', labelsize=14)
-    axs[axindex].minorticks_on()
-    axs[axindex].set_xlabel(r"time (BJD)", fontsize=16)
-    axs[axindex].tick_params(which='minor', length=3, width=0.7, direction='in', bottom=True, top=True, left=True, right=True)
-    axs[axindex].tick_params(which='major', length=7, width=1.2, direction='in', bottom=True, top=True, left=True, right=True)
+    results['polarization_2'] = np.array(y2,dtype=float)
+    results['polarization_2_err'] = np.array(y2err,dtype=float)
     
-    plt.show()
+    if plot :
+        axs[axindex].legend(fontsize=10)
+        axs[axindex].tick_params(axis='x', labelsize=14)
+        axs[axindex].tick_params(axis='y', labelsize=14)
+        axs[axindex].minorticks_on()
+        axs[axindex].set_xlabel(r"time (BJD)", fontsize=16)
+        axs[axindex].tick_params(which='minor', length=3, width=0.7, direction='in', bottom=True, top=True, left=True, right=True)
+        axs[axindex].tick_params(which='major', length=7, width=1.2, direction='in', bottom=True, top=True, left=True, right=True)
+        plt.show()
+    
+    return results
 
 
 def plot_polarimetry_map(stack_product, polar_product, min_aperture=0, max_aperture=1024, percentile=99.5,ref_catalog="CATALOG_POL_N_AP010", src_label_offset=30, arrow_size_scale=None, title_label=""):
