@@ -1,0 +1,11 @@
+# -----------------------------------------------------------------------------
+#   Define SPARC4 pipeline parameters
+# -----------------------------------------------------------------------------
+# force computation of polarimetry. Useful when new data arrived
+FORCE_POLARIMETRY_COMPUTATION: True
+# set (maximum) number of waveplate positions in a polar sequence.
+MAX_NUMBER_OF_WPPOS_IN_SEQUENCE: 16
+# whether or not to use rolling polar sequence mode
+ROLLING_POLAR_SEQUENCE: True
+# force creation of time series. Useful when new data arrived
+FORCE_TIME_SERIES_EXECUTION: False
