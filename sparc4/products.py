@@ -604,17 +604,15 @@ def readPhotTimeSeriesData(sci_list,
 
             weights = 1/(emag*emag)
 
-            keep_for_rms = (t > t[j] - time_span_for_rms_d /
-                            2) & (t < t[j] + time_span_for_rms_d/2)
+            keep_for_rms = (t > t[j] - time_span_for_rms_d/2) & (t < t[j] + time_span_for_rms_d/2)
 
             keep_for_rms &= np.isfinite(mag)
             keep_for_rms &= np.isfinite(weights)
 
-            if len(mag[keep_for_rms]) > 1:
-                rms = np.sqrt(
-                    np.cov(mag[keep_for_rms], aweights=weights[keep_for_rms]))
+            if len(mag[keep_for_rms]) > 1 and i+nsrc*j < len(tsdata["RMS"]) :
+                rms = np.sqrt(np.cov(mag[keep_for_rms], aweights=weights[keep_for_rms]))
                 tsdata["RMS"][i+nsrc*j] = rms
-            elif len(mag[keep_for_rms]) == 1:
+            elif len(mag[keep_for_rms]) == 1 and i+nsrc*j < len(tsdata["RMS"]) :
                 tsdata["RMS"][i+nsrc*j] = tsdata["EMAG"][i+nsrc*j]
 
     for j in range(len(keys_to_add_header_data)) :

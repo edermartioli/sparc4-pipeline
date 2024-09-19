@@ -3092,7 +3092,7 @@ def phot_time_series(sci_list,
     info['OBSALT'] = (altitude, '[m] observatory altitude')
     info['TELESCOP'] = ('OPD-PE 1.6m', 'telescope')
     info['INSTRUME'] = ('SPARC4', 'instrument')
-    info['CHANNEL'] = (hdr["CHANNEL"], 'Instrument channel')                         
+    info['CHANNEL'] = (hdr["CHANNEL"], 'Instrument channel')
     info['OBJECT'] = (hdr["OBJECT"], 'ID of object of interest')
     equinox = 'J2000.0'
     source = SkyCoord(hdr["RA"], hdr["DEC"], unit=(

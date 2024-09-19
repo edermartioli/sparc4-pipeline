@@ -256,7 +256,7 @@ SOLVE_ASTROMETRY_WITH_ASTROMETRY_NET: False
 SOLVE_ASTROMETRY_IN_STACK: True
 
 # sip_degree to model geometric distortion.
-SIP_DEGREE: 4
+SIP_DEGREE: 3
 
 # Use a Vizier online catalog for astrometric solution. If False, then uses Gaia.
 # It also serves as a backup when Gaia server is down.
