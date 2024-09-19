@@ -9,13 +9,13 @@
 
     Simple usage examples:
 
-    python -W ignore scripts/sparc4_mini_pipeline.py --nightdir=20230604 -vp --params=/Users/eder/sparc4-pipeline/params/my_params.yaml
+    python -W ignore scripts/sparc4_mini_pipeline.py --nightdir=20230604 --params=/Users/eder/sparc4-pipeline/params/my_params.yaml -vp
 
-    python -W ignore scripts/sparc4_mini_pipeline.py --nightdir=20230605 --datadir=/Users/eder/Data/SPARC4/comissioning_jun23/ --reducedir=/Users/eder/Data/SPARC4/comissioning_jun23/reduced -v
+    python -W ignore scripts/sparc4_mini_pipeline.py --nightdir=20230605 --datadir=/Users/eder/Data/SPARC4/comissioning_jun23/ --reducedir=/Users/eder/Data/SPARC4/comissioning_jun23/reduced
 
     python -W ignore sparc4_mini_pipeline.py --nightdir=20230606
     
-    python -W ignore scripts/sparc4_mini_pipeline.py --nightdir=20231107 --datadir=/Users/eder/Data/SPARC4/wasp-78/ --reducedir=/Users/eder/Data/SPARC4/wasp-78/reduced -v
+    python -W ignore scripts/sparc4_mini_pipeline.py --nightdir=20231107 --datadir=/Users/eder/Data/SPARC4/wasp-78/ --reducedir=/Users/eder/Data/SPARC4/wasp-78/reduced
     """
 
 import os
