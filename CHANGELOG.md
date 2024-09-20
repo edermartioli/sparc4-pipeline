@@ -51,3 +51,4 @@ Version 1.3 (2024-06-03)
 - Included new method "BY_SIMILARITY" to match frames for stack 
 - Fixed bugs in flat correction per wp position
 - Included plot_polarimetry_map routine 
+- Included plot routines for all 4 channels together for both sci images and lightcurves
