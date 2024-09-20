@@ -937,3 +937,147 @@ def plot_polarimetry_map(stack_product, polar_product, min_aperture=0, max_apert
     plt.xlabel("col [pix]")
     plt.ylabel("row [pix]")
     plt.show()
+
+
+def plot_s4_lightcurves(lcfiles=[None,None,None,None], object_indexes=[0,0,0,0], comps=[[1],[1],[1],[1]], aperture_radius=10, object_name='') :
+
+    """ Module to plot differential light curves for all 4 channels
+    
+    Parameters
+    ----------
+    lcfiles: [str,str,str,str]
+        list of light curves file paths for all 4 channels
+    object_indexes: list: [int, int, int, int]
+        list of target indexes
+    comps: list: [list:[c1, c2, c3, ..], list:[c1, c2, c3, ..], list:[c1, c2, c3, ..], list:[c1, c2, c3, ..]]
+        list of arrays of comparison indexes in the four channels
+    aperture_radius : int (optional)
+        photometry aperture radius (pixels) to select FITS hdu extension in catalog
+    object_name : str
+        object name
+    
+    Returns
+        lcs: list
+            set of 4 lightcurve data
+    -------
+    """
+    
+    bands = ['g', 'r', 'i', 'z']
+    colors = ['darkblue','darkgreen','darkorange','darkred']
+    
+    catalog_ext = "CATALOG_PHOT_AP{:03d}".format(aperture_radius)
+    fig, axs = plt.subplots(4, 1, sharex=True, sharey=True, gridspec_kw={'hspace': 0, 'wspace': 0})
+
+    lcs = []
+    
+    for ch in range(4) :
+        if ch == 0 :
+            axs[ch].set_title(r"{}".format(object_name), fontsize=20)
+        try :
+            lc = plot_light_curve(lcfiles[ch], target=object_indexes[ch], comps=comps[ch], catalog_name=catalog_ext, plot_coords=False, plot_rawmags=False, plot_sum=False, plot_comps=False)
+            axs[ch].plot(lc['TIME'],lc['diffmagsum'],".",color=colors[ch], alpha=0.3, label=bands[ch])
+            lcs.append(lc)
+        except :
+            lcs.append(None)
+            continue
+                
+        axs[ch].tick_params(axis='x', labelsize=14)
+        axs[ch].tick_params(axis='y', labelsize=14)
+        axs[ch].minorticks_on()
+        axs[ch].tick_params(which='minor', length=3, width=0.7, direction='in',bottom=True, top=True, left=True, right=True)
+        axs[ch].tick_params(which='major', length=7, width=1.2, direction='in',bottom=True, top=True, left=True, right=True)
+        if ch == 3 :
+             axs[ch].set_xlabel(r"time (BJD)", fontsize=16)
+                
+        axs[ch].set_ylabel(r"$\Delta$mag", fontsize=16)
+        axs[ch].legend(fontsize=16)
+
+    plt.show()
+    
+    return lcs
+
+
+def plot_s4data_for_diffphot(sci_img_files=[None,None,None,None], object_indexes=[0,0,0,0], comps=[[1],[1],[1],[1]], instmode="PHOT", percentile=98, aperture_radius=10, object_name="",figsize=(8, 8), fontsize=10) :
+
+
+    """ Module to plot differential light curves and auxiliary data
+    
+    Parameters
+    ----------
+    sci_img_files: [str,str,str,str]
+        list of processed scientific image file paths for all 4 channels
+    object_indexes: list: [int, int, int, int]
+        list of target indexes
+    comps: list: [list:[c1, c2, c3, ..], list:[c1, c2, c3, ..], list:[c1, c2, c3, ..], list:[c1, c2, c3, ..]]
+        list of arrays of comparison indexes in the four channels
+    instmode : str
+        instrument mode: "PHOT" or "POLAR"
+    aperture_radius : int (optional)
+        photometry aperture radius (pixels) to select FITS hdu extension in catalog
+    object_name : str
+        object name
+    
+    Returns
+        
+    -------
+    """
+
+    nstars = 1
+
+    bands = ['g', 'r', 'i', 'z']
+    colors = ['lightblue','darkgreen','darkorange','red']
+    panel_pos = [[0,0],[0,1],[1,0],[1,1]]
+    
+    catalog_ext = "CATALOG_PHOT_AP{:03d}".format(aperture_radius)
+    if instmode == "POLAR" :
+        catalog_ext = "CATALOG_POL_N_AP{:03d}".format(aperture_radius)
+
+    nrows, ncols = 2, 2
+    #fig, axs = plt.subplots(nrows, ncols, sharex=True, sharey=True, layout='constrained', gridspec_kw={'hspace': 0, 'wspace': 0}, figsize=figsize)
+    fig, axs = plt.subplots(nrows, ncols, figsize=figsize)
+        
+    for ch in range(4) :
+        col, row = panel_pos[ch]
+        
+        axs[col,row].set_title(r"{}-band".format(bands[ch]),fontsize=fontsize)
+
+        if sci_img_files[ch] is not None :
+            
+            hdul = fits.open(sci_img_files[ch])
+            img_data, hdr = hdul[0].data, hdul[0].header
+            catalog = Table(hdul[catalog_ext].data)
+            wcs = WCS(hdr, naxis=2)
+        
+            for j in range(len(catalog["X"])) :
+                
+                #axs[col,row].add_patch(plt.Circle((catalog["X"][j],catalog["Y"][j]), radius=aperture_radius+2, facecolor="none", edgecolor=colors[ch]))
+                
+                if j == object_indexes[ch] :
+                    axs[col,row].text(catalog["X"][j]+1.1*aperture_radius, catalog["Y"][j]-1.1*aperture_radius, '{}'.format(j), c='gray', fontsize=fontsize)
+                    
+                    axs[col,row].text(catalog["X"][j]+1.1*aperture_radius, catalog["Y"][j], '{}'.format(object_name), c='white', fontsize=fontsize, alpha=0.5)
+                    axs[col,row].add_patch(plt.Circle((catalog["X"][j],catalog["Y"][j]), radius=aperture_radius, facecolor="none", edgecolor=colors[ch]))
+                    axs[col,row].add_patch(plt.Circle((catalog["X"][j],catalog["Y"][j]), radius=aperture_radius+2, facecolor="none", edgecolor=colors[ch]))
+                else :
+                    if j in comps[ch] :
+                        axs[col,row].text(catalog["X"][j]+1.1*aperture_radius, catalog["Y"][j], 'C{}'.format(j), c='white', fontsize=fontsize)
+                        axs[col,row].add_patch(plt.Circle((catalog["X"][j],catalog["Y"][j]), radius=aperture_radius, facecolor="none", edgecolor=colors[ch]))
+                    else :
+                        axs[col,row].text(catalog["X"][j]+1.1*aperture_radius, catalog["Y"][j], '{}'.format(j), c='gray', fontsize=fontsize)
+                        axs[col,row].add_patch(plt.Circle((catalog["X"][j],catalog["Y"][j]), radius=aperture_radius, facecolor="none", edgecolor="grey"))
+                            
+        else :
+            img_data = np.empty([1024, 1024])
+  
+        axs[col,row].imshow(img_data, vmin=np.percentile(img_data, 100. - percentile), vmax=np.percentile(img_data, percentile), origin='lower', cmap='cividis', aspect='equal')
+                  
+        axs[col,row].tick_params(axis='x', labelsize=fontsize)
+        axs[col,row].tick_params(axis='y', labelsize=fontsize)
+        axs[col,row].minorticks_on()
+        axs[col,row].tick_params(which='minor', length=3, width=0.7, direction='in',bottom=True, top=True, left=True, right=True)
+        axs[col,row].tick_params(which='major', length=7, width=1.2, direction='in',bottom=True, top=True, left=True, right=True)
+                         
+    plt.show()
+        
+    return
+
