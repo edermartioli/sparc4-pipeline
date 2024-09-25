@@ -746,7 +746,8 @@ def plot_polar_time_series(filename, target=0, comps=[], output="", nsig=10, plo
     
     rms = np.nanmedian(np.abs(dm)) / 0.67449
     keep = np.isfinite(dm)
-    keep &= np.abs(dm) < nsig*rms
+    # keep &= np.abs(dm) < nsig*rms
+    
     if plot_sum and plot:
         axs[axindex].errorbar(time[keep], dm[keep], yerr=em[keep], fmt='k.', label=r"SUM $\Delta$mag={:.3f} $\sigma$={:.2f} mmag".format(mdm, rms*1000))
 
