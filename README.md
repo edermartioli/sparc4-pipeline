@@ -36,4 +36,7 @@ Download the [minidata package](https://drive.google.com/file/d/1tAVjyhYGMDcrU5s
 
 See the [SPARC4 Quick Tutorial](https://github.com/edermartioli/sparc4-pipeline/blob/257cde7c85666b2cd83a76834a9f0023365393fa/docs/Manual%20da%20SPARC4%20Pipeline.pdf) (in Portuguese) to start using the pipeline quickly.
 
+
+The [SPARC4 Pipeline Workshop Guidelines](https://docs.google.com/document/d/139lela_5Od0tttfZycWEukB7HSjlJ4hL4iNhtqP97mQ/edit?usp=sharing) are now available, providing step-by-step instructions to reduce the minidata. 
+
 The SPARC4 pipeline is under development in collaboration with the scientific community. If you are interested in collaborating, send an email to the pipeline team at the following address: `sparc4-pipeline@googlegroups.com`.
