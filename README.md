@@ -38,4 +38,18 @@ See the [SPARC4 Quick Tutorial](https://github.com/edermartioli/sparc4-pipeline/
 
 The [SPARC4 Pipeline Workshop Guidelines](https://docs.google.com/document/d/139lela_5Od0tttfZycWEukB7HSjlJ4hL4iNhtqP97mQ/edit?usp=sharing) ([pdf version](https://github.com/edermartioli/sparc4-pipeline/blob/main/docs/SPARC4%20Pipeline%20Workshop%20Guidelines.pdf)) are now available, providing step-by-step instructions to reduce the minidata. Make sure you also check the [slides presented in the workshop at the XLVII RASAB 2024](https://github.com/edermartioli/sparc4-pipeline/blob/main/docs/sparc4-pipeline_sab2024_hands-on.pdf) as well as the [hands-on SPARC4 Pipeline Workshop Jupyter notebooks](https://drive.google.com/file/d/1yJl6maK2WXIWPPt7f8XB0CQFZwhljsCZ/view?usp=sharing) with examples for accessing the pipeline products obtained from the reduction of the minidata.
 
+# Warnings
+
+* Date: 2024-Oct-03
+
+* The current FWHM values provided in the catalogs are incorrect; they appear to be twice the correct value. These values are calculated by the third-party tool `photutils`, but we are working on a solution soon.
+* The sources and sky magnitude values provided in the catalogs are instrumental, meaning they are not calibrated for any photometric system. 
+* The pipeline does not work for objects with non-sidereal movements.
+* The position angle of the linear polarization is not calibrated to the equatorial system. This applies to both half-wave and quarter-wave retarders.
+* The polarimetry using the quarter-wave requires the determination of the fast-axis direction.
+* If a new reduction is to be rerun with updated parameters, it is mandatory to delete any products affected by this new reduction; otherwise, it will have no effect. The current version of the pipeline only checks for the existence of a product by its file path, not whether its contents are consistent with the parameters used for the reduction.
+
+
 The SPARC4 pipeline is under development in collaboration with the scientific community. If you are interested in collaborating, send an email to the pipeline team at the following address: `sparc4-pipeline@googlegroups.com`.
+
+
