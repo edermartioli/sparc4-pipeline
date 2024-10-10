@@ -873,12 +873,12 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
                                            plot_comps=True,
                                            catalog_name=p['PHOT_REF_CATALOG_NAME'])
 
-                compute_k, zero = True, 0
+                compute_k, zero = p['COMPUTE_K_IN_L2'], 0
                 wave_plate = 'halfwave'
 
                 if polar_mode == 'L4':
                     wave_plate = 'quarterwave'
-                    compute_k = False
+                    compute_k = p['COMPUTE_K_IN_L4']
                     zero = p['ZERO_OF_WAVEPLATE']
 
                 logger.info("Selecting polarimetric sequences")
@@ -907,6 +907,7 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
                                                           source_index=p['TARGET_INDEX'],
                                                           min_aperture=p['MIN_APERTURE_FOR_POLARIMETRY'],
                                                           max_aperture=p['MAX_APERTURE_FOR_POLARIMETRY'],
+                                                          compute_k=compute_k,
                                                           plot=plot_polar)
                                                           
                     p['PolarProducts'].append(polarproduct)
@@ -3775,7 +3776,7 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
     return output_filename
 
 
-def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_aperture=0, max_aperture=1024, plot=False, verbose=False):
+def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_aperture=0, max_aperture=1024, compute_k=False, plot=False, verbose=False):
     """ Pipeline module to compute polarimetry for given polarimetric sequence and
         saves the polarimetry data into a FITS SPARC4 product
 
@@ -3792,6 +3793,8 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
         minimum aperture radius (pix)
     max_aperture : float
         minimum aperture radius (pix)
+    compute_k: bool
+        whether or not to compute k
     plot: bool
         whether or not to plot results
 
@@ -3913,15 +3916,20 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
         fo = QFloat(fos[keep], efos[keep])
         fe = QFloat(fes[keep], efes[keep])
 
+        k_value = kcte.nominal
+        if compute_k :
+            k_value = None
+            
         # calculate polarimetry model and get statistical quantities
         observed_model = np.full_like(waveplate_angles[keep], np.nan)
         if wave_plate == "halfwave":
             # initialize astropop SLSDualBeamPolarimetry object
-            pol = SLSDualBeamPolarimetry(wave_plate, compute_k=True, zero=0)
+
+            pol = SLSDualBeamPolarimetry(wave_plate, compute_k=compute_k, k=k_value, zero=0)
             observed_model = halfwave_model(waveplate_angles[keep], qpol.nominal, upol.nominal)
         elif wave_plate == "quarterwave":
             # initialize astropop SLSDualBeamPolarimetry object
-            pol = SLSDualBeamPolarimetry(wave_plate, compute_k=False, zero=zero.nominal)
+            pol = SLSDualBeamPolarimetry(wave_plate, compute_k=compute_k, k=k_value, zero=zero.nominal)
             observed_model = quarterwave_model(waveplate_angles[keep], qpol.nominal, upol.nominal, vpol.nominal, zero=zero.nominal)
 
         try :
@@ -4262,6 +4270,7 @@ def polar_time_series(sci_pol_list,
                       aperture_radius=None,
                       min_aperture=0,
                       max_aperture=1024,
+                      compute_k=True,
                       force=True):
     """ Pipeline module to calculate photometry differential time series for a given list of sparc4 sci image products
 
@@ -4279,6 +4288,8 @@ def polar_time_series(sci_pol_list,
         minimum aperture radius (pix)
     max_aperture : float
         minimum aperture radius (pix)
+    compute_k : bool
+        whether or not to compute k
     force : bool
         force reduction even if product already exists
 
@@ -4361,7 +4372,8 @@ def polar_time_series(sci_pol_list,
                                             source_index=j,
                                             aperture_radius=aperture_radius,
                                             min_aperture=min_aperture,
-                                            max_aperture=max_aperture)
+                                            max_aperture=max_aperture,
+                                            compute_k=compute_k)
 
             tsdata['TIME'] = np.append(tsdata['TIME'], mid_bjd)
             tsdata['SRCINDEX'] = np.append(tsdata['SRCINDEX'], j)

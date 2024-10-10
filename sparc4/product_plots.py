@@ -483,12 +483,17 @@ def plot_polarimetry_results(loc, pos_model_sampling=1, title_label="", wave_pla
     kcte = loc["K"]
     zero = loc["ZERO"]
 
+    kctelab = r"k: {:.5f}".format(kcte.nominal)
+    zerolab = r"$\psi_0$: {} deg".format(zero)
+    title_label += "  " + kctelab + "  " + zerolab
+
     qlab = "q: {:.2f}+-{:.2f} %".format(100*qpol.nominal, 100*qpol.std_dev)
     ulab = "u: {:.2f}+-{:.2f} %".format(100*upol.nominal, 100*upol.std_dev)
     vlab = "v: {:.2f}+-{:.2f} %".format(100*vpol.nominal, 100*vpol.std_dev)
     plab = "p: {:.2f}+-{:.2f} %".format(100*ppol.nominal, 100*ppol.std_dev)
     thetalab = r"$\theta$: {:.2f}+-{:.2f} deg".format(
         theta.nominal, theta.std_dev)
+        
     title_label += "\n"+qlab+"  "+ulab
     if wave_plate == 'quarterwave':
         title_label += "  "+vlab
@@ -863,7 +868,7 @@ def plot_polar_time_series(filename, target=0, comps=[], output="", nsig=10, plo
     return results
 
 
-def plot_polarimetry_map(stack_product, polar_product, min_aperture=0, max_aperture=1024, percentile=99.5,ref_catalog="CATALOG_POL_N_AP010", src_label_offset=30, arrow_size_scale=None, title_label=""):
+def plot_polarimetry_map(stack_product, polar_product, min_aperture=0, max_aperture=1024, percentile=99.5,ref_catalog="CATALOG_POL_N_AP010", src_label_offset=30, arrow_size_scale=None, compute_k=False, title_label=""):
     """ Pipeline module to plot polarimetry map
 
     Parameters
@@ -895,6 +900,7 @@ def plot_polarimetry_map(stack_product, polar_product, min_aperture=0, max_apert
                                                         source_index=i,
                                                         min_aperture=min_aperture,
                                                         max_aperture=max_aperture,
+                                                        compute_k=compute_k,
                                                         plot=False,
                                                         verbose=False)
 
