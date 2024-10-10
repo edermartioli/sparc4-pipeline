@@ -234,6 +234,12 @@ MAX_APERTURE_FOR_POLARIMETRY: 25
 # set aperture radius (in pixels) to calculate photometry in polar data
 APERTURE_RADIUS_FOR_PHOTOMETRY_IN_POLAR: 10
 
+# whether or not to compute factor "k" in L/2 mode.
+COMPUTE_K_IN_L2: True
+# whether or not to compute factor "k" in L/4 mode.
+COMPUTE_K_IN_L4: True
+# NOTE: factor "k" is a normalization constant to correct for a possible different response of the instrument to the ordinary and extraordinary polarization beams.
+
 # whether or not to fit the zero of waveplate in L/4 mode. If False, then use fixed value given by ZERO_OF_WAVEPLATE
 FIT_ZERO_OF_WPPOS_IN_L4: False
 
