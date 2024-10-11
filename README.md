@@ -45,7 +45,7 @@ Date: 2024-Oct-03
 * The sources and sky magnitude values provided in the catalogs are instrumental, meaning they are not calibrated for any photometric system. 
 * The pipeline does not work for objects with non-sidereal movements.
 * The position angle of the linear polarization is not calibrated to the equatorial system. This applies to both half-wave and quarter-wave retarders.
-* The polarimetry using the quarter-wave requires the determination of the fast-axis direction.
+* Polarimetry using a quarter-wave plate requires prior determination of the fast-axis direction. Simultaneously fitting the fast-axis direction and the normalization constant is unreliable and not permitted in the pipeline.
 * If a new reduction is to be rerun with updated parameters, it is mandatory to delete any products affected by this new reduction; otherwise, it will have no effect. The current version of the pipeline only checks for the existence of a product by its file path, not whether its contents are consistent with the parameters used for the reduction.
 -----
 
