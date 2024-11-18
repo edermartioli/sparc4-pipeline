@@ -23,7 +23,7 @@ dependencies = [
     "regions",
     "scipy",
     "uncertainties",
-    "photutils",
+    "photutils>=2.0",
     "twirl",
     "aafitrans",
 ]
