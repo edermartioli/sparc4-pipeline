@@ -41,7 +41,6 @@ The [SPARC4 Pipeline Workshop Guidelines](https://docs.google.com/document/d/139
 # Warnings
 Date: 2024-Oct-03
 
-* The current FWHM values provided in the catalogs are incorrect; they appear to be twice the correct value. These values are calculated by the third-party tool `photutils`, but we are working on a solution soon.
 * The sources and sky magnitude values provided in the catalogs are instrumental, meaning they are not calibrated for any photometric system. 
 * The pipeline does not work for objects with non-sidereal movements.
 * The position angle of the linear polarization is not calibrated to the equatorial system. This applies to both half-wave and quarter-wave retarders.
