@@ -180,7 +180,7 @@ USE_ASTROPOP_PHOTOMETRY: False
 RECENTER_APER_FOR_PHOTOMETRY: False
 
 # fit FWHM  -- slower but more accurate.
-FWHM_FROM_FIT: True
+FWHM_FROM_FIT: False
 # the switch below is to use a Moffat function instead of a Gaussian to fit the PSH to obtain the FHWMs.
 USE_MOFFAT_FUNC_TO_FIT_FHWM: True
 
