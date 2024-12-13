@@ -1590,8 +1590,11 @@ def reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", match_fr
                     logger.info("Subtracting bias using Master Zero frame : {} ".format(p["master_bias"]))
                     processing.subtract_bias(frame, bias, inplace=True)
                 if p["APPLY_FLATFIELD_CORRECTION"] :
-                    if p["APPLY_FLAT_PER_WPPOS"] and polarimetry :
+                    wppos = 0
+                    if 'WPPOS' in frames[i].header :
                         wppos = int(frames[i].header['WPPOS'])
+                        
+                    if p["APPLY_FLAT_PER_WPPOS"] and polarimetry and wppos != 0:
                         master_flat = p["wppos{:02d}_master_flat".format(wppos)]
                         if os.path.exists(master_flat) :
                             logger.info("Applying flat-field correction using Master Flat frame : {} ".format(master_flat))
@@ -1794,7 +1797,12 @@ def stack_science_images(p, inputlist, reduce_dir="./", force=False, stack_suffi
             processing.subtract_bias(frame, bias, inplace=True)
             
         if p["APPLY_FLATFIELD_CORRECTION"] :
-            if p["APPLY_FLAT_PER_WPPOS"] and polarimetry :
+        
+            wppos = 0
+            if 'WPPOS' in frames[i].header :
+                wppos = int(frames[i].header['WPPOS'])
+                
+            if p["APPLY_FLAT_PER_WPPOS"] and polarimetry and wppos != 0:
                 wppos = int(frames[i].header['WPPOS'])
                 master_flat = p["wppos{:02d}_master_flat".format(wppos)]
                 if os.path.exists(master_flat) :
