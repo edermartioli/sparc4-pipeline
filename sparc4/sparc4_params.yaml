@@ -149,7 +149,7 @@ MATCH_FRAMES: True
 # method to select files for stack
 METHOD_TO_SELECT_FILES_FOR_STACK: 'BY_SIMILARITY' # 'MAX_FLUXES', 'FIRST_FRAMES', or 'BY_SIMILARITY'
 
-# The following three parameters are used by the BY_SIMILARITY method only:
+# The following four parameters are used by the BY_SIMILARITY method only:
 # set maximum number of files to compare similarity and select for stack. If too large can be slow
 SIMIL_MAX_NFILES: 300
 # to shuffle input list of images
@@ -203,8 +203,9 @@ PHOT_MIN_OFFSET_FOR_SKYINNERRADIUS: 2
 PHOT_MIN_OFFSET_FOR_SKYOUTERRADIUS: 10
 
 # Define a list of aperture radii to perform photometry
+# The separation between polarimetric beams is 42 pixels. Therefore, an aperture radius greater than 21 pixels may result in flux cross-talk.
 #PHOT_APERTURES: [2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30]
-#PHOT_APERTURES: [5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]
+#PHOT_APERTURES: [5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21]
 PHOT_APERTURES: [5,8,10,12,15,20,25]
 
 # Threshold in number of sigmas to detect sources, where sigma = background error
@@ -216,7 +217,7 @@ PHOT_THRESHOLD: 100
 FORCE_POLARIMETRY_COMPUTATION: False
 
 # time out (integer seconds) to kill photometry when it hangs
-PHOTOMETRY_TIMEOUT: 60
+PHOTOMETRY_TIMEOUT: 15
 
 # set (maximum) number of waveplate positions in a polar sequence.
 MAX_NUMBER_OF_WPPOS_IN_SEQUENCE: 16
@@ -233,8 +234,11 @@ POS_MODEL_SAMPLING: 1.0
 
 # set minimum aperture (pixels) to search for best polar results
 MIN_APERTURE_FOR_POLARIMETRY: 5
+
 # set maximum aperture (pixels) to search for best polar results
-MAX_APERTURE_FOR_POLARIMETRY: 25
+# WARNING: The separation between polarimetric beams is 42 pixels. Therefore,
+# an aperture radius greater than 21 pixels may result in flux cross-talk.
+MAX_APERTURE_FOR_POLARIMETRY: 21
 
 # set aperture radius (in pixels) to calculate photometry in polar data
 APERTURE_RADIUS_FOR_PHOTOMETRY_IN_POLAR: 10
@@ -267,7 +271,13 @@ SOLVE_ASTROMETRY_WITH_ASTROMETRY_NET: False
 SOLVE_ASTROMETRY_IN_STACK: True
 
 # sip_degree to model geometric distortion.
-SIP_DEGREE: 3
+SIP_DEGREE: 4
+
+# set number of iterations for astrometric solution
+N_ITER_ASTROMETRY: 1
+
+# use detected sources in stack for astrometry
+USE_DETECTED_SRC_FOR_ASTROMETRY: True
 
 # Use a Vizier online catalog for astrometric solution. If False, then uses Gaia.
 # It also serves as a backup when Gaia server is down.
