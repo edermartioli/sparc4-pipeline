@@ -3809,18 +3809,26 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
             observed_model = np.full_like(waveplate_angles[keep], np.nan)
 
             try:
+            
+                logger.info("Computing polarimetry for the following flux array sizes: {} ".format(len(waveplate_angles[keep])))
+            
                 # compute polarimetry
                 norm = pol.compute(waveplate_angles[keep], n_fo[keep], n_fe[keep], f_ord_error=en_fo[keep], f_ext_error=en_fe[keep])
 
                 if wave_plate == 'halfwave':
+                    logger.info("Computing halfwave (L2) observed polarization model for q={} u={} ".format(norm.q.nominal, norm.u.nominal))
+                    
                     observed_model = halfwave_model(waveplate_angles[keep], norm.q.nominal, norm.u.nominal)
 
                 elif wave_plate == 'quarterwave':
+                    logger.info("Computing quarterwave (L4) observed polarization model for q={} u={} v={} zero={}".format(norm.q.nominal, norm.u.nominal, norm.v.nominal, norm.zero.nominal))
+                    
                     observed_model = quarterwave_model(waveplate_angles[keep], norm.q.nominal, norm.u.nominal, norm.v.nominal, zero=norm.zero.nominal)
 
                 zi[keep] = norm.zi.nominal
                 zi_err[keep] = norm.zi.std_dev
 
+                logger.info("Computing chi-square for number_of_observations={} and number_of_free_params={}".format(number_of_observations,number_of_free_params))
                 chi2 = np.nansum(((norm.zi.nominal - observed_model)/norm.zi.std_dev)** 2) / (number_of_observations - number_of_free_params)
 
                 polar_flag = 0
@@ -3853,7 +3861,7 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
                     theor_sigma = norm.theor_sigma['p']
 
             except Exception as e:
-                logger.warn("Could not calculate polarimetry for source_index={} and aperture={} pixels: {}".format(j, apertures[i],e))
+                logger.warn("Could not calculate polarimetry for source_index={} and aperture={} pixels: {}".format(j, apertures[i], e))
 
             var_values = [i, apertures[i], j,
                           ra, dec, x1, y1, x2, y2,
@@ -4079,14 +4087,12 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
         observed_model = np.full_like(waveplate_angles[keep], np.nan)
         if wave_plate == "halfwave":
             # initialize astropop SLSDualBeamPolarimetry object
-
             pol = SLSDualBeamPolarimetry(wave_plate, compute_k=compute_k, k=k_value, zero=0)
             observed_model = halfwave_model(waveplate_angles[keep], qpol.nominal, upol.nominal)
         elif wave_plate == "quarterwave":
             # initialize astropop SLSDualBeamPolarimetry object
             pol = SLSDualBeamPolarimetry(wave_plate, compute_k=compute_k, k=k_value, zero=zero.nominal)
             observed_model = quarterwave_model(waveplate_angles[keep], qpol.nominal, upol.nominal, vpol.nominal, zero=zero.nominal)
-
         try :
             # compute polarimetry
             norm = pol.compute(waveplate_angles[keep], fos[keep], fes[keep], f_ord_error=efos[keep], f_ext_error=efes[keep])
