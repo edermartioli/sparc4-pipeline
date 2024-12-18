@@ -54,3 +54,4 @@ Version 1.3 (2024-06-03)
 - Included plot routines for all 4 channels together for both sci images and lightcurves
 - Added PSF fit (Moffat or Gaussian) to obtain more reliable value of the FWHM
 - Fixed bugs with background subtraction for selection of images for stack using method "by similarity" 
+- Included plot to file capability
