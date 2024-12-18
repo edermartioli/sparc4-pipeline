@@ -697,6 +697,9 @@ def init_s4_p(nightdir, datadir="", reducedir="", channels="", print_report=Fals
         
         p['s4db_files'].append(db_file)
 
+    if 'MEM_CACHE_FOLDER' not in p.keys() or not os.path.exists(p['MEM_CACHE_FOLDER']) :
+        p['MEM_CACHE_FOLDER'] = None
+
     return p
 
 
@@ -1167,7 +1170,7 @@ def run_master_calibration(p, inputlist=[], output="", obstype='bias', data_dir=
     logger.info(f'{obstype} files: {len(filter_fg)}')
 
     # get frames
-    frames = list(filter_fg.framedata(unit='adu', use_memmap_backend=p['USE_MEMMAP']))
+    frames = list(filter_fg.framedata(unit='adu', use_memmap_backend=p['USE_MEMMAP'], cache_folder=p['MEM_CACHE_FOLDER']))
 
     # extract gain from the first image
     if float(frames[0].header['GAIN']) != 0:
@@ -1184,7 +1187,7 @@ def run_master_calibration(p, inputlist=[], output="", obstype='bias', data_dir=
         processing.gain_correct(frame, gain, inplace=True)
 
     # combine
-    master = imcombine(frames, method=method, use_memmap_backend=p['USE_MEMMAP'])
+    master = imcombine(frames, method=method, use_memmap_backend=p['USE_MEMMAP'], cache_folder=p['MEM_CACHE_FOLDER'])
 
     # get statistics
     stats = master.statistics()
@@ -1599,8 +1602,7 @@ def reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", match_fr
     if not all(obj_red_status) or force:
         logger.info("Loading science frames to memory ... ")
         # get frames
-        frames = list(obj_fg.framedata(
-            unit='adu', use_memmap_backend=p['USE_MEMMAP']))
+        frames = list(obj_fg.framedata(unit='adu', use_memmap_backend=p['USE_MEMMAP'], cache_folder=p['MEM_CACHE_FOLDER']))
 
         # extract gain from the first image
         if float(frames[0].header['GAIN']) != 0:
@@ -1818,7 +1820,7 @@ def stack_science_images(p, inputlist, reduce_dir="./", force=False, stack_suffi
 
     logger.info("Loading science frames to memory ... ")
     # get frames
-    frames = list(obj_fg.framedata(unit='adu', use_memmap_backend=p['USE_MEMMAP']))
+    frames = list(obj_fg.framedata(unit='adu', use_memmap_backend=p['USE_MEMMAP'], cache_folder=p['MEM_CACHE_FOLDER']))
 
     # extract gain from the first image
     if float(frames[0].header['GAIN']) != 0:

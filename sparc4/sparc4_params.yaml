@@ -370,4 +370,6 @@ COORD_SEARCH_RADIUS_IN_ARCSEC: 10
 #### GENERAL PROCESSING #####
 # whether or not to use memmap backend
 USE_MEMMAP: False
+# uncomment below to set a cache folder manually
+MEM_CACHE_FOLDER: '/Users/eder/sparc4-pipeline/cache/'
 #-------------------------------------
