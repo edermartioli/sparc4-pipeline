@@ -147,13 +147,13 @@ for channel in p['SELECTED_CHANNELS']:
         logger.info("Running master zero calibration")
     
         # Run master zero for a given detector mode
-        p = s4pipelib.run_master_zero_calibration(p, db, options.nightdir, data_dir, reduce_dir, p['CHANNELS'][j], detector_modes[key], key, force=options.force)
+        p = s4pipelib.run_master_zero_calibration(p, db, options.nightdir, data_dir, reduce_dir, p['CHANNELS'][j], detector_modes[key], key, force=options.force, plot=options.plot)
            
         # log messages:
         logger.info("Running master flat calibrations")
     
         # Run master flat for PHOT, POLAR_L2 and POLAR_L4 modes
-        p_phot, p_polarl2, p_polarl4 = s4pipelib.run_master_flat_calibrations(p, db, options.nightdir, data_dir, reduce_dir, p['CHANNELS'][j], detector_modes[key], key, force=options.force)
+        p_phot, p_polarl2, p_polarl4 = s4pipelib.run_master_flat_calibrations(p, db, options.nightdir, data_dir, reduce_dir, p['CHANNELS'][j], detector_modes[key], key, force=options.force, plot=options.plot)
   
         try:
             # log messages:
