@@ -13,6 +13,11 @@ REDUCED_NIGTHS_INSIDE_CHANNELS_DIR: False
 # calibration database directory
 CALIBDB_DIR: "/Users/eder/sparc4-pipeline/calibdb"
 
+# to save plot products to file. If False, it displays pop up windows, which pauses reduction
+PLOT_TO_FILE: True
+# set format by extension for plot files
+PLOT_FILE_FORMAT: ".png"
+
 # set a target list .csv file. Minimal columns: TARGET_ID, RA, DEC
 TARGET_LIST_FILE: ""
 
@@ -256,10 +261,10 @@ FIT_ZERO_OF_WPPOS_IN_L4: False
 ZERO_OF_WAVEPLATE: 108.7
 
 # Plot polarimetry fit
-PLOT_POLARIMETRY_FIT: False
+PLOT_POLARIMETRY_FIT: True
 
 # For time series, if True: plot total polarization (P, theta) or if False plot equatorial components (U, V)
-PLOT_TOTAL_POLARIZATION: False
+PLOT_TOTAL_POLARIZATION: True
 #-------------------------------------
 
 #### ASTROMETRY ####

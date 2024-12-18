@@ -175,7 +175,7 @@ def build_target_list_from_data(object_list=[], skycoords_list=[], search_radius
     return tbl
     
 
-def astrometry_from_existing_wcs(wcs, img_data, pixel_coords=None, sky_coords=None, pixel_scale=0.335, fov_search_factor=1.1, sparsify_factor=0.01, apply_sparsify_filter=True, max_number_of_catalog_sources=50, compute_wcs_tolerance = 10, plot_solution=False, nsources_to_plot=30, use_twirl_to_compute_wcs=False, sip_degree=None, use_vizier=False, vizier_catalogs=["UCAC"], vizier_catalog_idx=2) :
+def astrometry_from_existing_wcs(wcs, img_data, pixel_coords=None, sky_coords=None, pixel_scale=0.335, fov_search_factor=1.1, sparsify_factor=0.01, apply_sparsify_filter=True, max_number_of_catalog_sources=50, compute_wcs_tolerance = 10, nsources_to_plot=30, use_twirl_to_compute_wcs=False, sip_degree=None, use_vizier=False, vizier_catalogs=["UCAC"], vizier_catalog_idx=2, plot_solution=False, plot_filename="") :
 
     """ Pipeline module to calcualte astrometric solution from an existing wcs
     Parameters
@@ -206,6 +206,8 @@ def astrometry_from_existing_wcs(wcs, img_data, pixel_coords=None, sky_coords=No
         tolerance passed as a parameter to the function twirl.compute_wcs()
     plot_solution : bool
         to plot image and Gaia sources using new astrometric solution
+    plot_filename : str
+        output plot file name
     nsources_to_plot : int
         number of Gaia sources to plot
     use_twirl_to_compute_wcs : bool
@@ -348,9 +350,16 @@ def astrometry_from_existing_wcs(wcs, img_data, pixel_coords=None, sky_coords=No
     astrometry_sources_pixcoords = np.array(wcs.world_to_pixel_values(loc['ASTROMETRY_SOURCES_SKYCOORDS'][:nsources_to_plot]))
 
     if plot_solution :
+        fig = plt.figure(figsize=(10,10))
+        
         plt.imshow(img_data, vmin=np.median(img_data), vmax=3 * np.median(img_data), cmap="Greys_r")
         _ = photutils.aperture.CircularAperture(astrometry_sources_pixcoords, r=10.0).plot(color="y")
-        plt.show()
+        
+        if plot_filename != '' :
+            fig.savefig(plot_filename, bbox_inches='tight')
+            plt.close(fig)
+        else :
+            plt.show()
         
     return wcs
     
@@ -958,16 +967,25 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
                 
                 if plot_lc and inst_mode == p['INSTMODE_PHOTOMETRY_KEYVALUE'] :
                     # plot light curve
+                    
+                    plot_coords_file, plot_rawmags_file, plot_lc_file = "", "", ""
+                    if p['PLOT_TO_FILE'] :
+                        plot_coords_file = phot_ts_product.replace(".fits","_coords{}".format(p['PLOT_FILE_FORMAT']))
+                        plot_rawmags_file = phot_ts_product.replace(".fits","_rawmags{}".format(p['PLOT_FILE_FORMAT']))
+                        plot_lc_file = phot_ts_product.replace(".fits",p['PLOT_FILE_FORMAT'])
+
                     s4plt.plot_light_curve(phot_ts_product,
                                        target=p['TARGET_INDEX'],
                                        comps=p['COMPARISONS'],
                                        nsig=10,
+                                       catalog_name=p['PHOT_REF_CATALOG_NAME'],
                                        plot_coords=True,
                                        plot_rawmags=True,
                                        plot_sum=True,
                                        plot_comps=True,
-                                       catalog_name=p['PHOT_REF_CATALOG_NAME'])
-                
+                                       output_coords=plot_coords_file,
+                                       output_rawmags=plot_rawmags_file,
+                                       output_lc=plot_lc_file)
                 
             ##############################################
             ## POLARIMETRY AND TIME SERIES FOR POLARIMETRIC MODE (L2 OR L4) ##
@@ -981,15 +999,24 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
 
                 # plot light curve
                 if plot_lc:
+                    plot_coords_file, plot_rawmags_file, plot_lc_file = "", "", ""
+                    if p['PLOT_TO_FILE'] :
+                        plot_coords_file = outlc.replace(".fits","_coords{}".format(p['PLOT_FILE_FORMAT']))
+                        plot_rawmags_file = outlc.replace(".fits","_rawmags{}".format(p['PLOT_FILE_FORMAT']))
+                        plot_lc_file = outlc.replace(".fits",p['PLOT_FILE_FORMAT'])
+                        
                     s4plt.plot_light_curve(outlc,
                                            target=p['TARGET_INDEX'],
                                            comps=p['COMPARISONS'],
                                            nsig=10,
+                                           catalog_name=p['PHOT_REF_CATALOG_NAME'],
                                            plot_coords=True,
                                            plot_rawmags=True,
                                            plot_sum=True,
                                            plot_comps=True,
-                                           catalog_name=p['PHOT_REF_CATALOG_NAME'])
+                                           output_coords=plot_coords_file,
+                                           output_rawmags=plot_rawmags_file,
+                                           output_lc=plot_lc_file)
 
                 compute_k, zero = p['COMPUTE_K_IN_L2'], 0
                 wave_plate = 'halfwave'
@@ -1021,12 +1048,17 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
                                                        zero=zero,
                                                        force=p['FORCE_POLARIMETRY_COMPUTATION'])
                     
+                    polar_plot_file = ""
+                    if p['PLOT_TO_FILE'] :
+                        polar_plot_file = polarproduct.replace(".fits",p['PLOT_FILE_FORMAT'])
+                    
                     pol_results = get_polarimetry_results(polarproduct,
                                                           source_index=p['TARGET_INDEX'],
                                                           min_aperture=p['MIN_APERTURE_FOR_POLARIMETRY'],
                                                           max_aperture=p['MAX_APERTURE_FOR_POLARIMETRY'],
                                                           compute_k=compute_k,
-                                                          plot=plot_polar)
+                                                          plot=plot_polar,
+                                                          plot_filename=polar_plot_file)
                                                           
                     p['PolarProducts'].append(polarproduct)
 
@@ -1042,10 +1074,14 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
                                                                 
                 # plot light curve
                 if plot_lc:
+                    polar_ts_plot_file = ""
+                    if p['PLOT_TO_FILE'] :
+                        polar_ts_plot_file = p['PolarTimeSeriesProduct'].replace(".fits",p['PLOT_FILE_FORMAT'])
                     s4plt.plot_polar_time_series(p['PolarTimeSeriesProduct'],
                                                  target=p['TARGET_INDEX'],
                                                  comps=p['COMPARISONS'],
-                                                 plot_total_polarization=p["PLOT_TOTAL_POLARIZATION"])
+                                                 plot_total_polarization=p["PLOT_TOTAL_POLARIZATION"],
+                                                 output=polar_ts_plot_file)
                                                  
                     
                 logger.info("Running {} polarimetry for {} frames -- static polar".format(wave_plate, len(p['OBJECT_REDUCED_IMAGES'])))
@@ -1064,7 +1100,7 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
     return p
 
 
-def run_master_calibration(p, inputlist=[], output="", obstype='bias', data_dir="./", reduce_dir="./", normalize=False, force=False):
+def run_master_calibration(p, inputlist=[], output="", obstype='bias', data_dir="./", reduce_dir="./", normalize=False, force=False, plot=False):
     """ Pipeline module to run master calibration
 
     Parameters
@@ -1083,7 +1119,9 @@ def run_master_calibration(p, inputlist=[], output="", obstype='bias', data_dir=
         Boolean to decide whether or not to normalize the data
     force : bool, optional
         Boolean to decide whether or not to force reduction if a product already exists
-
+    plot : bool, optional
+        plot results
+        
     Returns
     -------
     p : dict
@@ -1183,6 +1221,15 @@ def run_master_calibration(p, inputlist=[], output="", obstype='bias', data_dir=
     # call function masteZero from sparc4_products to generate final product
     mastercal = s4p.masterCalibration(filter_fg.files, img_data=img_data,err_data=err_data, mask_data=mask_data,info=info, filename=output)
 
+    if plot :
+        plot_file = ""
+        if p["PLOT_TO_FILE"] :
+            plot_file = output.replace(".fits",p['PLOT_FILE_FORMAT'])
+        if obstype == 'bias':
+            s4plt.plot_cal_frame(output, percentile=99.5, combine_rows=True, combine_cols=True, output=plot_file)
+        else:
+            s4plt.plot_cal_frame(output, percentile=99.5, xcut=512, ycut=512, output=plot_file)
+
     return p
 
 def get_shuffled_short_list(inputlist, max_n_files=300) :
@@ -1223,7 +1270,7 @@ def get_shuffled_short_list(inputlist, max_n_files=300) :
     return outlist
 
 
-def run_master_zero_calibration(p, db, nightdir, data_dir, reduce_dir, channel, detector_mode, detector_mode_key, force=True) :
+def run_master_zero_calibration(p, db, nightdir, data_dir, reduce_dir, channel, detector_mode, detector_mode_key, force=True, plot=False) :
 
     """ Pipeline module to run master zero calibrations
 
@@ -1245,6 +1292,8 @@ def run_master_zero_calibration(p, db, nightdir, data_dir, reduce_dir, channel, 
         Keyword that identifies detector mode
     force : bool, optional
         Boolean to decide whether or not to force reduction if a product already exists
+    plot : bool, optional
+        plot results
 
     Returns
     -------
@@ -1269,17 +1318,17 @@ def run_master_zero_calibration(p, db, nightdir, data_dir, reduce_dir, channel, 
         # log messages:
         logger.info("Calculating master zero calibration and saving to file: {}".format(p["master_bias"]))
         
-        p = run_master_calibration(p, inputlist=zero_list, output=p["master_bias"], obstype='bias', data_dir=data_dir, reduce_dir=reduce_dir, force=force)
+        p = run_master_calibration(p, inputlist=zero_list, output=p["master_bias"], obstype='bias', data_dir=data_dir, reduce_dir=reduce_dir, force=force, plot=plot)
     else :
         p["APPLY_BIAS_CORRECTION"] = False
         p["master_bias"] = "None"
         # log messages:
         logger.warn("No ZERO images for detector mode {}. Turning off zero correction.".format(detector_mode_key))
-
+        
     return p
 
 
-def run_master_flat_calibrations(p, db, nightdir, data_dir, reduce_dir, channel, detector_mode, detector_mode_key, force=True) :
+def run_master_flat_calibrations(p, db, nightdir, data_dir, reduce_dir, channel, detector_mode, detector_mode_key, force=True, plot=False) :
 
     """ Pipeline module to run master flat calibrations
 
@@ -1301,7 +1350,9 @@ def run_master_flat_calibrations(p, db, nightdir, data_dir, reduce_dir, channel,
         Keyword that identifies detector mode
     force : bool, optional
         Boolean to decide whether or not to force reduction if a product already exists
-
+    plot : bool, optional
+        plot results
+        
     Returns
     -------
     p_phot, p_polarl2, p_polarl4 : dict, dict, dict
@@ -1330,7 +1381,7 @@ def run_master_flat_calibrations(p, db, nightdir, data_dir, reduce_dir, channel,
     #if len(skyflat_list):
     #    # calculate master sky flat
     #    flats["skyflat"] = "{}/{}_s4c{}{}_MasterSkyFlat.fits".format(reduce_dir, nightdir, channel, detector_mode_key)
-    #    p = run_master_calibration(p, inputlist=skyflat_list, output=flats["skyflat"], obstype='flat', data_dir=data_dir, reduce_dir=reduce_dir, normalize=True, force=force)
+    #    p = run_master_calibration(p, inputlist=skyflat_list, output=flats["skyflat"], obstype='flat', data_dir=data_dir, reduce_dir=reduce_dir, normalize=True, force=force, plot=plot)
 
     # create a list of dome flats for current detector mode and for photometry mode
     phot_flat_list = s4db.get_file_list(db, inst_mode=p['INSTMODE_PHOTOMETRY_KEYVALUE'], obstype=p['FLAT_OBSTYPE_KEYVALUE'], detector_mode=detector_mode)
@@ -1346,7 +1397,7 @@ def run_master_flat_calibrations(p, db, nightdir, data_dir, reduce_dir, channel,
         # log messages:
         logger.info("Calculating master flat for PHOT mode and saving to file: {}".format(flats["phot_master_flat"]))
 
-        p_phot = run_master_calibration(p_phot, inputlist=get_shuffled_short_list(phot_flat_list,max_n_files=p["MAX_NUMBER_OF_FLAT_FRAMES_TO_USE"]), output=flats["phot_master_flat"], obstype='flat', data_dir=data_dir, reduce_dir=reduce_dir, normalize=True, force=force)
+        p_phot = run_master_calibration(p_phot, inputlist=get_shuffled_short_list(phot_flat_list,max_n_files=p["MAX_NUMBER_OF_FLAT_FRAMES_TO_USE"]), output=flats["phot_master_flat"], obstype='flat', data_dir=data_dir, reduce_dir=reduce_dir, normalize=True, force=force, plot=plot)
         
         p_phot["master_flat"] = flats["phot_master_flat"]
     else :
@@ -1362,7 +1413,7 @@ def run_master_flat_calibrations(p, db, nightdir, data_dir, reduce_dir, channel,
         # log messages:
         logger.info("Calculating master flat for POLAR L2 mode and saving to file: {}".format(flats["polar_l2_master_flat"]))
 
-        p_polarl2 = run_master_calibration(p_polarl2, inputlist=get_shuffled_short_list(polar_l2_flat_list,max_n_files=p["MAX_NUMBER_OF_FLAT_FRAMES_TO_USE"]), output=flats["polar_l2_master_flat"], obstype='flat', data_dir=data_dir, reduce_dir=reduce_dir, normalize=True, force=force)
+        p_polarl2 = run_master_calibration(p_polarl2, inputlist=get_shuffled_short_list(polar_l2_flat_list,max_n_files=p["MAX_NUMBER_OF_FLAT_FRAMES_TO_USE"]), output=flats["polar_l2_master_flat"], obstype='flat', data_dir=data_dir, reduce_dir=reduce_dir, normalize=True, force=force, plot=plot)
         
         master_flat_file = "None"
         for wppos in range(1,17) :
@@ -1373,7 +1424,7 @@ def run_master_flat_calibrations(p, db, nightdir, data_dir, reduce_dir, channel,
                 master_flat_file = "{}/{}_s4c{}{}_POLAR_L2_WPPOS{:02d}_MasterDomeFlat.fits".format(reduce_dir, nightdir, channel, detector_mode_key, wppos)
                 # log messages:
                 logger.info("Calculating master flat for POLAR L2 mode WPPOS={} and saving to file: {}".format(wppos,master_flat_file))
-                _ = run_master_calibration(p_polarl2, inputlist=get_shuffled_short_list(polar_l2_wppos_flat_list,max_n_files=p["MAX_NUMBER_OF_FLAT_FRAMES_TO_USE"]), output=master_flat_file, obstype='flat', data_dir=data_dir, reduce_dir=reduce_dir, normalize=True, force=force)
+                _ = run_master_calibration(p_polarl2, inputlist=get_shuffled_short_list(polar_l2_wppos_flat_list,max_n_files=p["MAX_NUMBER_OF_FLAT_FRAMES_TO_USE"]), output=master_flat_file, obstype='flat', data_dir=data_dir, reduce_dir=reduce_dir, normalize=True, force=force, plot=plot)
                 
             p_polarl2["wppos{:02d}_master_flat".format(wppos)] = "None"
             
@@ -1386,7 +1437,7 @@ def run_master_flat_calibrations(p, db, nightdir, data_dir, reduce_dir, channel,
         # log messages:
         logger.info("Calculating master flat for POLAR L2 mode and saving to file: {}".format(flats["polar_l4_master_flat"]))
 
-        p_polarl4 = run_master_calibration(p_polarl4, inputlist=get_shuffled_short_list(polar_l4_flat_list,max_n_files=p["MAX_NUMBER_OF_FLAT_FRAMES_TO_USE"]), output=flats["polar_l4_master_flat"], obstype='flat', data_dir=data_dir, reduce_dir=reduce_dir, normalize=True, force=force)
+        p_polarl4 = run_master_calibration(p_polarl4, inputlist=get_shuffled_short_list(polar_l4_flat_list,max_n_files=p["MAX_NUMBER_OF_FLAT_FRAMES_TO_USE"]), output=flats["polar_l4_master_flat"], obstype='flat', data_dir=data_dir, reduce_dir=reduce_dir, normalize=True, force=force, plot=plot)
         
         master_flat_file = "None"
         for wppos in range(1,17) :
@@ -1397,7 +1448,7 @@ def run_master_flat_calibrations(p, db, nightdir, data_dir, reduce_dir, channel,
                 master_flat_file = "{}/{}_s4c{}{}_POLAR_L4_WPPOS{:02d}_MasterDomeFlat.fits".format(reduce_dir, nightdir, channel, detector_mode_key, wppos)
                 # log messages:
                 logger.info("Calculating master flat for POLAR L2 mode WPPOS={} and saving to file: {}".format(wppos,master_flat_file))
-                _ = run_master_calibration(p_polarl4, inputlist=get_shuffled_short_list(polar_l4_wppos_flat_list,max_n_files=p["MAX_NUMBER_OF_FLAT_FRAMES_TO_USE"]), output=master_flat_file, obstype='flat', data_dir=data_dir, reduce_dir=reduce_dir, normalize=True, force=force)
+                _ = run_master_calibration(p_polarl4, inputlist=get_shuffled_short_list(polar_l4_wppos_flat_list,max_n_files=p["MAX_NUMBER_OF_FLAT_FRAMES_TO_USE"]), output=master_flat_file, obstype='flat', data_dir=data_dir, reduce_dir=reduce_dir, normalize=True, force=force, plot=plot)
             p_polarl4["wppos{:02d}_master_flat".format(wppos)] = master_flat_file
             
         p_polarl4["master_flat"] = flats["polar_l4_master_flat"]
@@ -1724,8 +1775,7 @@ def stack_science_images(p, inputlist, reduce_dir="./", force=False, stack_suffi
 
     # set output stack filename
     if output_stack == "":
-        output_stack = os.path.join(
-            reduce_dir, '{}_stack.fits'.format(stack_suffix))
+        output_stack = os.path.join(reduce_dir, '{}_stack.fits'.format(stack_suffix))
     p['OBJECT_STACK'] = output_stack
 
     if os.path.exists(p['OBJECT_STACK']) and not force:
@@ -2671,7 +2721,7 @@ def generate_catalogs(p, data, hdr, sources, fwhm, catalogs=[], catalogs_label='
                         pixel_coords_atm = pixel_coords
                     
                     for iter in range(p['N_ITER_ASTROMETRY']) :
-                        p['WCS'] = astrometry_from_existing_wcs(deepcopy(p['WCS']), data, pixel_coords=pixel_coords_atm, pixel_scale=p["PLATE_SCALE"], max_number_of_catalog_sources=p['MAX_NUMBER_OF_GAIA_SRCS_FOR_ASTROMETRY'], plot_solution=p['PLOT_ASTROMETRY_RESULTS_IN_STACK'], nsources_to_plot=30, use_twirl_to_compute_wcs=False, sip_degree=p['SIP_DEGREE'], use_vizier=p['USE_VIZIER'], vizier_catalogs=p['VIZIER_CATALOGS'], vizier_catalog_idx=p['VIZIER_CATALOG_IDX'])
+                        p['WCS'] = astrometry_from_existing_wcs(deepcopy(p['WCS']), data, pixel_coords=pixel_coords_atm, pixel_scale=p["PLATE_SCALE"], max_number_of_catalog_sources=p['MAX_NUMBER_OF_GAIA_SRCS_FOR_ASTROMETRY'], nsources_to_plot=30, use_twirl_to_compute_wcs=False, sip_degree=p['SIP_DEGREE'], use_vizier=p['USE_VIZIER'], vizier_catalogs=p['VIZIER_CATALOGS'], vizier_catalog_idx=p['VIZIER_CATALOG_IDX'], plot_solution=p['PLOT_ASTROMETRY_RESULTS_IN_STACK'])
 
             except Exception as e:
             
@@ -3939,7 +3989,8 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
     return output_filename
 
 
-def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_aperture=0, max_aperture=1024, compute_k=False, plot=False, verbose=False):
+def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_aperture=0, max_aperture=1024, compute_k=False, plot=False, verbose=False, plot_filename='', figsize=(12, 6)):
+
     """ Pipeline module to compute polarimetry for given polarimetric sequence and
         saves the polarimetry data into a FITS SPARC4 product
 
@@ -3960,7 +4011,10 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
         whether or not to compute k
     plot: bool
         whether or not to plot results
-
+    plot_filename : str, optional
+        The output plot file name to save graphic to file. If empty, it won't be saved.
+    figsize : (int,int)
+        Horizontal and vertical figure size
     Returns
     -------
     loc : dict
@@ -4165,7 +4219,7 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
         title_label += r"Source index: {}    aperture: {} pix    $\chi^2$: {:.2f}    RMS: {:.6f}".format(
             source_index, aperture_radius, chi2, sig_res)
 
-        s4plt.plot_polarimetry_results(loc, title_label=title_label, wave_plate=wave_plate)
+        s4plt.plot_polarimetry_results(loc, title_label=title_label, wave_plate=wave_plate, output=plot_filename, figsize=figsize)
 
     hdul.close()
 
@@ -4417,10 +4471,13 @@ def stack_and_reduce_sci_images(p, sci_list, reduce_dir, ref_img="", stack_suffi
 
     # plot stack frame
     if match_frames and plot:
-        if polarimetry:
-            s4plt.plot_sci_polar_frame(p['OBJECT_STACK'], percentile=99.5)
-        else:
-            s4plt.plot_sci_frame(p['OBJECT_STACK'], nstars=20, use_sky_coords=True)
+        stack_plot_file = ""
+        if p['PLOT_TO_FILE'] :
+            stack_plot_file = p['OBJECT_STACK'].replace(".fits",p['PLOT_FILE_FORMAT'])
+        if polarimetry :
+            s4plt.plot_sci_polar_frame(p['OBJECT_STACK'], percentile=99.5, output=stack_plot_file)
+        else :
+            s4plt.plot_sci_frame(p['OBJECT_STACK'], nstars=20, use_sky_coords=True, output=stack_plot_file)
 
     return p
 

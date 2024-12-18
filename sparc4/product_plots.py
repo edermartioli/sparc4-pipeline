@@ -23,9 +23,9 @@ from regions import CircleSkyRegion
 
 import sparc4.pipeline_lib as s4pipelib
 
-def plot_cal_frame(filename, output="", percentile=99.5, xcut=512, ycut=512,
+def plot_cal_frame(filename, percentile=99.5, xcut=512, ycut=512,
                    combine_rows=False, combine_cols=False,
-                   combine_method="mean"):
+                   combine_method="mean", output="",figsize=(16, 8)):
     """ Plot calibration (bias, flat) frame
 
     Parameters
@@ -51,7 +51,7 @@ def plot_cal_frame(filename, output="", percentile=99.5, xcut=512, ycut=512,
     noise_mean = QFloat(np.mean(err_data), np.std(err_data))
 
     # plot best polarimetry results
-    fig, axes = plt.subplots(3, 2, figsize=(16, 8), sharex=False, sharey=False, gridspec_kw={
+    fig, axes = plt.subplots(3, 2, figsize=figsize, sharex=False, sharey=False, gridspec_kw={
                              'hspace': 0.5, 'height_ratios': [4, 1, 1]})
 
     axes[0, 0].set_title("image: mean:{}".format(img_mean))
@@ -110,11 +110,14 @@ def plot_cal_frame(filename, output="", percentile=99.5, xcut=512, ycut=512,
     axes[2, 1].set_ylabel(r"$\sigma$".format(xcut), fontsize=16)
     axes[2, 1].set_xlabel("rows (pixel)", fontsize=16)
 
-    plt.show()
+    if output != '' :
+        fig.savefig(output, bbox_inches='tight')
+        plt.close(fig)
+    else :
+        plt.show()
+        
 
-
-def plot_sci_frame(filename, cat_ext=3, nstars=5, output="", percentile=98,
-                   use_sky_coords=False):
+def plot_sci_frame(filename, cat_ext=3, nstars=5, percentile=98, use_sky_coords=False, output="", figsize=(10, 10)):
     """ Plot science frame
 
     Parameters
@@ -142,7 +145,7 @@ def plot_sci_frame(filename, cat_ext=3, nstars=5, output="", percentile=98,
     if nstars > len(x):
         nstars = len(x)
 
-    fig = plt.figure(figsize=(10, 10))
+    fig = plt.figure(figsize=figsize)
 
     if use_sky_coords:
         # load WCS from image header
@@ -192,10 +195,14 @@ def plot_sci_frame(filename, cat_ext=3, nstars=5, output="", percentile=98,
         plt.xlabel("columns (pixel)", fontsize=18)
         plt.ylabel("rows (pixel)", fontsize=18)
 
-    plt.show()
+    if output != '' :
+        fig.savefig(output, bbox_inches='tight')
+        plt.close(fig)
+    else :
+        plt.show()
 
 
-def plot_sci_polar_frame(filename, percentile=99.5):
+def plot_sci_polar_frame(filename, percentile=99.5, output="", figsize=(10, 10)):
     """ Plot science polar frame
 
     Parameters
@@ -221,7 +228,7 @@ def plot_sci_polar_frame(filename, percentile=99.5):
 
     mean_aper = np.mean(hdul["CATALOG_POL_N_AP010"].data['APER'])
 
-    plt.figure(figsize=(10, 10))
+    fig = plt.figure(figsize=figsize)
 
     plt.plot(x_o, y_o, 'wo', ms=mean_aper, fillstyle='none', lw=1.5, alpha=0.7)
     plt.plot(x_e, y_e, 'wo', ms=mean_aper, fillstyle='none', lw=1.5, alpha=0.7)
@@ -238,11 +245,15 @@ def plot_sci_polar_frame(filename, percentile=99.5):
     plt.xlabel("columns (pixel)", fontsize=16)
     plt.ylabel("rows (pixel)", fontsize=16)
 
-    plt.show()
+    if output != '' :
+        fig.savefig(output, bbox_inches='tight')
+        plt.close(fig)
+    else :
+        plt.show()
+        
 
-
-def plot_diff_light_curve(filename, target=0, comps=[], output="", nsig=100,
-                          plot_sum=True, plot_comps=False):
+def plot_diff_light_curve(filename, target=0, comps=[], nsig=100,
+                          plot_sum=True, plot_comps=False, output="",figsize=(10, 10)):
     """ Plot light curve
 
     Parameters
@@ -257,6 +268,8 @@ def plot_diff_light_curve(filename, target=0, comps=[], output="", nsig=100,
     -------
     None
     """
+
+    fig = plt.figure(figsize=figsize)
 
     hdul = fits.open(filename)
     # Below is a hack to avoid very high values of time in some bad data
@@ -309,12 +322,18 @@ def plot_diff_light_curve(filename, target=0, comps=[], output="", nsig=100,
     plt.xlabel(r"time (BJD)", fontsize=16)
     plt.ylabel(r"$\Delta$mag", fontsize=16)
     plt.legend(fontsize=10)
-    plt.show()
+    
+    if output != '' :
+        fig.savefig(output, bbox_inches='tight')
+        plt.close(fig)
+    else :
+        plt.show()
+        
 
-
-def plot_light_curve(filename, target=0, comps=[], output="", nsig=10,
+def plot_light_curve(filename, target=0, comps=[], nsig=10,
                      plot_coords=True, plot_rawmags=True, plot_sum=True,
-                     plot_comps=True, catalog_name=1):
+                     plot_comps=True, catalog_name=1, output="",
+                     output_coords="", output_rawmags="", output_lc="",figsize=(12, 6)):
     """ Plot light curve
 
     Parameters
@@ -323,6 +342,13 @@ def plot_light_curve(filename, target=0, comps=[], output="", nsig=10,
         string for fits file path
 
     output : str, optional
+        The output csv table file name to save differential photometry data. If empty, it won't be saved.
+        
+    output_coords : str, optional
+        The output plot file name to save graphic to file. If empty, it won't be saved.
+    output_rawmags : str, optional
+        The output plot file name to save graphic to file. If empty, it won't be saved.
+    output_lc : str, optional
         The output plot file name to save graphic to file. If empty, it won't be saved.
 
     Returns
@@ -351,6 +377,7 @@ def plot_light_curve(filename, target=0, comps=[], output="", nsig=10,
     fwhm = target_tbl['FWHM']
 
     if plot_coords:
+        fig = plt.figure(figsize=figsize)
         use_sky_coords = True
         platescale, unit = 1.0, 'pix'
         if use_sky_coords:
@@ -365,7 +392,11 @@ def plot_light_curve(filename, target=0, comps=[], output="", nsig=10,
         plt.xlabel(r"time (BJD)", fontsize=16)
         plt.ylabel(r"$\Delta$ {}".format(unit), fontsize=16)
         plt.legend(fontsize=10)
-        plt.show()
+        if output_coords != '' :
+            fig.savefig(output_coords, bbox_inches='tight')
+            plt.close(fig)
+        else :
+            plt.show()
 
     mag_offset = 0.1
     m = target_tbl['MAG']
@@ -376,13 +407,18 @@ def plot_light_curve(filename, target=0, comps=[], output="", nsig=10,
     mskym = np.nanmedian(skym)
 
     if plot_rawmags:
+        fig = plt.figure(figsize=figsize)
         plt.errorbar(time, mmag - m - mag_offset, yerr=em, fmt='.', label='raw obj dmag, mean={:.4f}'.format(mmag))
         plt.plot(time, mskym - skym + mag_offset, '.', label='raw sky dmag, mean={:.4f}'.format(mskym))
         plt.xlabel(r"time (BJD)", fontsize=16)
         plt.ylabel(r"$\Delta$mag", fontsize=16)
         plt.legend(fontsize=10)
-        plt.show()
-
+        if output_rawmags != '' :
+            fig.savefig(output_rawmags, bbox_inches='tight')
+            plt.close(fig)
+        else :
+            plt.show()
+            
     results['TIME'] = time
     results['x'] = x
     results['y'] = y
@@ -395,6 +431,9 @@ def plot_light_curve(filename, target=0, comps=[], output="", nsig=10,
     cm, ecm = [], []
     sumag = np.zeros_like(m)
     sumag_var = np.zeros_like(m)
+    
+    if plot_comps or plot_sum:
+        fig = plt.figure(figsize=figsize)
     
     for i in range(len(comps)):
         comp_tbl = tbl[tbl["SRCINDEX"] == comps[i]]
@@ -445,7 +484,11 @@ def plot_light_curve(filename, target=0, comps=[], output="", nsig=10,
         plt.xlabel(r"time (BJD)", fontsize=16)
         plt.ylabel(r"$\Delta$mag", fontsize=16)
         plt.legend(fontsize=10)
-        plt.show()
+        if output_lc != '' :
+            fig.savefig(output_lc, bbox_inches='tight')
+            plt.close(fig)
+        else :
+            plt.show()
 
     if output != "" :
         # save output table to file
@@ -454,7 +497,7 @@ def plot_light_curve(filename, target=0, comps=[], output="", nsig=10,
     return results
     
 
-def plot_polarimetry_results(loc, pos_model_sampling=1, title_label="", wave_plate='halfwave'):
+def plot_polarimetry_results(loc, pos_model_sampling=1, title_label="", wave_plate='halfwave', output='',figsize=(12, 6)):
     """ Pipeline module to plot half-wave polarimetry data
 
     Parameters
@@ -467,6 +510,9 @@ def plot_polarimetry_results(loc, pos_model_sampling=1, title_label="", wave_pla
         plot title
     wave_plate : str
         wave plate mode
+
+    output : str, optional
+        The output plot file name to save graphic to file. If empty, it won't be saved.
 
     Returns
     -------
@@ -502,7 +548,7 @@ def plot_polarimetry_results(loc, pos_model_sampling=1, title_label="", wave_pla
     title_label += "  "+plab+"  "+thetalab
 
     # plot best polarimetry results
-    fig, axes = plt.subplots(2, 1, figsize=(12, 6), sharex=True, sharey=False, gridspec_kw={
+    fig, axes = plt.subplots(2, 1, figsize=figsize, sharex=True, sharey=False, gridspec_kw={
                              'hspace': 0, 'height_ratios': [2, 1]})
 
     if title_label != "":
@@ -567,7 +613,11 @@ def plot_polarimetry_results(loc, pos_model_sampling=1, title_label="", wave_pla
     axes[1].tick_params(which='major', length=7, width=1.2,
                         direction='in', bottom=True, top=True, left=True, right=True)
 
-    plt.show()
+    if output != '' :
+        fig.savefig(output, bbox_inches='tight')
+        plt.close(fig)
+    else :
+        plt.show()
 
 
 def plot_2d(x, y, z, LIM=None, LAB=None, z_lim=None, use_index_in_y=False, title="", pfilename="", cmap="gist_heat"):
@@ -639,7 +689,7 @@ def plot_2d(x, y, z, LIM=None, LAB=None, z_lim=None, use_index_in_y=False, title
     plt.close()
 
 
-def plot_polar_time_series(filename, target=0, comps=[], output="", nsig=10, plot_total_polarization=True, plot_polarization_angle=True, plot_comps=True, plot_sum=True, plot=True) :
+def plot_polar_time_series(filename, target=0, comps=[], nsig=10, plot_total_polarization=True, plot_polarization_angle=True, plot_comps=True, plot_sum=True, plot=True, output="",figsize=(12, 6)) :
 
     """ Tool to plot polarimetric time series
 
@@ -865,12 +915,18 @@ def plot_polar_time_series(filename, target=0, comps=[], output="", nsig=10, plo
         axs[axindex].set_xlabel(r"time (BJD)", fontsize=16)
         axs[axindex].tick_params(which='minor', length=3, width=0.7, direction='in', bottom=True, top=True, left=True, right=True)
         axs[axindex].tick_params(which='major', length=7, width=1.2, direction='in', bottom=True, top=True, left=True, right=True)
-        plt.show()
+        if output != '' :
+            fig.savefig(output, bbox_inches='tight')
+            plt.close(fig)
+        else :
+            plt.show()
+
     
     return results
 
 
-def plot_polarimetry_map(stack_product, polar_product, min_aperture=0, max_aperture=1024, percentile=99.5,ref_catalog="CATALOG_POL_N_AP010", src_label_offset=30, arrow_size_scale=None, compute_k=False, title_label=""):
+def plot_polarimetry_map(stack_product, polar_product, min_aperture=0, max_aperture=1024, percentile=99.5,ref_catalog="CATALOG_POL_N_AP010", src_label_offset=30,
+    arrow_size_scale=None, compute_k=False, title_label="", output="",figsize=(10, 10)):
     """ Pipeline module to plot polarimetry map
 
     Parameters
@@ -880,6 +936,9 @@ def plot_polarimetry_map(stack_product, polar_product, min_aperture=0, max_apert
     polar_product : str
         path to polarimetry product
         
+    output : str, optional
+        The output plot file name to save graphic to file. If empty, it won't be saved.
+
     Returns
     -------
     None
@@ -919,7 +978,7 @@ def plot_polarimetry_map(stack_product, polar_product, min_aperture=0, max_apert
 
     src_idxs = np.arange(nsources)
 
-    plt.figure(figsize=(10, 10))
+    fig = plt.figure(figsize=figsize)
     plt.imshow(img_data, vmin=np.percentile(img_data, 100-percentile), vmax=np.percentile(img_data, percentile), origin='lower')
     
     mean_aper = np.mean(hdul[ref_catalog].data['APER'])
@@ -945,10 +1004,14 @@ def plot_polarimetry_map(stack_product, polar_product, min_aperture=0, max_apert
     
     plt.xlabel("col [pix]")
     plt.ylabel("row [pix]")
-    plt.show()
+    if output != '' :
+        fig.savefig(output, bbox_inches='tight')
+        plt.close(fig)
+    else :
+        plt.show()
 
 
-def plot_s4_lightcurves(lcfiles=[None,None,None,None], object_indexes=[0,0,0,0], comps=[[1],[1],[1],[1]], aperture_radius=10, object_name='') :
+def plot_s4_lightcurves(lcfiles=[None,None,None,None], object_indexes=[0,0,0,0], comps=[[1],[1],[1],[1]], aperture_radius=10, object_name='', output='',figsize=(10, 10)) :
 
     """ Module to plot differential light curves for all 4 channels
     
@@ -964,7 +1027,9 @@ def plot_s4_lightcurves(lcfiles=[None,None,None,None], object_indexes=[0,0,0,0],
         photometry aperture radius (pixels) to select FITS hdu extension in catalog
     object_name : str
         object name
-    
+    output : str, optional
+        The output plot file name to save graphic to file. If empty, it won't be saved.
+
     Returns
         lcs: list
             set of 4 lightcurve data
@@ -975,7 +1040,7 @@ def plot_s4_lightcurves(lcfiles=[None,None,None,None], object_indexes=[0,0,0,0],
     colors = ['darkblue','darkgreen','darkorange','darkred']
     
     catalog_ext = "CATALOG_PHOT_AP{:03d}".format(aperture_radius)
-    fig, axs = plt.subplots(4, 1, sharex=True, sharey=True, gridspec_kw={'hspace': 0, 'wspace': 0})
+    fig, axs = plt.subplots(4, 1, sharex=True, sharey=True, gridspec_kw={'hspace': 0, 'wspace': 0}, figsize=figsize)
 
     lcs = []
     
@@ -1001,12 +1066,16 @@ def plot_s4_lightcurves(lcfiles=[None,None,None,None], object_indexes=[0,0,0,0],
         axs[ch].set_ylabel(r"$\Delta$mag", fontsize=16)
         axs[ch].legend(fontsize=16)
 
-    plt.show()
+    if output != '' :
+        fig.savefig(output, bbox_inches='tight')
+        plt.close(fig)
+    else :
+        plt.show()
     
     return lcs
 
 
-def plot_s4data_for_diffphot(sci_img_files=[None,None,None,None], object_indexes=[0,0,0,0], comps=[[1],[1],[1],[1]], instmode="PHOT", percentile=98, aperture_radius=10, object_name="",figsize=(8, 8), fontsize=10) :
+def plot_s4data_for_diffphot(sci_img_files=[None,None,None,None], object_indexes=[0,0,0,0], comps=[[1],[1],[1],[1]], instmode="PHOT", percentile=98, aperture_radius=10, object_name="", fontsize=10, output='',figsize=(10, 10)) :
 
 
     """ Module to plot differential light curves and auxiliary data
@@ -1025,7 +1094,9 @@ def plot_s4data_for_diffphot(sci_img_files=[None,None,None,None], object_indexes
         photometry aperture radius (pixels) to select FITS hdu extension in catalog
     object_name : str
         object name
-    
+    output : str, optional
+        The output plot file name to save graphic to file. If empty, it won't be saved.
+
     Returns
         
     -------
@@ -1086,7 +1157,11 @@ def plot_s4data_for_diffphot(sci_img_files=[None,None,None,None], object_indexes
         axs[col,row].tick_params(which='minor', length=3, width=0.7, direction='in',bottom=True, top=True, left=True, right=True)
         axs[col,row].tick_params(which='major', length=7, width=1.2, direction='in',bottom=True, top=True, left=True, right=True)
                          
-    plt.show()
-        
+    if output != '' :
+        fig.savefig(output, bbox_inches='tight')
+        plt.close(fig)
+    else :
+        plt.show()
+
     return
 
