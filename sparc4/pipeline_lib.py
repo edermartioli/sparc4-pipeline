@@ -1222,7 +1222,7 @@ def run_master_calibration(p, inputlist=[], output="", obstype='bias', data_dir=
     mask_data = np.array(master.mask)
 
     # call function masteZero from sparc4_products to generate final product
-    mastercal = s4p.masterCalibration(filter_fg.files, img_data=img_data,err_data=err_data, mask_data=mask_data,info=info, filename=output)
+    mastercal = s4p.masterCalibration(sorted(filter_fg.files), img_data=img_data,err_data=err_data, mask_data=mask_data,info=info, filename=output)
 
     if plot :
         plot_file = ""
@@ -1408,7 +1408,7 @@ def run_master_flat_calibrations(p, db, nightdir, data_dir, reduce_dir, channel,
         p_phot["master_flat"] = "None"
         
         # log messages:
-        logger.warn("No flats for PHOT mode in detector mode {}. Turning off flat correction.".format(detector_mode_key))
+        logger.warn("No flats for PHOT mode in detector mode {}. Turning off flat correction in PHOT mode.".format(detector_mode_key))
             
     if len(polar_l2_flat_list):
         # calculate master dome flat
@@ -1428,7 +1428,9 @@ def run_master_flat_calibrations(p, db, nightdir, data_dir, reduce_dir, channel,
                 # log messages:
                 logger.info("Calculating master flat for POLAR L2 mode WPPOS={} and saving to file: {}".format(wppos,master_flat_file))
                 _ = run_master_calibration(p_polarl2, inputlist=get_shuffled_short_list(polar_l2_wppos_flat_list,max_n_files=p["MAX_NUMBER_OF_FLAT_FRAMES_TO_USE"]), output=master_flat_file, obstype='flat', data_dir=data_dir, reduce_dir=reduce_dir, normalize=True, force=force, plot=plot)
-                
+            else :
+                logger.info("No flats found in database for the following configuration: inst_mode={}, polar_mode={}, obstype={}, detector_mode={}, wppos={}. ".format(p['INSTMODE_POLARIMETRY_KEYVALUE'],p['POLARIMETRY_L2_KEYVALUE'],p['FLAT_OBSTYPE_KEYVALUE'],detector_mode,wppos))
+
             p_polarl2["wppos{:02d}_master_flat".format(wppos)] = "None"
             
         p_polarl2["master_flat"] = flats["polar_l2_master_flat"]
@@ -1438,7 +1440,7 @@ def run_master_flat_calibrations(p, db, nightdir, data_dir, reduce_dir, channel,
         # calculate master dome flat
         flats["polar_l4_master_flat"] = "{}/{}_s4c{}{}_POLAR_L4_MasterDomeFlat.fits".format(reduce_dir, nightdir, channel, detector_mode_key)
         # log messages:
-        logger.info("Calculating master flat for POLAR L2 mode and saving to file: {}".format(flats["polar_l4_master_flat"]))
+        logger.info("Calculating master flat for POLAR L4 mode and saving to file: {}".format(flats["polar_l4_master_flat"]))
 
         p_polarl4 = run_master_calibration(p_polarl4, inputlist=get_shuffled_short_list(polar_l4_flat_list,max_n_files=p["MAX_NUMBER_OF_FLAT_FRAMES_TO_USE"]), output=flats["polar_l4_master_flat"], obstype='flat', data_dir=data_dir, reduce_dir=reduce_dir, normalize=True, force=force, plot=plot)
         
@@ -1450,8 +1452,11 @@ def run_master_flat_calibrations(p, db, nightdir, data_dir, reduce_dir, channel,
             if len(polar_l4_wppos_flat_list) :
                 master_flat_file = "{}/{}_s4c{}{}_POLAR_L4_WPPOS{:02d}_MasterDomeFlat.fits".format(reduce_dir, nightdir, channel, detector_mode_key, wppos)
                 # log messages:
-                logger.info("Calculating master flat for POLAR L2 mode WPPOS={} and saving to file: {}".format(wppos,master_flat_file))
+                logger.info("Calculating master flat for POLAR L4 mode WPPOS={} and saving to file: {}".format(wppos,master_flat_file))
                 _ = run_master_calibration(p_polarl4, inputlist=get_shuffled_short_list(polar_l4_wppos_flat_list,max_n_files=p["MAX_NUMBER_OF_FLAT_FRAMES_TO_USE"]), output=master_flat_file, obstype='flat', data_dir=data_dir, reduce_dir=reduce_dir, normalize=True, force=force, plot=plot)
+            else :
+                logger.info("No flats found in database for the following configuration: inst_mode={}, polar_mode={}, obstype={}, detector_mode={}, wppos={}. ".format(p['INSTMODE_POLARIMETRY_KEYVALUE'],p['POLARIMETRY_L2_KEYVALUE'],p['FLAT_OBSTYPE_KEYVALUE'],detector_mode,wppos))
+                
             p_polarl4["wppos{:02d}_master_flat".format(wppos)] = master_flat_file
             
         p_polarl4["master_flat"] = flats["polar_l4_master_flat"]
@@ -1878,6 +1883,12 @@ def stack_science_images(p, inputlist, reduce_dir="./", force=False, stack_suffi
             'REFIMG': (p['REFERENCE_IMAGE'], 'reference image for stack'),
             'NIMGSTCK': (p['FINAL_NFILES_FOR_STACK'], 'number of images for stack')
             }
+            
+    list_of_imgs = sorted(obj_fg.files)
+    for i in range(len(list_of_imgs)) :
+        # get file basename and add it to the info dict
+        basename = os.path.basename(list_of_imgs[i])
+        info['IN{:06d}'.format(i)] = (basename, 'input file {} of {}'.format(i, len(list_of_imgs)))
 
     logger.info('Registering science frames and stacking them ... ')
 

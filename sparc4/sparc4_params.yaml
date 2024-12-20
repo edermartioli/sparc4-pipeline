@@ -152,7 +152,7 @@ UPSAMPLEFACTOR: 4
 MATCH_FRAMES: True
 
 # method to select files for stack
-METHOD_TO_SELECT_FILES_FOR_STACK: 'BY_SIMILARITY' # 'MAX_FLUXES', 'FIRST_FRAMES', or 'BY_SIMILARITY'
+METHOD_TO_SELECT_FILES_FOR_STACK: 'FIRST_FRAMES' # 'MAX_FLUXES', 'FIRST_FRAMES', or 'BY_SIMILARITY'
 
 # The following four parameters are used by the BY_SIMILARITY method only:
 # set maximum number of files to compare similarity and select for stack. If too large can be slow
