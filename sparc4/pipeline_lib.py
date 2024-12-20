@@ -1431,7 +1431,8 @@ def run_master_flat_calibrations(p, db, nightdir, data_dir, reduce_dir, channel,
             else :
                 logger.info("No flats found in database for the following configuration: inst_mode={}, polar_mode={}, obstype={}, detector_mode={}, wppos={}. ".format(p['INSTMODE_POLARIMETRY_KEYVALUE'],p['POLARIMETRY_L2_KEYVALUE'],p['FLAT_OBSTYPE_KEYVALUE'],detector_mode,wppos))
 
-            p_polarl2["wppos{:02d}_master_flat".format(wppos)] = "None"
+            p_polarl2["wppos{:02d}_master_flat".format(wppos)] = master_flat_file
+            master_flat_file = "None"
             
         p_polarl2["master_flat"] = flats["polar_l2_master_flat"]
 
@@ -1458,6 +1459,7 @@ def run_master_flat_calibrations(p, db, nightdir, data_dir, reduce_dir, channel,
                 logger.info("No flats found in database for the following configuration: inst_mode={}, polar_mode={}, obstype={}, detector_mode={}, wppos={}. ".format(p['INSTMODE_POLARIMETRY_KEYVALUE'],p['POLARIMETRY_L2_KEYVALUE'],p['FLAT_OBSTYPE_KEYVALUE'],detector_mode,wppos))
                 
             p_polarl4["wppos{:02d}_master_flat".format(wppos)] = master_flat_file
+            master_flat_file = "None"
             
         p_polarl4["master_flat"] = flats["polar_l4_master_flat"]
 
