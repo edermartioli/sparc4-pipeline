@@ -56,3 +56,4 @@ Version 1.3 (2024-06-03)
 - Fixed bugs with background subtraction for selection of images for stack using method "by similarity" 
 - Included plot to file capability
 - Implemented MEM_CACHE_FOLDER
+- Fixed bug in flat per WPPOS
