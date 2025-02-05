@@ -1056,7 +1056,8 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
                         continue
 
                     logger.info("Running {} polarimetry for sequence: {} of {}".format(wave_plate, i+1, len(pol_sequences)))
-                        
+                       
+                    # Compute polarimetry for one sequence
                     polarproduct = compute_polarimetry(pol_sequences[i],
                                                        wave_plate=wave_plate,
                                                        base_aperture=p['APERTURE_RADIUS_FOR_PHOTOMETRY_IN_POLAR'],
@@ -1064,19 +1065,21 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
                                                        fit_zero=fit_zero,
                                                        zero=zero,
                                                        force=p['FORCE_POLARIMETRY_COMPUTATION'])
-                    
-                    polar_plot_file = ""
-                    if p['PLOT_TO_FILE'] :
-                        polar_plot_file = polarproduct.replace(".fits",p['PLOT_FILE_FORMAT'])
-                    
-                    pol_results = get_polarimetry_results(polarproduct,
+                                                       
+                    # Plot polarimetry results
+                    if plot_polar :
+                        # Get polarimetry from polarimetry product
+                        pol_results = get_polarimetry_results(polarproduct,
                                                           source_index=p['TARGET_INDEX'],
                                                           min_aperture=p['MIN_APERTURE_FOR_POLARIMETRY'],
                                                           max_aperture=p['MAX_APERTURE_FOR_POLARIMETRY'],
-                                                          compute_k=compute_k,
-                                                          plot=plot_polar,
-                                                          plot_filename=polar_plot_file)
-                                                          
+                                                          compute_k=compute_k)
+                        polar_plot_file = ""
+                        if p['PLOT_TO_FILE'] :
+                            polar_plot_file = polarproduct.replace(".fits",p['PLOT_FILE_FORMAT'])
+                        if pol_results["POLARIMETRY_SUCCESS"] :
+                            s4plt.plot_polarimetry_results(pol_results, title_label=pol_results['TITLE_LABEL'], wave_plate=wave_plate, output=polar_plot_file)
+                        
                     p['PolarProducts'].append(polarproduct)
 
 
@@ -1105,6 +1108,7 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
                     
                 output_static_polar = "{}/{}_polar.fits".format(reduce_dir, stack_suffix)
                 
+                # Calculate a static polar, which means a polarimetry product using all images available
                 static_polar_product = compute_polarimetry(p['OBJECT_REDUCED_IMAGES'],
                                                            output_filename = output_static_polar,
                                                            wave_plate=wave_plate,
@@ -1113,6 +1117,20 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
                                                            fit_zero=fit_zero,
                                                            zero=zero,
                                                            force=p['FORCE_POLARIMETRY_COMPUTATION'])
+                # plot static polar
+                if plot_polar :
+                    # get polarimetry from static polar product
+                    static_polar_results = get_polarimetry_results(static_polar_product,
+                                                                    source_index=p['TARGET_INDEX'],
+                                                                    min_aperture=p['MIN_APERTURE_FOR_POLARIMETRY'],
+                                                                    max_aperture=p['MAX_APERTURE_FOR_POLARIMETRY'],
+                                                                    compute_k=compute_k)
+                    static_polar_plot_file = ""
+                    if p['PLOT_TO_FILE'] :
+                        static_polar_plot_file = static_polar_product.replace(".fits",p['PLOT_FILE_FORMAT'])
+                    if static_polar_results["POLARIMETRY_SUCCESS"] :
+                        s4plt.plot_polarimetry_results(static_polar_results, title_label=static_polar_results['TITLE_LABEL'], wave_plate=wave_plate, output=static_polar_plot_file)
+                        
                 
     return p
 
@@ -3729,7 +3747,7 @@ def get_photometric_data_for_polar_catalog(beam1, beam2, sci_list, aperture_inde
     return ra, dec, x1, y1, x2, y2, mag.nominal, mag.std_dev, fwhm, skymag.nominal, skymag.std_dev, flag
 
 
-def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_output=True, wave_plate='halfwave', compute_k=True, fit_zero=False, zero=0, base_aperture=8, exptimekey="EXPTIME", force=False):
+def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_output=True, wave_plate='halfwave', compute_k=True, fit_zero=False, zero=0, base_aperture=8, exptimekey="EXPTIME", min_n_wppos=4, force=False):
 
     """ Pipeline module to compute polarimetry for given polarimetric sequence and
         saves the polarimetry data into a FITS SPARC4 product
@@ -3756,6 +3774,8 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
         base aperture index
     exptimekey : str
         header keyword for exposure time
+    min_n_wppos : int (Deafult: min_n_wppos=4)
+        minimum number of waveplate positions acceptable for polimetry
     force : bool, optional
         Boolean to decide whether or not to force reduction if a product already exists
 
@@ -3892,52 +3912,53 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
                 logger.info("Computing polarimetry for the following flux array sizes: {} ".format(len(waveplate_angles[keep])))
             
                 # compute polarimetry
-                norm = pol.compute(waveplate_angles[keep], n_fo[keep], n_fe[keep], f_ord_error=en_fo[keep], f_ext_error=en_fe[keep])
+                if len(waveplate_angles[keep]) >= min_n_wppos :
+                    norm = pol.compute(waveplate_angles[keep], n_fo[keep], n_fe[keep], f_ord_error=en_fo[keep], f_ext_error=en_fe[keep])
 
-                if wave_plate == 'halfwave':
-                    logger.info("Computing halfwave (L2) observed polarization model for q={} u={} ".format(norm.q.nominal, norm.u.nominal))
+                    if wave_plate == 'halfwave':
+                        logger.info("Computing halfwave (L2) observed polarization model for q={} u={} ".format(norm.q.nominal, norm.u.nominal))
                     
-                    observed_model = halfwave_model(waveplate_angles[keep], norm.q.nominal, norm.u.nominal)
+                        observed_model = halfwave_model(waveplate_angles[keep], norm.q.nominal, norm.u.nominal)
 
-                elif wave_plate == 'quarterwave':
-                    logger.info("Computing quarterwave (L4) observed polarization model for q={} u={} v={} zero={}".format(norm.q.nominal, norm.u.nominal, norm.v.nominal, norm.zero.nominal))
+                    elif wave_plate == 'quarterwave':
+                        logger.info("Computing quarterwave (L4) observed polarization model for q={} u={} v={} zero={}".format(norm.q.nominal, norm.u.nominal, norm.v.nominal, norm.zero.nominal))
                     
-                    observed_model = quarterwave_model(waveplate_angles[keep], norm.q.nominal, norm.u.nominal, norm.v.nominal, zero=norm.zero.nominal)
+                        observed_model = quarterwave_model(waveplate_angles[keep], norm.q.nominal, norm.u.nominal, norm.v.nominal, zero=norm.zero.nominal)
 
-                zi[keep] = norm.zi.nominal
-                zi_err[keep] = norm.zi.std_dev
+                    zi[keep] = norm.zi.nominal
+                    zi_err[keep] = norm.zi.std_dev
 
-                logger.info("Computing chi-square for number_of_observations={} and number_of_free_params={}".format(number_of_observations,number_of_free_params))
-                chi2 = np.nansum(((norm.zi.nominal - observed_model)/norm.zi.std_dev)** 2) / (number_of_observations - number_of_free_params)
+                    logger.info("Computing chi-square for number_of_observations={} and number_of_free_params={}".format(number_of_observations,number_of_free_params))
+                    chi2 = np.nansum(((norm.zi.nominal - observed_model)/norm.zi.std_dev)** 2) / (number_of_observations - number_of_free_params)
 
-                polar_flag = 0
+                    polar_flag = 0
 
-                if type(norm.q.nominal) is float :
-                    qpol, q_err = norm.q.nominal, norm.q.std_dev
+                    if type(norm.q.nominal) is float :
+                        qpol, q_err = norm.q.nominal, norm.q.std_dev
                     
-                if type(norm.u.nominal) is float :
-                    upol, u_err = norm.u.nominal, norm.u.std_dev
+                    if type(norm.u.nominal) is float :
+                        upol, u_err = norm.u.nominal, norm.u.std_dev
                     
-                if wave_plate == 'quarterwave' and type(norm.v.nominal) is float:
-                    vpol, v_err = norm.v.nominal, norm.v.std_dev
+                    if wave_plate == 'quarterwave' and type(norm.v.nominal) is float:
+                        vpol, v_err = norm.v.nominal, norm.v.std_dev
                     
-                if type(norm.p.nominal) is float :
-                    ptot, ptot_err = norm.p.nominal, norm.p.std_dev
-                
-                if type(norm.theta.nominal) is float :
-                    theta, theta_err = norm.theta.nominal, norm.theta.std_dev
-
-                if type(norm.k) is float :
-                    k_factor = norm.k
+                    if type(norm.p.nominal) is float :
+                        ptot, ptot_err = norm.p.nominal, norm.p.std_dev
                     
-                if type(norm.zero.nominal) is float :
-                    zero, zero_err = norm.zero.nominal, norm.zero.std_dev
+                    if type(norm.theta.nominal) is float :
+                        theta, theta_err = norm.theta.nominal, norm.theta.std_dev
+    
+                    if type(norm.k) is float :
+                        k_factor = norm.k
+                        
+                    if type(norm.zero.nominal) is float :
+                        zero, zero_err = norm.zero.nominal, norm.zero.std_dev
        
-                if type(norm.rms) is float :
-                    z_rms = norm.rms
+                    if type(norm.rms) is float :
+                        z_rms = norm.rms
                     
-                if type(norm.theor_sigma['p']) is float :
-                    theor_sigma = norm.theor_sigma['p']
+                    if type(norm.theor_sigma['p']) is float :
+                        theor_sigma = norm.theor_sigma['p']
 
             except Exception as e:
                 logger.warn("Could not calculate polarimetry for source_index={} and aperture={} pixels: {}".format(j, apertures[i], e))
@@ -4018,7 +4039,7 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
     return output_filename
 
 
-def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_aperture=0, max_aperture=1024, compute_k=False, plot=False, verbose=False, plot_filename='', figsize=(12, 6)):
+def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_aperture=0, max_aperture=1024, compute_k=False, min_n_wppos=4, plot=False, verbose=False, plot_filename='', figsize=(12, 6)):
 
     """ Pipeline module to compute polarimetry for given polarimetric sequence and
         saves the polarimetry data into a FITS SPARC4 product
@@ -4038,6 +4059,8 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
         minimum aperture radius (pix)
     compute_k: bool
         whether or not to compute k
+    min_n_wppos : int (Deafult: min_n_wppos=4)
+        minimum number of waveplate positions acceptable for polimetry
     plot: bool
         whether or not to plot results
     plot_filename : str, optional
@@ -4054,6 +4077,8 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
     loc["POLAR_PRODUCT"] = filename
     loc["SOURCE_INDEX"] = source_index
 
+    loc["POLARIMETRY_SUCCESS"] = False
+    
     # open polarimetry product FITS file
     hdul = fits.open(filename)
     wave_plate = hdul[0].header['POLTYPE']
@@ -4114,10 +4139,14 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
     waveplate_angles = np.arange(nexps)*np.nan
 
     for ii in range(nexps):
-        fos[ii] = tbl["FO{:04d}".format(ii)]
-        efos[ii] = tbl["EFO{:04d}".format(ii)]
-        fes[ii] = tbl["FE{:04d}".format(ii)]
-        efes[ii] = tbl["EFE{:04d}".format(ii)]
+        if np.isfinite(tbl["FO{:04d}".format(ii)]) :
+            fos[ii] = tbl["FO{:04d}".format(ii)]
+        if np.isfinite(tbl["EFO{:04d}".format(ii)]) :
+            efos[ii] = tbl["EFO{:04d}".format(ii)]
+        if np.isfinite(tbl["FE{:04d}".format(ii)]) :
+            fes[ii] = tbl["FE{:04d}".format(ii)]
+        if np.isfinite(tbl["EFE{:04d}".format(ii)]) :
+            efes[ii] = tbl["EFE{:04d}".format(ii)]
         waveplate_angles[ii] = hdul[0].header["WANG{:04d}".format(ii)]
 
     # filter out nan data
@@ -4134,15 +4163,15 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
     kcte = QFloat(np.nan, np.nan)
     zero = QFloat(np.nan, np.nan)
     # cast zi data into QFloat
-    fo = QFloat(np.array([np.nan]), np.array([np.nan]))
-    fe = QFloat(np.array([np.nan]), np.array([np.nan]))
-    zi = QFloat(np.array([np.nan]), np.array([np.nan]))
+    fo_out = QFloat(fos, efos)
+    fe_out = QFloat(fes, efes)
+    zi = QFloat(zis, zierrs)
     n, m = 0, 0
     sig_res = np.nan
     chi2 = np.nan
     rms = np.nan
     theor_sigma = np.nan
-    observed_model = zi
+    observed_model = QFloat(np.arange(nexps)*np.nan, np.arange(nexps)*np.nan)
         
     if len(fos[keep]) == 0 :
         logger.warn("No useful polarization data for Source index: {}  and aperture: {} pix ".format(source_index, aperture_radius))
@@ -4158,40 +4187,48 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
         rms, theor_sigma = tbl['RMS'][0], tbl['TSIGMA'][0]
         n, m = tbl['NOBS'][0], tbl['NPAR'][0]
 
-        # cast zi data into QFloat
+        # cast flux data into QFloat
         fo = QFloat(fos[keep], efos[keep])
         fe = QFloat(fes[keep], efes[keep])
-
+        
+        # cast flux data into QFloat keeping nans
+        fo_out = QFloat(fos, efos)
+        fe_out = QFloat(fes, efes)
+    
         k_value = kcte.nominal
         if compute_k :
             k_value = None
             
         # calculate polarimetry model and get statistical quantities
-        observed_model = np.full_like(waveplate_angles[keep], np.nan)
+        observed_model = np.full_like(waveplate_angles, np.nan)
+        
         if wave_plate == "halfwave":
             # initialize astropop SLSDualBeamPolarimetry object
             pol = SLSDualBeamPolarimetry(wave_plate, compute_k=compute_k, k=k_value, zero=0)
-            observed_model = halfwave_model(waveplate_angles[keep], qpol.nominal, upol.nominal)
+            if len(waveplate_angles[keep]) >= min_n_wppos and np.isfinite(qpol.nominal) and np.isfinite(upol.nominal):
+                observed_model[keep] = halfwave_model(waveplate_angles[keep], qpol.nominal, upol.nominal)
         elif wave_plate == "quarterwave":
             # initialize astropop SLSDualBeamPolarimetry object
             pol = SLSDualBeamPolarimetry(wave_plate, compute_k=compute_k, k=k_value, zero=zero.nominal)
-            observed_model = quarterwave_model(waveplate_angles[keep], qpol.nominal, upol.nominal, vpol.nominal, zero=zero.nominal)
+            if len(waveplate_angles[keep]) >= min_n_wppos and np.isfinite(qpol.nominal) and np.isfinite(upol.nominal) and np.isfinite(vpol.nominal):
+                observed_model[keep] = quarterwave_model(waveplate_angles[keep], qpol.nominal, upol.nominal, vpol.nominal, zero=zero.nominal)
         try :
-            # compute polarimetry
-            norm = pol.compute(waveplate_angles[keep], fos[keep], fes[keep], f_ord_error=efos[keep], f_ext_error=efes[keep])
+            if len(waveplate_angles[keep]) >= min_n_wppos :
+                # compute polarimetry
+                norm = pol.compute(waveplate_angles[keep], fos[keep], fes[keep], f_ord_error=efos[keep], f_ext_error=efes[keep])
     
-            # get zis
-            zis[keep] = norm.zi.nominal
-            zierrs[keep] = norm.zi.std_dev
+                # get zis
+                zis[keep] = norm.zi.nominal
+                zierrs[keep] = norm.zi.std_dev
 
-            # cast zi data into QFloat
-            zi = QFloat(zis[keep], zierrs[keep])
+                # cast zi data into QFloat
+                zi = QFloat(zis, zierrs)
 
-            # get statistics
-            resids = zi.nominal - observed_model
-            sig_res = np.nanstd(resids)
-            chi2 = np.nansum((resids/zi.std_dev)**2) / (n - m)
-            theor_sigma = norm.theor_sigma['p']
+                # get statistics
+                resids = zis[keep] - observed_model[keep]
+                sig_res = np.nanstd(resids)
+                chi2 = np.nansum((resids/zierrs[keep])**2) / (n - m)
+                theor_sigma = norm.theor_sigma['p']
             
         except Exception as e :
             logger.warn("Could not compute polarimetry: {}".format(e))
@@ -4214,10 +4251,10 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
         logger.info("RMS of zi residuals: {}".format(sig_res))
         logger.info("Reduced chi-square (n={}, DOF={}): {:.2f}".format(n, n-m, chi2))
 
-    loc["WAVEPLATE_ANGLES"] = waveplate_angles[keep]
+    loc["WAVEPLATE_ANGLES"] = waveplate_angles
     loc["ZI"] = zi
-    loc["FO"] = fo
-    loc["FE"] = fe
+    loc["FO"] = fo_out
+    loc["FE"] = fe_out
     loc["OBSERVED_MODEL"] = observed_model
     loc["Q"] = qpol
     loc["U"] = upol
@@ -4232,22 +4269,30 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
     loc["NOBS"] = n
     loc["NPAR"] = m
 
-    # plot polarization data and best-fit model
-    if plot:
+    if wave_plate == "halfwave" :
+        if len(waveplate_angles[keep]) and np.isfinite(loc["P"].nominal) :
+            loc["POLARIMETRY_SUCCESS"] = True
+    elif wave_plate == "quarterwave" :
+        if len(waveplate_angles[keep]) and np.isfinite(loc["P"].nominal) and np.isfinite(loc["V"].nominal)  :
+            loc["POLARIMETRY_SUCCESS"] = True
+            
+    polar_mode_label = "L2"
+    if wave_plate == "quarterwave" :
+        polar_mode_label = "L4"
+
+    channel_index = int(hdul[0].header['CHANNEL'])
+    bands = ["g","r","i","z"]
+
+    title_label = r"Object: {}  date: {}  mode: {} S4C{} ({}-band)".format(hdul[0].header['OBJECT'],hdul[0].header['DATE-OBS'][:10],polar_mode_label,channel_index,bands[channel_index-1])
+    title_label += "\n"
+    # set title to appear in the plot header
+    title_label += r"Source index: {}    aperture: {} pix    $\chi^2$: {:.2f}    RMS: {:.6f}".format(source_index, aperture_radius, chi2, sig_res)
+
+    loc["TITLE_LABEL"] = title_label
+    loc["WAVE_PLATE"] = wave_plate
     
-        polar_mode_label = "L2"
-        if wave_plate == "quarterwave" :
-            polar_mode_label = "L4"
-
-        channel_index = int(hdul[0].header['CHANNEL'])
-        bands = ["g","r","i","z"]
-
-        title_label = r"Object: {}  date: {}  mode: {} S4C{} ({}-band)".format(hdul[0].header['OBJECT'],hdul[0].header['DATE-OBS'][:10],polar_mode_label,channel_index,bands[channel_index-1])
-        title_label += "\n"
-        # set title to appear in the plot header
-        title_label += r"Source index: {}    aperture: {} pix    $\chi^2$: {:.2f}    RMS: {:.6f}".format(
-            source_index, aperture_radius, chi2, sig_res)
-
+    # plot polarization data and best-fit model
+    if plot and loc["POLARIMETRY_SUCCESS"] :
         s4plt.plot_polarimetry_results(loc, title_label=title_label, wave_plate=wave_plate, output=plot_filename, figsize=figsize)
 
     hdul.close()

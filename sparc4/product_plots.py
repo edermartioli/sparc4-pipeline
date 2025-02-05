@@ -570,8 +570,7 @@ def plot_polarimetry_results(loc, pos_model_sampling=1, title_label="", wave_pla
     # axes[0].fill_between(pos_model, pred_mean+pred_std, pred_mean-pred_std, color=color, alpha=0.3, edgecolor="none")
 
     # Plot data
-    axes[0].errorbar(waveplate_angles, zi.nominal, yerr=zi.std_dev,
-                     fmt='ko', ms=2, capsize=2, lw=0.5, alpha=0.9, label='data')
+    axes[0].errorbar(waveplate_angles, zi.nominal, yerr=zi.std_dev, fmt='ko', ms=2, capsize=2, lw=0.5, alpha=0.9, label='data')
     axes[0].set_ylabel(
         r"$Z(\phi) = \frac{f_\parallel(\phi)-f_\perp(\phi)}{f_\parallel(\phi)+f_\perp(\phi)}$", fontsize=16)
     axes[0].legend(fontsize=16)

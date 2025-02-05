@@ -360,7 +360,7 @@ TARGET_INDEX: 0
 #COMPARISONS: [1, 2, 3, 4, 5, 6]
 COMPARISONS: [1]
 # whether or not to update the target index from input - if False the TARGET_INDEX is kept as above
-UPDATE_TARGET_INDEX_FROM_INPUT: True
+UPDATE_TARGET_INDEX_FROM_INPUT: False
 # define target index from input list
 TARGET_INDEX_FROM_INPUT: 0
 # define search radius in arcsec for matching SIMBAD sources around the observed RA,DEC (from header)
