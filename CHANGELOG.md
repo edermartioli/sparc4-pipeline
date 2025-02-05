@@ -57,3 +57,4 @@ Version 1.3 (2024-06-03)
 - Included plot to file capability
 - Implemented MEM_CACHE_FOLDER
 - Fixed bug in flat per WPPOS
+- Fixed a bug in linux for wppos matching in astropy table
