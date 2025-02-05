@@ -175,7 +175,7 @@ def build_target_list_from_data(object_list=[], skycoords_list=[], search_radius
     return tbl
     
 
-def astrometry_from_existing_wcs(wcs, img_data, pixel_coords=None, sky_coords=None, pixel_scale=0.335, fov_search_factor=1.1, sparsify_factor=0.01, apply_sparsify_filter=True, max_number_of_catalog_sources=50, compute_wcs_tolerance = 10, nsources_to_plot=30, use_twirl_to_compute_wcs=False, sip_degree=None, use_vizier=False, vizier_catalogs=["UCAC"], vizier_catalog_idx=2, plot_solution=False, plot_filename="") :
+def astrometry_from_existing_wcs(wcs, img_data, pixel_coords=None, sky_coords=None, pixel_scale=0.335, fov_search_factor=1.1, sparsify_factor=0.01, apply_sparsify_filter=True, max_number_of_catalog_sources=50, compute_wcs_tolerance = 10, nsources_to_plot=30, use_twirl_to_compute_wcs=False, twirl_find_peak_threshold=2.0, sip_degree=None, use_vizier=False, vizier_catalogs=["UCAC"], vizier_catalog_idx=2, plot_solution=False, ra_offset=0., dec_offset=0., plot_filename="") :
 
     """ Pipeline module to calcualte astrometric solution from an existing wcs
     Parameters
@@ -214,6 +214,11 @@ def astrometry_from_existing_wcs(wcs, img_data, pixel_coords=None, sky_coords=No
         use twirl to comput wcs, if not then use fit_wcs_from_points
     sip_degree : int
         sip_degree to model geometric distortion
+    ra_offset : float
+        apply offset in right ascension (arcmin)
+    dec_offset : float
+        apply offset in declination (arcmin)
+
     Returns
         wcs : astropy.wcs.WCS
         Updated wcs object
@@ -226,7 +231,7 @@ def astrometry_from_existing_wcs(wcs, img_data, pixel_coords=None, sky_coords=No
     # detect stars in the image if a list of pixel coordinates is not provided
     if pixel_coords is None :
         logger.info("Detecting peaks using twirl")
-        pixel_coords = twirl.find_peaks(img_data)
+        pixel_coords = twirl.find_peaks(img_data, threshold=twirl_find_peak_threshold)
         
     try :
         if sky_coords is None :
@@ -234,8 +239,11 @@ def astrometry_from_existing_wcs(wcs, img_data, pixel_coords=None, sky_coords=No
             logger.info("No sky coordinates given, searching sources in online catalogs")
         
             # get the center of the image
-            ra, dec = wcs.wcs.crval[0], wcs.wcs.crval[1]
-    
+            ra, dec = wcs.wcs.crval[0]+ra_offset/60., wcs.wcs.crval[1]+dec_offset/60.
+            wcs.wcs.crval = [ra, dec]
+            wcs_hdr = wcs.to_header(relax=True)
+            wcs = WCS(wcs_hdr, naxis=2)
+            
             # set image center coordinates
             center = SkyCoord(ra, dec, unit=(u.deg,u.deg), frame='icrs')
             #print("Center: ", center)
@@ -252,12 +260,17 @@ def astrometry_from_existing_wcs(wcs, img_data, pixel_coords=None, sky_coords=No
             # get RAs and Decs from online catalogs for a sky area of fov_search_factor x FoV
             if use_vizier :
                 logger.info("Querying Vizier")
+                
                 result = Vizier.query_region(center, width=[fov_search_factor * fov,fov_search_factor * fov], catalog=vizier_catalogs)
+                result[vizier_catalog_idx].sort(keys=['Vmag'])
+                vizier_tbl = result[vizier_catalog_idx]
+                
                 sources_skycoords = []
-                for i in range(len(result[vizier_catalog_idx])) :
-                    ra_i, dec_i = result[vizier_catalog_idx]['RAJ2000'][i], result[vizier_catalog_idx]['DEJ2000'][i]
+                for i in range(len(vizier_tbl)) :
+                    ra_i, dec_i = vizier_tbl['RAJ2000'][i], vizier_tbl['DEJ2000'][i]
                     sources_skycoords.append([ra_i,dec_i])
                 sources_skycoords = np.array(sources_skycoords,dtype=float)
+                
             else :
                 try :
                     logger.info("Querying Gaia DR3 using twirl")
@@ -290,7 +303,7 @@ def astrometry_from_existing_wcs(wcs, img_data, pixel_coords=None, sky_coords=No
             sources_radecs_guess = np.array(wcs.world_to_pixel_values(sources_skycoords))
 
             #plt.imshow(img_data, vmin=np.median(img_data), vmax=3 * np.median(img_data), cmap="Greys_r")
-            #_ = photutils.aperture.CircularAperture(pixel_coords[:max_number_of_catalog_sources], r=10.0).plot(color="y")
+            #_ = photutils.aperture.CircularAperture(pixel_coords, r=10.0).plot(color="y")
             #_ = photutils.aperture.CircularAperture(sources_radecs_guess[:max_number_of_catalog_sources], r=15.0).plot(color="r")
             #plt.show()
     
@@ -321,7 +334,8 @@ def astrometry_from_existing_wcs(wcs, img_data, pixel_coords=None, sky_coords=No
             else :
                 all_sky_coords = SkyCoord(matched_sky_coords, unit='deg')
                 wcs = fit_wcs_from_points(np.array([source_pos_array[:,0], source_pos_array[:,1]]), all_sky_coords, proj_point='center', projection='TAN', sip_degree=sip_degree)
-        
+                #print(repr(wcs.to_header()))
+                
             loc['ASTROMETRY_SOURCES_SKYCOORDS'] = sources_skycoords[:max_number_of_catalog_sources]
         else :
             all_sky_coords = SkyCoord(sky_coords, unit='deg')
@@ -1421,7 +1435,7 @@ def run_master_flat_calibrations(p, db, nightdir, data_dir, reduce_dir, channel,
         master_flat_file = "None"
         for wppos in range(1,17) :
             # create a master flat for each waveplate position
-            polar_l2_wppos_flat_list = s4db.get_file_list(db, inst_mode=p['INSTMODE_POLARIMETRY_KEYVALUE'], polar_mode=p['POLARIMETRY_L2_KEYVALUE'], obstype=p['FLAT_OBSTYPE_KEYVALUE'], detector_mode=detector_mode, wppos=wppos)
+            polar_l2_wppos_flat_list = s4db.get_file_list(db, inst_mode=p['INSTMODE_POLARIMETRY_KEYVALUE'], polar_mode=p['POLARIMETRY_L2_KEYVALUE'], obstype=p['FLAT_OBSTYPE_KEYVALUE'], detector_mode=detector_mode, wppos=str(wppos))
             
             if len(polar_l2_wppos_flat_list) :
                 master_flat_file = "{}/{}_s4c{}{}_POLAR_L2_WPPOS{:02d}_MasterDomeFlat.fits".format(reduce_dir, nightdir, channel, detector_mode_key, wppos)
@@ -1448,7 +1462,7 @@ def run_master_flat_calibrations(p, db, nightdir, data_dir, reduce_dir, channel,
         master_flat_file = "None"
         for wppos in range(1,17) :
             # create a master flat for each waveplate position
-            polar_l4_wppos_flat_list = s4db.get_file_list(db, inst_mode=p['INSTMODE_POLARIMETRY_KEYVALUE'], polar_mode=p['POLARIMETRY_L4_KEYVALUE'], obstype=p['FLAT_OBSTYPE_KEYVALUE'], detector_mode=detector_mode, wppos=wppos)
+            polar_l4_wppos_flat_list = s4db.get_file_list(db, inst_mode=p['INSTMODE_POLARIMETRY_KEYVALUE'], polar_mode=p['POLARIMETRY_L4_KEYVALUE'], obstype=p['FLAT_OBSTYPE_KEYVALUE'], detector_mode=detector_mode, wppos=str(wppos))
             
             if len(polar_l4_wppos_flat_list) :
                 master_flat_file = "{}/{}_s4c{}{}_POLAR_L4_WPPOS{:02d}_MasterDomeFlat.fits".format(reduce_dir, nightdir, channel, detector_mode_key, wppos)

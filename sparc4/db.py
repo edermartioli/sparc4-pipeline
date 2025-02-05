@@ -336,7 +336,7 @@ def get_file_list(tbl, object_id=None, inst_mode=None, polar_mode=None, obstype=
         tbl = tbl[tbl['CALW'] == calwheel_mode]
 
     if wppos is not None:
-        tbl = tbl[tbl["WPPOS"] == wppos or tbl["WPPOS"] == str(wppos)]
+        tbl = tbl[tbl["WPPOS"] == wppos]
 
     outlist = []
     if len(tbl) == len(tbl.columns) and len(tbl["FILE"][0]) == 1:
