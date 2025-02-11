@@ -530,17 +530,16 @@ def plot_polarimetry_results(loc, pos_model_sampling=1, title_label="", wave_pla
     zero = loc["ZERO"]
     tsigma = loc["TSIGMA"]
     
-    tsigmalab = r"$\sigma_t$: {:.5f}".format(tsigma)
+    tsigmalab = r"$\sigma_t$: {:.5f} %".format(100*tsigma)
     kctelab = r"k: {:.5f}".format(kcte.nominal)
     zerolab = r"$\psi_0$: {} deg".format(zero)
     title_label += "  " + tsigmalab + "  " + kctelab + "  " + zerolab
 
-    qlab = "q: {:.2f}+-{:.2f} %".format(100*qpol.nominal, 100*qpol.std_dev)
-    ulab = "u: {:.2f}+-{:.2f} %".format(100*upol.nominal, 100*upol.std_dev)
-    vlab = "v: {:.2f}+-{:.2f} %".format(100*vpol.nominal, 100*vpol.std_dev)
-    plab = "p: {:.2f}+-{:.2f} %".format(100*ppol.nominal, 100*ppol.std_dev)
-    thetalab = r"$\theta$: {:.2f}+-{:.2f} deg".format(
-        theta.nominal, theta.std_dev)
+    qlab = r"q: {:.4f}$\pm${:.4f} %".format(100*qpol.nominal, 100*qpol.std_dev)
+    ulab = r"u: {:.4f}$\pm${:.4f} %".format(100*upol.nominal, 100*upol.std_dev)
+    vlab = r"v: {:.4f}$\pm${:.4f} %".format(100*vpol.nominal, 100*vpol.std_dev)
+    plab = r"p: {:.4f}$\pm${:.4f} %".format(100*ppol.nominal, 100*ppol.std_dev)
+    thetalab = r"$\theta$: {:.2f}$\pm${:.2f} deg".format(theta.nominal, theta.std_dev)
         
     title_label += "\n"+qlab+"  "+ulab
     if wave_plate == 'quarterwave':
@@ -548,8 +547,7 @@ def plot_polarimetry_results(loc, pos_model_sampling=1, title_label="", wave_pla
     title_label += "  "+plab+"  "+thetalab
 
     # plot best polarimetry results
-    fig, axes = plt.subplots(2, 1, figsize=figsize, sharex=True, sharey=False, gridspec_kw={
-                             'hspace': 0, 'height_ratios': [2, 1]})
+    fig, axes = plt.subplots(2, 1, figsize=figsize, sharex=True, sharey=False, gridspec_kw={'hspace': 0, 'height_ratios': [2, 1]})
 
     if title_label != "":
         axes[0].set_title(title_label)
@@ -571,16 +569,13 @@ def plot_polarimetry_results(loc, pos_model_sampling=1, title_label="", wave_pla
 
     # Plot data
     axes[0].errorbar(waveplate_angles, zi.nominal, yerr=zi.std_dev, fmt='ko', ms=2, capsize=2, lw=0.5, alpha=0.9, label='data')
-    axes[0].set_ylabel(
-        r"$Z(\phi) = \frac{f_\parallel(\phi)-f_\perp(\phi)}{f_\parallel(\phi)+f_\perp(\phi)}$", fontsize=16)
+    axes[0].set_ylabel(r"$Z(\phi) = \frac{f_\parallel(\phi)-f_\perp(\phi)}{f_\parallel(\phi)+f_\perp(\phi)}$", fontsize=16)
     axes[0].legend(fontsize=16)
     axes[0].tick_params(axis='x', labelsize=14)
     axes[0].tick_params(axis='y', labelsize=14)
     axes[0].minorticks_on()
-    axes[0].tick_params(which='minor', length=3, width=0.7,
-                        direction='in', bottom=True, top=True, left=True, right=True)
-    axes[0].tick_params(which='major', length=7, width=1.2,
-                        direction='in', bottom=True, top=True, left=True, right=True)
+    axes[0].tick_params(which='minor', length=3, width=0.7,direction='in', bottom=True, top=True, left=True, right=True)
+    axes[0].tick_params(which='major', length=7, width=1.2,direction='in', bottom=True, top=True, left=True, right=True)
 
     # Print q, u, p and theta values
     ylims = axes[0].get_ylim()
@@ -589,17 +584,14 @@ def plot_polarimetry_results(loc, pos_model_sampling=1, title_label="", wave_pla
     # Plot residuals
     observed_model = np.full_like(waveplate_angles, np.nan)
     if wave_plate == 'halfwave':
-        observed_model = halfwave_model(
-            waveplate_angles, qpol.nominal, upol.nominal)
+        observed_model = halfwave_model(waveplate_angles, qpol.nominal, upol.nominal)
     elif wave_plate == 'quarterwave':
-        observed_model = quarterwave_model(
-            waveplate_angles, qpol.nominal, upol.nominal, vpol.nominal, zero=zero.nominal)
+        observed_model = quarterwave_model(waveplate_angles, qpol.nominal, upol.nominal, vpol.nominal, zero=zero.nominal)
 
     resids = zi.nominal - observed_model
     sig_res = np.nanstd(resids)
 
-    axes[1].errorbar(waveplate_angles, resids, yerr=zi.std_dev,
-                     fmt='ko', alpha=0.5, label='residuals')
+    axes[1].errorbar(waveplate_angles, resids, yerr=zi.std_dev,fmt='ko', alpha=0.5, label='residuals')
     axes[1].set_xlabel(r"waveplate position angle, $\phi$ [deg]", fontsize=16)
     axes[1].hlines(0., 0, 360, color="k", linestyles=":", lw=0.6)
     axes[1].set_ylim(-5*sig_res, +5*sig_res)
@@ -607,10 +599,8 @@ def plot_polarimetry_results(loc, pos_model_sampling=1, title_label="", wave_pla
     axes[1].tick_params(axis='x', labelsize=14)
     axes[1].tick_params(axis='y', labelsize=14)
     axes[1].minorticks_on()
-    axes[1].tick_params(which='minor', length=3, width=0.7,
-                        direction='in', bottom=True, top=True, left=True, right=True)
-    axes[1].tick_params(which='major', length=7, width=1.2,
-                        direction='in', bottom=True, top=True, left=True, right=True)
+    axes[1].tick_params(which='minor', length=3, width=0.7,direction='in', bottom=True, top=True, left=True, right=True)
+    axes[1].tick_params(which='major', length=7, width=1.2,direction='in', bottom=True, top=True, left=True, right=True)
 
     if output != '' :
         fig.savefig(output, bbox_inches='tight')
