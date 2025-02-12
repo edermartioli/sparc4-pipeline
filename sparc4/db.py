@@ -90,7 +90,7 @@ def create_db_from_observations(filelist, dbkeys=[], include_img_statistics=True
             hdr = fits.getheader(filelist[i], 0)
 
         for key in dbkeys:
-            tbldata[key].append(hdr[key])
+            tbldata[key].append(str(hdr[key]))
     
     tbl = None
     if len(tbldata["FILE"]) :
