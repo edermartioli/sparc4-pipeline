@@ -257,8 +257,8 @@ COMPUTE_K_IN_L4: True
 # whether or not to fit the zero of waveplate in L/4 mode. If False, then use fixed value given by ZERO_OF_WAVEPLATE
 FIT_ZERO_OF_WPPOS_IN_L4: False
 
-# Set zero of polarimetry calibrated from standards
-ZERO_OF_WAVEPLATE: 108.7
+# Set zero of polarimetry for CHANNELS=[1,2,3,4]; calibrated from standards
+ZERO_OF_WAVEPLATE: [108.7,108.7,108.7,108.7]
 
 # Plot polarimetry fit
 PLOT_POLARIMETRY_FIT: True
