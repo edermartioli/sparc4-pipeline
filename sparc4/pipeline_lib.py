@@ -1045,7 +1045,7 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
                 if polar_mode == 'L4':
                     wave_plate = 'quarterwave'
                     compute_k = p['COMPUTE_K_IN_L4']
-                    zero = p['ZERO_OF_WAVEPLATE']
+                    zero = p['ZERO_OF_WAVEPLATE'][channel_index]
 
                 logger.info("Selecting polarimetric sequences")
 
