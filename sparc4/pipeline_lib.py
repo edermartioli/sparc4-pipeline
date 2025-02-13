@@ -990,8 +990,8 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
                         plot_coords_file = phot_ts_product.replace(".fits","_coords{}".format(p['PLOT_FILE_FORMAT']))
                         plot_rawmags_file = phot_ts_product.replace(".fits","_rawmags{}".format(p['PLOT_FILE_FORMAT']))
                         plot_lc_file = phot_ts_product.replace(".fits",p['PLOT_FILE_FORMAT'])
-
-                    s4plt.plot_light_curve(phot_ts_product,
+                    try :
+                        s4plt.plot_light_curve(phot_ts_product,
                                        target=p['TARGET_INDEX'],
                                        comps=p['COMPARISONS'],
                                        nsig=10,
@@ -1003,7 +1003,8 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
                                        output_coords=plot_coords_file,
                                        output_rawmags=plot_rawmags_file,
                                        output_lc=plot_lc_file)
-                
+                    except Exception as e:
+                        logger.warn("Could not generate plot for product {} : {}".format(phot_ts_product, e))
             ##############################################
             ## POLARIMETRY AND TIME SERIES FOR POLARIMETRIC MODE (L2 OR L4) ##
             ##############################################
@@ -1022,7 +1023,8 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
                         plot_rawmags_file = outlc.replace(".fits","_rawmags{}".format(p['PLOT_FILE_FORMAT']))
                         plot_lc_file = outlc.replace(".fits",p['PLOT_FILE_FORMAT'])
                         
-                    s4plt.plot_light_curve(outlc,
+                    try :
+                        s4plt.plot_light_curve(outlc,
                                            target=p['TARGET_INDEX'],
                                            comps=p['COMPARISONS'],
                                            nsig=10,
@@ -1034,7 +1036,9 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
                                            output_coords=plot_coords_file,
                                            output_rawmags=plot_rawmags_file,
                                            output_lc=plot_lc_file)
-
+                    except Exception as e:
+                        logger.warn("Could not generate plot for product {} : {}".format(outlc, e))
+                        
                 compute_k, zero = p['COMPUTE_K_IN_L2'], 0
                 wave_plate = 'halfwave'
 
@@ -1078,8 +1082,11 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
                         if p['PLOT_TO_FILE'] :
                             polar_plot_file = polarproduct.replace(".fits",p['PLOT_FILE_FORMAT'])
                         if pol_results["POLARIMETRY_SUCCESS"] :
-                            s4plt.plot_polarimetry_results(pol_results, title_label=pol_results['TITLE_LABEL'], wave_plate=wave_plate, output=polar_plot_file)
-                        
+                            try :
+                                s4plt.plot_polarimetry_results(pol_results, title_label=pol_results['TITLE_LABEL'], wave_plate=wave_plate, output=polar_plot_file)
+                            except Exception as e:
+                                logger.warn("Could not generate plot for product {} : {}".format(polarproduct, e))
+                                
                     p['PolarProducts'].append(polarproduct)
 
 
@@ -1097,12 +1104,14 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
                     polar_ts_plot_file = ""
                     if p['PLOT_TO_FILE'] :
                         polar_ts_plot_file = p['PolarTimeSeriesProduct'].replace(".fits",p['PLOT_FILE_FORMAT'])
-                    s4plt.plot_polar_time_series(p['PolarTimeSeriesProduct'],
+                    try :
+                        s4plt.plot_polar_time_series(p['PolarTimeSeriesProduct'],
                                                  target=p['TARGET_INDEX'],
                                                  comps=p['COMPARISONS'],
                                                  plot_total_polarization=p["PLOT_TOTAL_POLARIZATION"],
                                                  output=polar_ts_plot_file)
-                                                 
+                    except Exception as e:
+                        logger.warn("Could not generate plot for product {} : {}".format(p['PolarTimeSeriesProduct'], e))
                     
                 logger.info("Running {} polarimetry for {} frames -- static polar".format(wave_plate, len(p['OBJECT_REDUCED_IMAGES'])))
                     
@@ -1129,9 +1138,11 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
                     if p['PLOT_TO_FILE'] :
                         static_polar_plot_file = static_polar_product.replace(".fits",p['PLOT_FILE_FORMAT'])
                     if static_polar_results["POLARIMETRY_SUCCESS"] :
-                        s4plt.plot_polarimetry_results(static_polar_results, title_label=static_polar_results['TITLE_LABEL'], wave_plate=wave_plate, output=static_polar_plot_file)
+                        try :
+                            s4plt.plot_polarimetry_results(static_polar_results, title_label=static_polar_results['TITLE_LABEL'], wave_plate=wave_plate, output=static_polar_plot_file)
+                        except Exception as e:
+                            logger.warn("Could not generate plot for product {} : {}".format(static_polar_product, e))
                         
-                
     return p
 
 
@@ -1260,10 +1271,14 @@ def run_master_calibration(p, inputlist=[], output="", obstype='bias', data_dir=
         plot_file = ""
         if p["PLOT_TO_FILE"] :
             plot_file = output.replace(".fits",p['PLOT_FILE_FORMAT'])
-        if obstype == 'bias':
-            s4plt.plot_cal_frame(output, percentile=99.5, combine_rows=True, combine_cols=True, output=plot_file)
-        else:
-            s4plt.plot_cal_frame(output, percentile=99.5, xcut=512, ycut=512, output=plot_file)
+            
+        try :
+            if obstype == 'bias':
+                s4plt.plot_cal_frame(output, percentile=99.5, combine_rows=True, combine_cols=True, output=plot_file)
+            else :
+                s4plt.plot_cal_frame(output, percentile=99.5, xcut=512, ycut=512, output=plot_file)
+        except Exception as e:
+            logger.warn("Could not generate plot for product {} : {}".format(output, e))
 
     return p
 
@@ -4293,8 +4308,11 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
     
     # plot polarization data and best-fit model
     if plot and loc["POLARIMETRY_SUCCESS"] :
-        s4plt.plot_polarimetry_results(loc, title_label=title_label, wave_plate=wave_plate, output=plot_filename, figsize=figsize)
-
+        try :
+            s4plt.plot_polarimetry_results(loc, title_label=title_label, wave_plate=wave_plate, output=plot_filename, figsize=figsize)
+        except Exception as e:
+            logger.warn("Could not generate polarimetry plot : {}".format(e))
+            
     hdul.close()
 
     return loc
@@ -4548,11 +4566,13 @@ def stack_and_reduce_sci_images(p, sci_list, reduce_dir, ref_img="", stack_suffi
         stack_plot_file = ""
         if p['PLOT_TO_FILE'] :
             stack_plot_file = p['OBJECT_STACK'].replace(".fits",p['PLOT_FILE_FORMAT'])
-        if polarimetry :
-            s4plt.plot_sci_polar_frame(p['OBJECT_STACK'], percentile=99.5, output=stack_plot_file)
-        else :
-            s4plt.plot_sci_frame(p['OBJECT_STACK'], nstars=20, use_sky_coords=True, output=stack_plot_file)
-
+        try :
+            if polarimetry :
+                s4plt.plot_sci_polar_frame(p['OBJECT_STACK'], percentile=99.5, output=stack_plot_file)
+            else :
+                s4plt.plot_sci_frame(p['OBJECT_STACK'], nstars=20, use_sky_coords=True, output=stack_plot_file)
+        except Exception as e:
+            logger.warn("Could not generate plot for product {} : {}".format(p['OBJECT_STACK'], e))
     return p
 
 
