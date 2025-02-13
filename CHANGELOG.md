@@ -60,3 +60,4 @@ Version 1.3 (2024-06-03)
 - Fixed a bug in linux for wppos matching in astropy table
 - Updated polarimetry plots
 - Implemented try/except statements in plots for stability
+- Changed parameter ZERO_OF_WAVEPLATE from single float to array of 4 floats, to handle different values between channels
