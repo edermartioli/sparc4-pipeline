@@ -229,6 +229,10 @@ MAX_NUMBER_OF_WPPOS_IN_SEQUENCE: 16
 # whether or not to use rolling polar sequence mode
 ROLLING_POLAR_SEQUENCE: False
 
+# set a fixed number of images to include in each polar sequence,
+# WARNING: this will force a fixed number of images and will ignore the grouping by wppos above. 
+FIXED_NUMBER_OF_IMAGES_IN_POLAR_SEQUENCE: 0
+
 # [S]outh and [N]orth polarimetric beams
 CATALOG_BEAM_IDS: ["S","N"]
 

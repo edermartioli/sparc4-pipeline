@@ -464,7 +464,7 @@ def identify_files(p, night, print_report=True):
     return p
 
 
-def select_polar_sequences(list_of_files, sortlist=True, npos_in_seq=16, rolling_seq=False, verbose=False):
+def select_polar_sequences(list_of_files, sortlist=True, npos_in_seq=16, rolling_seq=False, nimages_per_seq_fixed=0, min_n_images_per_seq=4, verbose=False) :
     """ Pipeline module to select polarimetric sequences
     Parameters
     ----------
@@ -476,6 +476,10 @@ def select_polar_sequences(list_of_files, sortlist=True, npos_in_seq=16, rolling
         to set number of waveplate positions in each sequence
     rolling_seq : bool
         switch to create rolling polar sequences, e.g. seqs[1234,2345,3456,4567,...]
+    nimages_per_seq_fixed : int
+        when given a number greater than the minimum number of images per sequence, it will adopt a fixed number of images per sequence
+    min_n_images_per_seq : int
+        minimum allowed number of images per sequence
     verbose : bool
         turn on verbose
 
@@ -495,90 +499,109 @@ def select_polar_sequences(list_of_files, sortlist=True, npos_in_seq=16, rolling
 
     # run only for a non-empty list
     if len(sortedlist):
-        
-        # save WPPOS of first image
-        prev_pos = fits.getheader(sortedlist[0])['WPPOS']
-        
-        block_index = 0
-        blocks, block_pos = [], []
-        blocks.append([])
-        
-        blocks[block_index].append(sortedlist[0])
-        block_pos.append(prev_pos)
-                
-        for i in range(1,len(sortedlist)) :
-            # save WPPOS of first image
-            pos = fits.getheader(sortedlist[i])['WPPOS']
-            
-            if pos != prev_pos :
-                prev_pos = pos
-                block_index += 1
-                blocks.append([])
-                block_pos.append(prev_pos)
-                
-            blocks[block_index].append(sortedlist[i])
-          
-        number_of_blocks = len(block_pos)
-        sequences.append([])
-        blocksinseq = []
-        seq_index = 0
-
-        if rolling_seq :
-            
-            for j in range(len(block_pos)) :
-                pos_in_seq = []
-                
-                lastjj = j + npos_in_seq
-                
-                if lastjj > len(block_pos) :
-                    lastjj = len(block_pos)
-                
-                for jj in range(j,lastjj) :
-                    if block_pos[jj] not in pos_in_seq :
-                        for i in range(len(blocks[jj])) :
-                            sequences[seq_index].append(blocks[jj][i])
-                        pos_in_seq.append(block_pos[jj])
-                                                    
-                blocksinseq.append(len(pos_in_seq))
-                
-                if lastjj == len(block_pos) :
-                    break
-
-                sequences.append([])
-                seq_index += 1
-                
-        else :
-            nblocks_in_sequence = 0
-        
-            #--
-            prev_block_pos = block_pos[0]
-            for i in range(len(blocks[0])) :
-                sequences[seq_index].append(blocks[0][i])
-            nblocks_in_sequence += 1
-            #--
-            
-            for j in range(1,len(block_pos)) :
     
-                # reset sequence
-                if nblocks_in_sequence == npos_in_seq or block_pos[j] < prev_block_pos :
+        # when a valid fixed number of images per sequence is given
+        if nimages_per_seq_fixed >= min_n_images_per_seq :
+            # if the number of images per seq is greater than the total number of images, do 1 sequence only
+            if nimages_per_seq_fixed > len(sortedlist) :
+                sequences.append(sortedlist)
+            else  :
+                ns = len(sortedlist) - nimages_per_seq_fixed + 1
+                for i in range(ns) :
+                    if rolling_seq :
+                        sequences.append(sortedlist[i:i+nimages_per_seq_fixed])
+                    else :
+                        first_index = i*nimages_per_seq_fixed
+                        last_index = i*nimages_per_seq_fixed + nimages_per_seq_fixed
+                        if last_index > len(sortedlist) :
+                            last_index = len(sortedlist)
+                        tmp_seq = sortedlist[first_index:last_index]
+                        if len(tmp_seq) >= min_n_images_per_seq :
+                            sequences.append(tmp_seq)
+        else :
+            # save WPPOS of first image
+            prev_pos = fits.getheader(sortedlist[0])['WPPOS']
+            
+            block_index = 0
+            blocks, block_pos = [], []
+            blocks.append([])
+            
+            blocks[block_index].append(sortedlist[0])
+            block_pos.append(prev_pos)
+                    
+            for i in range(1,len(sortedlist)) :
+                # save WPPOS of first image
+                pos = fits.getheader(sortedlist[i])['WPPOS']
+                
+                if pos != prev_pos :
+                    prev_pos = pos
+                    block_index += 1
+                    blocks.append([])
+                    block_pos.append(prev_pos)
+                    
+                blocks[block_index].append(sortedlist[i])
+              
+            number_of_blocks = len(block_pos)
+            sequences.append([])
+            blocksinseq = []
+            seq_index = 0
+
+            if rolling_seq :
+                
+                for j in range(len(block_pos)) :
+                    pos_in_seq = []
+                    
+                    lastjj = j + npos_in_seq
+                    
+                    if lastjj > len(block_pos) :
+                        lastjj = len(block_pos)
+                    
+                    for jj in range(j,lastjj) :
+                        if block_pos[jj] not in pos_in_seq :
+                            for i in range(len(blocks[jj])) :
+                                sequences[seq_index].append(blocks[jj][i])
+                            pos_in_seq.append(block_pos[jj])
+                                                        
+                    blocksinseq.append(len(pos_in_seq))
+                    
+                    if lastjj == len(block_pos) :
+                        break
+
                     sequences.append([])
                     seq_index += 1
-                    blocksinseq.append(nblocks_in_sequence)
-                    nblocks_in_sequence = 0
                     
+            else :
+                nblocks_in_sequence = 0
+            
                 #--
-                prev_block_pos = block_pos[j]
-                for i in range(len(blocks[j])) :
-                    sequences[seq_index].append(blocks[j][i])
+                prev_block_pos = block_pos[0]
+                for i in range(len(blocks[0])) :
+                    sequences[seq_index].append(blocks[0][i])
                 nblocks_in_sequence += 1
-                if j==len(block_pos)-1:
-                    blocksinseq.append(nblocks_in_sequence)
                 #--
-            
-        if verbose :
-            for k in range(len(sequences)) :
-                print("Sequence {} of {} : {} files for {} waveplate positions".format(k+1,len(sequences),len(sequences[k]),blocksinseq[k]))
-            
+                
+                for j in range(1,len(block_pos)) :
+        
+                    # reset sequence
+                    if nblocks_in_sequence == npos_in_seq or block_pos[j] < prev_block_pos :
+                        sequences.append([])
+                        seq_index += 1
+                        blocksinseq.append(nblocks_in_sequence)
+                        nblocks_in_sequence = 0
+                        
+                    #--
+                    prev_block_pos = block_pos[j]
+                    for i in range(len(blocks[j])) :
+                        sequences[seq_index].append(blocks[j][i])
+                    nblocks_in_sequence += 1
+                    if j==len(block_pos)-1:
+                        blocksinseq.append(nblocks_in_sequence)
+                    #--
+                
+            if verbose :
+                for k in range(len(sequences)) :
+                    print("Sequence {} of {} : {} files for {} waveplate positions".format(k+1,len(sequences),len(sequences[k]),blocksinseq[k]))
+                
     return sequences
 
 

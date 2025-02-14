@@ -1050,7 +1050,7 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
                 logger.info("Selecting polarimetric sequences")
 
                 # divide input list into a many sequences
-                pol_sequences = s4utils.select_polar_sequences(p['OBJECT_REDUCED_IMAGES'], sortlist=True, npos_in_seq=p["MAX_NUMBER_OF_WPPOS_IN_SEQUENCE"], rolling_seq=p["ROLLING_POLAR_SEQUENCE"])
+                pol_sequences = s4utils.select_polar_sequences(p['OBJECT_REDUCED_IMAGES'], sortlist=True, npos_in_seq=p["MAX_NUMBER_OF_WPPOS_IN_SEQUENCE"], rolling_seq=p["ROLLING_POLAR_SEQUENCE"], nimages_per_seq_fixed=p["FIXED_NUMBER_OF_IMAGES_IN_POLAR_SEQUENCE"])
 
                 p['PolarProducts'] = []
 
