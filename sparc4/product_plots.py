@@ -117,7 +117,7 @@ def plot_cal_frame(filename, percentile=99.5, xcut=512, ycut=512,
         plt.show()
         
 
-def plot_sci_frame(filename, cat_ext=3, nstars=5, percentile=98, use_sky_coords=False, output="", figsize=(10, 10)):
+def plot_sci_frame(filename, cat_ext=3, nstars=5, percentile=98, use_sky_coords=False, output="", figsize=(10, 10), toplabel="", bottomlabel=""):
     """ Plot science frame
 
     Parameters
@@ -147,6 +147,14 @@ def plot_sci_frame(filename, cat_ext=3, nstars=5, percentile=98, use_sky_coords=
 
     fig = plt.figure(figsize=figsize)
 
+    if toplabel != "" :
+        xmax, ymax = np.shape(img_data)
+        plt.annotate(toplabel, [xmax-500, ymax-40], color='w', fontsize=17, alpha=0.75)
+        
+    if bottomlabel != "" :
+        xmax, ymax = np.shape(img_data)
+        plt.annotate(bottomlabel, [xmax-550, 10], color='w', fontsize=14, alpha=0.75)
+        
     if use_sky_coords:
         # load WCS from image header
         wcs_obj = WCS(hdul[0].header, naxis=2)
@@ -202,7 +210,7 @@ def plot_sci_frame(filename, cat_ext=3, nstars=5, percentile=98, use_sky_coords=
         plt.show()
 
 
-def plot_sci_polar_frame(filename, percentile=99.5, output="", figsize=(10, 10)):
+def plot_sci_polar_frame(filename, percentile=99.5, output="", figsize=(10, 10), toplabel="", bottomlabel=""):
     """ Plot science polar frame
 
     Parameters
@@ -241,6 +249,14 @@ def plot_sci_polar_frame(filename, percentile=99.5, output="", figsize=(10, 10))
         y = [y_o[i], y_e[i]]
         plt.plot(x, y, 'w-o', alpha=0.5)
         plt.annotate(f"{i}", [np.mean(x)-25, np.mean(y)+25], color='w')
+
+    if toplabel != "" :
+        xmax, ymax = np.shape(img_data)
+        plt.annotate(toplabel, [xmax-500, ymax-40], color='w', fontsize=17, alpha=0.75)
+        
+    if bottomlabel != "" :
+        xmax, ymax = np.shape(img_data)
+        plt.annotate(bottomlabel, [xmax-550, 10], color='w', fontsize=14, alpha=0.75)
 
     plt.xlabel("columns (pixel)", fontsize=16)
     plt.ylabel("rows (pixel)", fontsize=16)

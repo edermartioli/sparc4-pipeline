@@ -31,7 +31,8 @@ from functools import wraps
 import logging
 
 def set_timecoords_keys(hdr, timezone=-3, timetype="", ra="", dec="",
-                        set_airmass=True, time_key='DATE-OBS', exptimekey='EXPTIME'):
+                        set_airmass=True, time_key='DATE-OBS', exptimekey='EXPTIME',
+                        longitude=-45.5825, latitude=-22.53444, altitude=1864):
     """ Pipeline module to set time and coordinates keywords
     Parameters
     ----------
@@ -52,6 +53,12 @@ def set_timecoords_keys(hdr, timezone=-3, timetype="", ra="", dec="",
         string to point to the main date keyword in FITS header
     exptimekey : str, optional
         string to point to the exposure time (in units of s) keyword in FITS header
+    longitude : float
+        East longitude in degrees
+    latitude : float
+        North latitude in degrees
+    altitude : float, optional
+        altitude of observatory in meters
 
     Returns
     -------
@@ -59,21 +66,15 @@ def set_timecoords_keys(hdr, timezone=-3, timetype="", ra="", dec="",
         FITS header unit to be updated
     """
 
-    # set OPD geographic coordinates
-    longitude = -(45 + (34 + (57/60))/60)
-    latitude = -(22 + (32 + (4/60))/60)
-    altitude = 1864*u.m  # hdr['OBSALT']
-
     # Set geographic coordinates from header if they exist
     if 'OBSLONG' in hdr.keys():
         longitude = hdr['OBSLONG']
     if 'OBSLAT' in hdr.keys():
         latitude = hdr['OBSLAT']
     if 'OBSALT' in hdr.keys():
-        altitude = hdr['OBSALT']*u.m  # hdr['OBSALT']
+        altitude = hdr['OBSALT']  # hdr['OBSALT']
 
-    observatory_location = EarthLocation.from_geodetic(
-        lat=latitude, lon=longitude, height=altitude)
+    observatory_location = EarthLocation.from_geodetic(lat=latitude, lon=longitude, height=altitude*u.m)
 
     # set equinox to 2000 or get it from header if it exists
     equinox = "J{:.1f}".format(2000.)

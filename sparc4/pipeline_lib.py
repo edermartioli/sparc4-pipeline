@@ -60,6 +60,9 @@ from astroquery.vizier import Vizier
 from astroquery.gaia import Gaia
 from scipy import stats
 
+from astropy.coordinates import EarthLocation
+from astroquery.jplhorizons import Horizons
+
 import yaml
 
 logger = s4utils.start_logger()
@@ -175,7 +178,7 @@ def build_target_list_from_data(object_list=[], skycoords_list=[], search_radius
     return tbl
     
 
-def astrometry_from_existing_wcs(wcs, img_data, pixel_coords=None, sky_coords=None, pixel_scale=0.335, fov_search_factor=1.1, sparsify_factor=0.01, apply_sparsify_filter=True, max_number_of_catalog_sources=50, compute_wcs_tolerance = 10, nsources_to_plot=30, use_twirl_to_compute_wcs=False, twirl_find_peak_threshold=2.0, sip_degree=None, use_vizier=False, vizier_catalogs=["UCAC"], vizier_catalog_idx=2, plot_solution=False, ra_offset=0., dec_offset=0., plot_filename="") :
+def astrometry_from_existing_wcs(wcs, img_data, pixel_coords=None, sky_coords=None, pixel_scale=0.335, fov_search_factor=1.5, sparsify_factor=0.01, apply_sparsify_filter=True, max_number_of_catalog_sources=50, compute_wcs_tolerance = 10, nsources_to_plot=30, use_twirl_to_compute_wcs=False, twirl_find_peak_threshold=2.0, sip_degree=None, use_vizier=False, vizier_catalogs=["UCAC"], vizier_catalog_idx=2, plot_solution=False, ra_offset=0., dec_offset=0., plot_filename="") :
 
     """ Pipeline module to calcualte astrometric solution from an existing wcs
     Parameters
@@ -901,6 +904,24 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
     # loop over each object to run the reduction
     for k in range(len(objs)):
         obj = objs[k]
+    
+        # set solar system flag to False
+        p['SOLAR_SYSTEM_OBJECT'] = False
+        p['SOLAR_SYSTEM_OBJECT_ID'] = ""
+        
+        # when sinalized that observations has a Solar System object, it tests every object
+        if p['HAS_SOLAR_SYSTEM_BODY'] :
+        
+            # query the JPL database to determine whether this is a Solar System object
+            ssobj = Horizons(id=obj, location=p['JPL_HORIZONS_OBSERVATORY_CODE'], epochs=Time.now().jd)
+
+            if 'No matches found' in ssobj.ephemerides_async().text :
+                logger.info("Target {} is not a Solar System object, continue with normal reduction".format(obj))
+            else :
+                logger.info("Target {} is a Solar System object, continue with especial reduction".format(obj))
+                # set Solar System flag to True when object matches a catalogued solar system object
+                p['SOLAR_SYSTEM_OBJECT'] = True
+                p['SOLAR_SYSTEM_OBJECT_ID'] = obj
 
         logger.info("Reducing data for object: {}".format(obj))
         
@@ -924,7 +945,7 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
                                           obstype=p['OBJECT_OBSTYPE_KEYVALUE'],
                                           calwheel_mode=calw,
                                           detector_mode=detector_mode)
-
+                                          
             # run stack and reduce individual science images (produce *_proc.fits)
             p = stack_and_reduce_sci_images(p,
                                             sci_list,
@@ -934,7 +955,8 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
                                             force=force,
                                             match_frames=match_frames,
                                             polarimetry=polarimetry,
-                                            plot=plot_stack)
+                                            plot=plot_stack,
+                                            plot_proc_frames=p['PLOT_PROC_FRAMES'])
 
             # set suffix for output time series filename
             ts_suffix = "{}_s4c{}_{}{}".format(nightdir, p['CHANNELS'][channel_index], obj.replace(" ", ""), polsuffix)
@@ -964,8 +986,6 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
             for kk in range(len(lists_of_catalogs)) :
                 # add beam label to suffix
                 ts_suffix_tmp = "{}_{}".format(ts_suffix, p["CATALOG_BEAM_IDS"][kk])
-                
-                
                 
                 logger.info("Running photometric time series")
                 # run photometric time series
@@ -1565,7 +1585,7 @@ def run_master_flat_calibrations(p, db, nightdir, data_dir, reduce_dir, channel,
 
 
 
-def reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", match_frames=True, ref_img="", force=False, polarimetry=False, ra="", dec=""):
+def reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", match_frames=True, ref_img="", force=False, polarimetry=False, ra="", dec="", plot=False, animated_gif=""):
     """ Pipeline module to run the reduction of science images.
 
          The reduction consists of the following processing steps:
@@ -1602,7 +1622,10 @@ def reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", match_fr
         string to overwrite header RA (Right Ascension) keyword
     dec : str, optional
         string to overwrite header DEC (Declination) keyword
-    
+    plot : bool, optional
+        plot processed frames
+    animated_gif : str, optional
+        give output file name to create an animated gif of all processed frames
     Returns
     -------
     p : dict
@@ -1728,6 +1751,9 @@ def reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", match_fr
         # write ref image name to header
         info['REFIMG'] = (p['REFERENCE_IMAGE'], "reference image")
 
+        # reset list of output plot data
+        proc_plot_files = []
+        
         # Perform aperture photometry and store reduced data into products
         for i, frame in enumerate(frames):
 
@@ -1782,8 +1808,34 @@ def reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", match_fr
                 frame_wcs_header = deepcopy(p['WCS_HEADER'])
 
                 # call function to generate final product
-                s4p.scienceImageProduct(obj_fg.files[i], img_data=img_data, info=info, catalogs=frame_catalogs,polarimetry=polarimetry,filename=obj_red_images[i], catalog_beam_ids=p['CATALOG_BEAM_IDS'],wcs_header=frame_wcs_header,time_key=p["TIME_KEY"], ra=ra, dec=dec)
-
+                hdul_frame = s4p.scienceImageProduct(obj_fg.files[i], img_data=img_data, info=info, catalogs=frame_catalogs,polarimetry=polarimetry,filename=obj_red_images[i], catalog_beam_ids=p['CATALOG_BEAM_IDS'],wcs_header=frame_wcs_header,time_key=p["TIME_KEY"], ra=ra, dec=dec)
+                
+                # plot individual proc frames
+                if plot :
+                    frame_obstime = frames[i].header[p["TIME_KEY"]]
+                    proc_plot_file = ""
+                    if p['PLOT_TO_FILE'] :
+                        proc_plot_file = obj_red_images[i].replace(".fits",p['PLOT_FILE_FORMAT'])
+                        proc_plot_files.append(proc_plot_file)
+                        try :
+                            if polarimetry :
+                                s4plt.plot_sci_polar_frame(obj_red_images[i], percentile=99.5, output=proc_plot_file, toplabel="UT {}".format(frame_obstime[:-3]), bottomlabel=os.path.basename(obj_fg.files[i]))
+                            else :
+                                s4plt.plot_sci_frame(obj_red_images[i], nstars=20, use_sky_coords=True, toplabel="UT {}".format(frame_obstime[:-3]), bottomlabel=os.path.basename(obj_fg.files[i]))
+                        except Exception as e:
+                            logger.warn("Could not generate plot for product {} : {}".format(obj_red_images[i], e))
+                            
+        if animated_gif != "" and p['PLOT_TO_FILE'] and p['PLOT_PROC_FRAMES']:
+            command = "convert "
+            for i in range(len(proc_plot_files)):
+                command += "{} ".format(proc_plot_files[i])
+            command += "{}".format(animated_gif)
+            try :
+                logger.info("Creating animated gif, executing command: \n {}".format(command))
+                os.system(command)
+            except Exception as e:
+                logger.warn("Could not create animated gif {} : {}".format(animated_gif, e))
+            
     # save as new or append list of reduced images to p dict, discarding the first element = redundant ref img
     if 'OBJECT_REDUCED_IMAGES' not in p.keys():
         p['OBJECT_REDUCED_IMAGES'] = obj_red_images[1:]
@@ -2135,6 +2187,10 @@ def select_files_for_stack(p, inputlist, saturation_limit=32768, imagehdu=0, max
         if inputlist[i] != p['REFERENCE_IMAGE']:
             sorted_files.append(inputlist[i])
 
+    if p['SOLAR_SYSTEM_OBJECT'] :
+        # when there is a solar system object, then use only the first image instead of a stack.
+        sorted_files = sorted_files[:1]
+
     # Now select up to <N files for stack as defined in the parameters file and save list to the param dict
     if len(sorted_files) > p['NFILES_FOR_STACK'] :
         p['SELECTED_FILES_FOR_STACK'] = sorted_files[:p['NFILES_FOR_STACK']]
@@ -2142,7 +2198,6 @@ def select_files_for_stack(p, inputlist, saturation_limit=32768, imagehdu=0, max
     else:
         p['SELECTED_FILES_FOR_STACK'] = sorted_files
         p['FINAL_NFILES_FOR_STACK'] = len(sorted_files)
-
 
     return p
 
@@ -2319,12 +2374,6 @@ def select_files_for_stack_and_get_shifts(p, frames, obj_files, sort_method='MAX
         p['SELECTED_FILES_FOR_STACK'] = sorted_files[:p['NFILES_FOR_STACK']]
         p['SELECTED_FILE_INDICES_FOR_STACK'] = newsort[:p['NFILES_FOR_STACK']]
         p['FINAL_NFILES_FOR_STACK'] = p['NFILES_FOR_STACK']
-        """
-        if correct_shifts :
-            # Correct shifts to match the new reference image for the catalog
-            p["XSHIFTS"] -= p["XSHIFTS"][newsort[0]]
-            p["YSHIFTS"] -= p["YSHIFTS"][newsort[0]]
-            """
     else:
         p['FINAL_NFILES_FOR_STACK'] = len(sorted_files)
         p['SELECTED_FILES_FOR_STACK'] = sorted_files
@@ -2492,7 +2541,7 @@ def calculate_aperture_radius(p, data):
     return p
 
 
-def run_aperture_photometry(img_data, x, y, aperture_radius, r_ann, err_data=None, output_mag=True, exptime=1.0, recenter=False, readnoise=0., use_astropop=False, fwhm_from_fit=False, use_moffat=False):
+def run_aperture_photometry(img_data, x, y, aperture_radius, r_ann, err_data=None, output_mag=True, exptime=1.0, recenter=False, recenter_limit=5., readnoise=0., use_astropop=False, fwhm_from_fit=False, use_moffat=False):
     """ Pipeline module to run aperture photometry of sources in an image
     Parameters
     ----------
@@ -2512,6 +2561,8 @@ def run_aperture_photometry(img_data, x, y, aperture_radius, r_ann, err_data=Non
         set exposure time (s) for flux calculation
     recenter : bool, optional
         to recenter sources
+    recenter_limit : float, optional
+        maximum accepted recenter offset in pixels
     readnoise : float, optional
         set readout noise (electrons) for flux error calculation
     use_astropop : bool, optional
@@ -2544,7 +2595,7 @@ def run_aperture_photometry(img_data, x, y, aperture_radius, r_ann, err_data=Non
         recenter_method, recenter_limit = None, None
         if recenter :
             recenter_method='com' # com: center of mass method
-            recenter_limit=5 # recenter accepted up to 5 pixels
+            recenter_limit=recenter_limit # recenter accepted up to 5 pixels
 
         ap_phot = aperture_photometry(img_data, x, y, r=aperture_radius, r_ann=r_ann, gain=1.0, bkg_method='mmm', recenter_method=recenter_method, recenter_limit=recenter_limit)
         
@@ -2619,7 +2670,7 @@ def read_catalog_coords(catalog):
     return ra, dec, x, y
 
 
-def set_wcs_from_astrom_ref_image(ref_filename, header):
+def set_wcs_from_astrom_ref_image(ref_filename, header, ra_deg=None, dec_deg=None):
     """ Pipeline module to set WCS header parameters from an input header of a
             reference image. The reference image is usually an astrometric field.
     Parameters
@@ -2628,6 +2679,10 @@ def set_wcs_from_astrom_ref_image(ref_filename, header):
         reference file name to get a guess of WCS
     header : fits.Header
         FITS image header
+    ra_deg : float, optional
+        right ascension in deg, overwrite header value
+    dec_deg : float, optional
+        declination in deg, overwrite header value
     Returns
         w :
         updated WCS object
@@ -2635,15 +2690,21 @@ def set_wcs_from_astrom_ref_image(ref_filename, header):
      :
     """
     
-    # get ra and dec from current header
-    ra, dec = header['RA'].split(":"), header['DEC'].split(":")
-    ra_str = '{:02d}h{:02d}m{:.2f}s'.format(int(ra[0]), int(ra[1]), float(ra[2]))
-    dec_str = '{:02d}d{:02d}m{:.2f}s'.format(int(dec[0]), int(dec[1]), float(dec[2]))
-    #print("RA=",ra_str, "DEC=",dec_str)
+    if (ra_deg is None) or (dec_deg is None) :
+        # get ra and dec from current header
+        ra, dec = header['RA'].split(":"), header['DEC'].split(":")
+        ra_str = '{:02d}h{:02d}m{:.2f}s'.format(int(ra[0]), int(ra[1]), float(ra[2]))
+        dec_str = '{:02d}d{:02d}m{:.2f}s'.format(int(dec[0]), int(dec[1]), float(dec[2]))
+        #print("RA=",ra_str, "DEC=",dec_str)
     
-    # set object coordinates as SkyCoords
-    coord = SkyCoord(ra_str, dec_str, frame='icrs')
-    ra_deg, dec_deg = coord.ra.degree, coord.dec.degree
+        # set object coordinates as SkyCoords
+        coord = SkyCoord(ra_str, dec_str, frame='icrs')
+    
+    if ra_deg is None :
+        ra_deg = coord.ra.degree
+    if dec_deg is None :
+        dec_deg = coord.dec.degree
+
     crval1, crval2 = ra_deg, dec_deg
 
     # get image center in pixel coordinates
@@ -2677,7 +2738,7 @@ def set_wcs_from_astrom_ref_image(ref_filename, header):
     return w
 
 
-def generate_catalogs(p, data, hdr, sources, fwhm, catalogs=[], catalogs_label='', aperture_radius=10, r_ann=(25, 50), sortbyflux=True, maxnsources=0, polarimetry=False, use_e_beam_for_astrometry=True, solve_astrometry=False, exptime=1.0, readnoise=0.):
+def generate_catalogs(p, data, hdr, sources, fwhm, catalogs=[], catalogs_label='', aperture_radius=10, r_ann=(25, 50), sortbyflux=True, maxnsources=0, polarimetry=False, use_e_beam_for_astrometry=True, solve_astrometry=False, exptime=1.0, readnoise=0., ssobj_raw_index=None):
     """ Pipeline module to generate new catalogs and append it
     to a given list of catalogs
     Parameters
@@ -2688,6 +2749,34 @@ def generate_catalogs(p, data, hdr, sources, fwhm, catalogs=[], catalogs_label='
         float array containing the image data
     hdr : fits.PrimaryHDU().header
         FITS image header
+    sources : dict
+        container of sources data, returned from source detection routine
+    fwhm : float
+        full width at half maximum
+    catalogs : list of dicts, optional
+        list of catalogs of sources. An empty list indicates a new catalog list to be generated
+    catalogs_label : str
+        catalogs label
+    aperture_radius : float
+        aperture radius within which to perform aperture photometry
+    r_ann : tuple: (float,float)
+        sky annulus inner and outer radii
+    sortbyflux : bool
+        sort sources by flux, starting with the brightest
+    maxnsources : int
+        maxinum number of sources to limit catalog size
+    polarimetry : bool
+        for polarimetry data
+    use_e_beam_for_astrometry : bool
+        whether to use the extraordinary beam as reference for astrometry; default is to use the ordinary beam.
+    solve_astrometry : bool
+        whether to solve astrometry
+    exptime : float
+        exposure time in seconds
+    readnoise : float
+        readout noise in e-
+    ssobj_raw_index : int
+        raw index of solar system object. In polarimetry the raw index is different than the final index because the two beams will share the same final index
     Returns
         catalogs: list of dicts
             returns a list of catalog dictionaries, where the new catalogs
@@ -2709,11 +2798,22 @@ def generate_catalogs(p, data, hdr, sources, fwhm, catalogs=[], catalogs_label='
 
         sources_table = Table()
 
-        sources_table['star_index'] = np.arange(len(pairs))+1
+        sources_table['star_index'] = np.arange(len(pairs))
         sources_table['x_o'] = sources['x'][pairs['o']]
         sources_table['y_o'] = sources['y'][pairs['o']]
         sources_table['x_e'] = sources['x'][pairs['e']]
         sources_table['y_e'] = sources['y'][pairs['e']]
+
+        # set index for for solar system objects
+        if p['SOLAR_SYSTEM_OBJECT'] and ssobj_raw_index is not None :
+            if use_e_beam_for_astrometry:
+                mask_e = pairs['e']==ssobj_raw_index
+                if len(pairs['e'][mask_e]) :
+                    p['SOLAR_SYSTEM_OBJECT_INDEX'] = sources_table['star_index'][mask_e][0]-1
+            else :
+                mask_o = pairs['o']==ssobj_raw_index
+                if len(pairs['o'][mask_o]) :
+                    p['SOLAR_SYSTEM_OBJECT_INDEX'] = sources_table['star_index'][mask_o][0]-1
 
         if use_e_beam_for_astrometry:
             dx = np.nanmedian(sources_table['x_o'] - sources_table['x_e'])
@@ -2788,7 +2888,7 @@ def generate_catalogs(p, data, hdr, sources, fwhm, catalogs=[], catalogs_label='
             except Exception as e:
             
                 logger.warn("Could not solve astrometry in POLAR-MODE, using WCS from database: {}".format(e))
-                p['WCS'] = set_wcs_from_astrom_ref_image(p["ASTROM_REF_IMG"], hdr)
+                p['WCS'] = set_wcs_from_astrom_ref_image(p["ASTROM_REF_IMG"], hdr, ra_deg=p['RA_DEG'], dec_deg=p['DEC_DEG'])
             
             # update wcs header in parameters dict
             p['WCS_HEADER'] = p['WCS'].to_header(relax=True)
@@ -2813,6 +2913,9 @@ def generate_catalogs(p, data, hdr, sources, fwhm, catalogs=[], catalogs_label='
             catalogs[current_catalogs_len+1]["{}".format(i)] = (i, ras[i], decs[i], xo[i], yo[i], fwhmse[i], fwhmse[i], mage[i], mage_error[i], smage[i], smage_error[i], aperture_radius, flagse[i])
     else:
         catalogs.append({})
+        
+        if p['SOLAR_SYSTEM_OBJECT'] and ssobj_raw_index is not None:
+            p['SOLAR_SYSTEM_OBJECT_INDEX'] = ssobj_raw_index
         
         # x, y = np.array(sources['x']), np.array(sources['y'])
         x, y, mag, mag_error, smag, smag_error, fwhms, flags = run_aperture_photometry(data, sources['x'], sources['y'], aperture_radius, r_ann, output_mag=True, exptime=exptime, recenter=p["RECENTER_APER_FOR_PHOTOMETRY"], readnoise=readnoise, use_astropop=p["USE_ASTROPOP_PHOTOMETRY"], fwhm_from_fit=p['FWHM_FROM_FIT'], use_moffat=p['USE_MOFFAT_FUNC_TO_FIT_FHWM'])
@@ -2849,7 +2952,7 @@ def generate_catalogs(p, data, hdr, sources, fwhm, catalogs=[], catalogs_label='
                     
             except Exception as e:
                 logger.warn("Could not solve astrometry in PHOT-MODE, using WCS from database: {}".format(e))
-                p['WCS'] = set_wcs_from_astrom_ref_image(p["ASTROM_REF_IMG"], hdr)
+                p['WCS'] = set_wcs_from_astrom_ref_image(p["ASTROM_REF_IMG"], hdr, ra_deg=p['RA_DEG'], dec_deg=p['DEC_DEG'])
                 
         # update wcs header in parameters dict
         p['WCS_HEADER'] = p['WCS'].to_header(relax=True)
@@ -2903,6 +3006,171 @@ def set_sky_aperture(p, aperture_radius):
     r_ann = (r_in_ann, r_out_ann)
 
     return r_ann
+
+
+def add_solar_system_object(p, data, sources, dist_threshold=8, ra=None, dec=None, polarimetry=False, plot=False) :
+    
+    """ Pipeline module to add Solar System object to targets
+
+    Parameters
+    ----------
+    p : dict
+        dictionary to store pipeline parameters
+    data : numpy.ndarray (n x m)
+        float array containing the image data
+    sources : astropy.table.Table()
+        input table of detected sources
+    dist_threshold : float, default=8 pixels
+        maximum distance (in pixels) for matching targets against detected sources
+    ra: float
+        RA (deg) for Solar System object to add
+    dec: float
+        Dec (deg) for Solar System object to add
+    polarimetry : bool, default=False
+        whether or not input data is a dual beam polarimetric image with duplicated sources
+    plot : bool, default=False
+        plot data and sources
+
+    Returns
+    -------
+    sources : astropy.table.Table()
+        updated table of detected sources
+    visible_targets_sky_coords : list of tuples
+        list of RA and DEC sky coordinates of targets visible in the field
+    p : dict
+        dictionary to store pipeline parameters
+    """
+
+    # initialize list of target sky coordinates
+    visible_targets_sky_coords, visible_targets_pixel_coords = [], []
+    visible_targets_pixel_coords2 = []
+        
+    dx, dy = 0, 0
+    if polarimetry :
+        dx = p["POLAR_DUAL_BEAM_PIX_DISTANCE_X"]
+        dy = p["POLAR_DUAL_BEAM_PIX_DISTANCE_Y"]
+
+    if plot :
+        src_pixel_coords = np.ndarray((len(sources['x']), 2))
+        for j in range(len(sources['x'])) :
+            src_pixel_coords[j] = [sources['x'][j],sources['y'][j]]
+
+    # initialize list of target sky coordinates
+    target_sky_coords = [[ra,dec]]
+        
+    # use current wcs to generate the set of pixel coordinates of input targets
+    targets_pixel_coords = np.array(p["WCS"].world_to_pixel_values(target_sky_coords))
+
+    # save x and y pixel coordinates into arrays
+    ny, nx = np.shape(data)
+    x, y, x2, y2 = [], [], [], []
+    ids = []
+    for i in range(len(targets_pixel_coords)) :
+    
+        # get x,y pix coordinates
+        xcoord = targets_pixel_coords[i][0]
+        ycoord = targets_pixel_coords[i][1]
+        
+        # get x,y pix coordinates for the second polarimetric beam
+        xcoord2 = xcoord + dx
+        ycoord2 = ycoord + dy
+            
+        # append only if star lies within the image boundaries:
+        if (xcoord > 0) and (xcoord < nx) and \
+           (ycoord > 0) and (ycoord < ny) and \
+           (xcoord2 > 0) and (xcoord2 < nx) and \
+           (ycoord2 > 0) and (ycoord2 < ny) and \
+            np.isfinite(xcoord) and np.isfinite(ycoord) and \
+            np.isfinite(xcoord2) and np.isfinite(ycoord2) :
+           
+            x.append(xcoord)
+            y.append(ycoord)
+            x2.append(xcoord2)
+            y2.append(ycoord2)
+            ids.append(p['SOLAR_SYSTEM_OBJECT_ID'])
+            
+            visible_targets_sky_coords.append([ra,dec])
+            visible_targets_pixel_coords.append([xcoord,ycoord])
+            visible_targets_pixel_coords2.append([xcoord2,ycoord2])
+            
+    # if number of targets in the field is 0, exit
+    if len(x) == 0 :
+        return sources, visible_targets_sky_coords, p
+       
+    # set circular apertures for photometry
+    apertures = photutils.aperture.CircularAperture(visible_targets_pixel_coords, r=10)
+    # calculate photometric quantities for all targets
+    aper_stats = photutils.aperture.ApertureStats(data, apertures)
+      
+    ss_target_index = None
+    # check if targets are already in the sources list
+    for j in range(len(x)) :
+        # calculate distace between target and all sources
+        dist = np.sqrt((sources['x'] - x[j])**2 + (sources['y'] - y[j])**2)
+        
+        # get minimum distance
+        min_dist_idx = np.nanargmin(dist)
+        # Consider a match if minimum distance is within dist_threshold
+        if dist[min_dist_idx] < dist_threshold:
+            logger.info("Target {} already exists in catalog with index={}, skipping ...".format(ids[j], min_dist_idx))
+            ss_target_index = min_dist_idx
+            #row = sources[min_dist_idx]
+        else :
+            ss_target_index = len(sources)
+            # make a hard copy of the first row in the sources table
+            row = deepcopy(sources[0])
+                    
+            # fill in basic photometric information for new target
+            row['id'] = len(sources)
+            row["x"], row["y"] = x[j], y[j]
+            row['flux'] = aper_stats.sum[j]
+            row['xcentroid'], row['ycentroid'] = aper_stats.xcentroid[j], aper_stats.ycentroid[j]
+            #row['peak'], row['fwhm'] = aper_stats.max[j], aper_stats.fwhm[j]
+            row['sharpness'], row['roundness'] = np.nan, np.nan
+            row['s_roundness'], row['g_roundness'] = np.nan, np.nan
+            row['eccentricity'], row['elongation'] = aper_stats.eccentricity[j] , aper_stats.elongation[j]
+            row['ellipticity'] = aper_stats.ellipticity[j]
+            #row['cxx'], row['cyy'], row['cxy'] = aper_stats.cxx[j], aper_stats.cyy[j], aper_stats.cxy[j]
+            
+            # add new target to the sources table
+            sources.add_row(row)
+            
+            if polarimetry :
+                row2 = deepcopy(row)
+                row2["x"], row2["y"] = x2[j], y2[j]
+                sources.add_row(row2)
+            
+    p['SOLAR_SYSTEM_OBJECT_INDEX'] = ss_target_index
+    
+    if plot :
+        fig = plt.figure(figsize=(10, 10))
+        
+        new_src_pixel_coords = np.ndarray((len(sources['x']), 2))
+        for j in range(len(sources['x'])) :
+            new_src_pixel_coords[j] = [sources['x'][j],sources['y'][j]]
+        # plot image to check targets
+        astrometry_sources_pixcoords = np.array(visible_targets_pixel_coords)
+        astrometry_sources_pixcoords2 = np.array(visible_targets_pixel_coords2)
+                    
+        plt.imshow(data, vmin=np.percentile(data, 0.5), vmax=np.percentile(data, 99.5), origin='lower', cmap="Greys_r")
+        _ = photutils.aperture.CircularAperture(src_pixel_coords, r=6.0).plot(color="g")
+        _ = photutils.aperture.CircularAperture(new_src_pixel_coords, r=10.0).plot(color="m")
+        
+        _ = photutils.aperture.CircularAperture(astrometry_sources_pixcoords, r=14.0).plot(color="r")
+        if polarimetry :
+            _ = photutils.aperture.CircularAperture(astrometry_sources_pixcoords2, r=14.0).plot(color="r")
+        plt.annotate(p['SOLAR_SYSTEM_OBJECT_ID'], [astrometry_sources_pixcoords[0][0]-25, astrometry_sources_pixcoords[0][1]+25], color='r')
+        plt.xlabel("columns (pixel)", fontsize=16)
+        plt.ylabel("rows (pixel)", fontsize=16)
+        
+        if p['PLOT_TO_FILE'] :
+            output = p['OBJECT_STACK'].replace(".fits","_ssobj{}".format(p['PLOT_FILE_FORMAT']))
+            fig.savefig(output, bbox_inches='tight')
+            plt.close(fig)
+        else :
+            plt.show()
+                    
+    return sources, visible_targets_sky_coords, p
 
 
 def add_targets_from_users_file(p, data, sources, dist_threshold=8, polarimetry=False, plot=False) :
@@ -3098,15 +3366,22 @@ def build_catalogs(p, data, hdr, catalogs=[], xshift=0., yshift=0., solve_astrom
     # read image data
     # hdul = fits.open(image_name, mode = "readonly")
     # data = np.array(hdul[0].data, dtype=float)
-
+       
+    p['RA_DEG'], p['DEC_DEG'] = None, None
+    
+    if p['SOLAR_SYSTEM_OBJECT'] :
+        # For solar system object, query object id through JPL Horizons to get ephemerides for observation time
+        obstime = Time(hdr[p['TIME_KEY']], format='isot', scale='utc')
+        ssobj = Horizons(id=p['SOLAR_SYSTEM_OBJECT_ID'], location=p['JPL_HORIZONS_OBSERVATORY_CODE'], epochs=obstime.jd)
+        eph = ssobj.ephemerides()
+        # get ra/dec of object during observations
+        p['RA_DEG'], p['DEC_DEG'] = eph['RA'][0], eph['DEC'][0]
+        logger.info("Solar System object {} detected, setting coordinates at center: RA={} Dec={}".format(p['SOLAR_SYSTEM_OBJECT_ID'],p['RA_DEG'], p['DEC_DEG']))
+        
     #if set_wcs_from_database or 'WCS' not in p :
     # set wcs from a reference image in the database
-    p['WCS'] = set_wcs_from_astrom_ref_image(p["ASTROM_REF_IMG"], hdr)
+    p['WCS'] = set_wcs_from_astrom_ref_image(p["ASTROM_REF_IMG"], hdr, ra_deg=p['RA_DEG'], dec_deg=p['DEC_DEG'])
     
-    # get image coordinates from header
-    coord = SkyCoord(hdr['RA'], hdr['DEC'], unit=(u.hourangle, u.deg), frame='icrs')
-    p['RA_DEG'], p['DEC_DEG'] = coord.ra.degree, coord.dec.degree
-
     #print("******* DEBUG ASTROMETRY **********")
     #print("WCS:\n{}".format(p['WCS']))
  
@@ -3136,20 +3411,35 @@ def build_catalogs(p, data, hdr, catalogs=[], xshift=0., yshift=0., solve_astrom
         r_ann = set_sky_aperture(p, p['PHOT_FIXED_APERTURE'])
     
         logger.info("Creating new catalog of detected sources:")
-
+        
         # The step below is important to solve astrometry before add targets from user or object header key
         # print("Running aperture photometry with aperture_radius={} r_ann={}".format(aperture_radius,r_ann))
         new_catalogs, p = generate_catalogs(p, data, hdr, sources, fwhm, catalogs=[], aperture_radius=p['PHOT_FIXED_APERTURE'], r_ann=r_ann, polarimetry=polarimetry, solve_astrometry=p["SOLVE_ASTROMETRY_IN_STACK"], exptime=exptime, readnoise=readnoise)
         
+        p['SOLAR_SYSTEM_OBJECT_INDEX'] = None
+        if p['SOLAR_SYSTEM_OBJECT'] :
+            logger.info("Adding solar system object manually to the catalog of sources")
+            # run routine to add solar system object
+            sources, target_sky_coords, p = add_solar_system_object(p, data, sources, ra=p['RA_DEG'], dec=p['DEC_DEG'], dist_threshold=2*fwhm, polarimetry=polarimetry, plot=p['PLOT_STACK_WITH_SS_OBJ_IDENTIFIED'])
+            logger.info("The raw index of the Solar System object is {}".format(p['SOLAR_SYSTEM_OBJECT_INDEX']))
+            
+            if len(target_sky_coords) :
+                new_catalogs, p = generate_catalogs(p, data, hdr, sources, fwhm, catalogs=[], aperture_radius=p['PHOT_FIXED_APERTURE'], r_ann=r_ann, polarimetry=polarimetry, solve_astrometry=p["SOLVE_ASTROMETRY_IN_STACK"], exptime=exptime, readnoise=readnoise, sortbyflux=False, ssobj_raw_index=p['SOLAR_SYSTEM_OBJECT_INDEX'])
+            # update main target index to the Solar System object index
+            if p['UPDATE_TARGET_INDEX_TO_SS_OBJECT'] :
+                p['TARGET_INDEX'] = p['SOLAR_SYSTEM_OBJECT_INDEX']
+
         if p['TARGET_LIST_FILE'] != "" :
+            logger.info("Adding sources manually from input target list file: {}".format(p['TARGET_LIST_FILE']))
+                
             # run routine to add targets from user's list to the sources
             sources, target_sky_coords, p = add_targets_from_users_file(p, data, sources, dist_threshold=2*fwhm, polarimetry=polarimetry, plot=False)
             
             if len(target_sky_coords) :
                 # generate catalogs again, now with the new targets added
                 new_catalogs, p = generate_catalogs(p, data, hdr, sources, fwhm, catalogs=[], aperture_radius=p['PHOT_FIXED_APERTURE'], r_ann=r_ann, polarimetry=polarimetry, solve_astrometry=p["SOLVE_ASTROMETRY_IN_STACK"], exptime=exptime, readnoise=readnoise, sortbyflux=False)
-
-                if p['UPDATE_TARGET_INDEX_FROM_INPUT'] :
+               
+                if p['UPDATE_TARGET_INDEX_FROM_INPUT'] and not p['UPDATE_TARGET_INDEX_TO_SS_OBJECT']:
                     # use current wcs to generate the set of pixel coordinates of input targets
                     targets_pixel_coords = np.array(p["WCS"].world_to_pixel_values(target_sky_coords))
                     # read catalog x,y pixel coordinates
@@ -3162,7 +3452,7 @@ def build_catalogs(p, data, hdr, catalogs=[], xshift=0., yshift=0., solve_astrom
                     dist = np.sqrt((src_x - targets_pixel_coords[p['TARGET_INDEX_FROM_INPUT']][0])**2 + (src_y - targets_pixel_coords[p['TARGET_INDEX_FROM_INPUT']][1])**2)
                     # update target index by an input target
                     p['TARGET_INDEX'] = np.nanargmin(dist)
-
+                    
 
         if p['MULTI_APERTURES']:
             logger.info("Running photometry for multiple apertures:")
@@ -3183,12 +3473,19 @@ def build_catalogs(p, data, hdr, catalogs=[], xshift=0., yshift=0., solve_astrom
         logger.info("Running aperture photometry for catalogs with an offset of dx={} dy={}".format(xshift, yshift))
         
         ras, decs, x, y = read_catalog_coords(deepcopy(catalogs[0]))
+        
         pixel_coords = np.ndarray((len(x), 2))
         sky_coords = np.ndarray((len(ras), 2))
         for i in range(len(x)) :
             pixel_coords[i] = [x[i]+xshift,y[i]+yshift]
             sky_coords[i] = [ras[i],decs[i]]
-        
+                    
+        if p['SOLAR_SYSTEM_OBJECT'] :
+            # Remove Solar System object before solving astrometry
+            idx = p['SOLAR_SYSTEM_OBJECT_INDEX']
+            pixel_coords = np.delete(pixel_coords,idx,0)
+            sky_coords = np.delete(sky_coords,idx,0)
+
         if p['SOLVE_ASTROMETRY_IN_INDIVIDUAL_FRAMES'] :
             pixel_coords_atm = None
             if p['USE_DETECTED_SRC_FOR_ASTROMETRY'] :
@@ -3208,13 +3505,26 @@ def build_catalogs(p, data, hdr, catalogs=[], xshift=0., yshift=0., solve_astrom
         
             # load coordinates from an input catalog
             ras, decs, x, y = read_catalog_coords(deepcopy(catalogs[j]))
-
+                
             # apply shifts
             if np.isfinite(xshift):
                 x += xshift
             if np.isfinite(yshift):
                 y += yshift
 
+            if p['SOLAR_SYSTEM_OBJECT'] :
+                idx = p['SOLAR_SYSTEM_OBJECT_INDEX']
+                
+                #ssobj = Horizons(id=p['SOLAR_SYSTEM_OBJECT_ID'], location=p['JPL_HORIZONS_OBSERVATORY_CODE'], epochs=obstime.jd)
+                #eph = ssobj.ephemerides()
+                ss_pix_coords = np.array(p["WCS"].world_to_pixel_values([[eph['RA'][0], eph['DEC'][0]]]))
+                
+                if (j % 2) == 0 :
+                    x[idx], y[idx] = ss_pix_coords[0][0], ss_pix_coords[0][1]
+                else :
+                    x[idx] = ss_pix_coords[0][0]+p["POLAR_DUAL_BEAM_PIX_DISTANCE_X"]
+                    y[idx] = ss_pix_coords[0][1]+p["POLAR_DUAL_BEAM_PIX_DISTANCE_Y"]
+                
             aperture_radius = catalogs[j]['0'][11]
             r_ann = set_sky_aperture(p, aperture_radius)
 
@@ -4054,7 +4364,7 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
     return output_filename
 
 
-def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_aperture=0, max_aperture=1024, compute_k=False, min_n_wppos=4, plot=False, verbose=False, plot_filename='', figsize=(12, 6)):
+def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_aperture=0, max_aperture=1024, compute_k=False, zero=None, zero_err=None, min_n_wppos=4, plot=False, verbose=False, plot_filename='', figsize=(12, 6)):
 
     """ Pipeline module to compute polarimetry for given polarimetric sequence and
         saves the polarimetry data into a FITS SPARC4 product
@@ -4074,6 +4384,10 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
         minimum aperture radius (pix)
     compute_k: bool
         whether or not to compute k
+    zero: float
+        zero of waveplate
+    zero_err: float
+        uncertainty of the zero of waveplate
     min_n_wppos : int (Deafult: min_n_wppos=4)
         minimum number of waveplate positions acceptable for polimetry
     plot: bool
@@ -4176,7 +4490,12 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
     ppol = QFloat(np.nan, np.nan)
     theta = QFloat(np.nan, np.nan)
     kcte = QFloat(np.nan, np.nan)
-    zero = QFloat(np.nan, np.nan)
+    qzero = QFloat(np.nan, np.nan)
+    if zero is not None :
+        qzero.nominal = zero
+    if zero is not None :
+        qzero.std_dev = zero_err
+        
     # cast zi data into QFloat
     fo_out = QFloat(fos, efos)
     fe_out = QFloat(fes, efes)
@@ -4198,7 +4517,10 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
         ppol = QFloat(tbl['P'][0], tbl['EP'][0])
         theta = QFloat(tbl['THETA'][0], tbl['ETHETA'][0])
         kcte = QFloat(tbl['K'][0], tbl['EK'][0])
-        zero = QFloat(tbl['ZERO'][0], tbl['EZERO'][0])
+        if not np.isfinite(qzero.nominal) :
+            qzero.nominal = tbl['ZERO'][0]
+        if not np.isfinite(qzero.std_dev) :
+            qzero.std_dev = tbl['EZERO'][0]
         rms, theor_sigma = tbl['RMS'][0], tbl['TSIGMA'][0]
         n, m = tbl['NOBS'][0], tbl['NPAR'][0]
 
@@ -4224,9 +4546,9 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
                 observed_model[keep] = halfwave_model(waveplate_angles[keep], qpol.nominal, upol.nominal)
         elif wave_plate == "quarterwave":
             # initialize astropop SLSDualBeamPolarimetry object
-            pol = SLSDualBeamPolarimetry(wave_plate, compute_k=compute_k, k=k_value, zero=zero.nominal)
+            pol = SLSDualBeamPolarimetry(wave_plate, compute_k=compute_k, k=k_value, zero=qzero.nominal)
             if len(waveplate_angles[keep]) >= min_n_wppos and np.isfinite(qpol.nominal) and np.isfinite(upol.nominal) and np.isfinite(vpol.nominal):
-                observed_model[keep] = quarterwave_model(waveplate_angles[keep], qpol.nominal, upol.nominal, vpol.nominal, zero=zero.nominal)
+                observed_model[keep] = quarterwave_model(waveplate_angles[keep], qpol.nominal, upol.nominal, vpol.nominal, zero=qzero.nominal)
         try :
             if len(waveplate_angles[keep]) >= min_n_wppos :
                 # compute polarimetry
@@ -4262,7 +4584,7 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
         logger.info("Total linear polarization p: {}".format(ppol))
         logger.info("Angle of polarization theta: {}".format(theta))
         logger.info("Free constant k: {}".format(kcte))
-        logger.info("Zero of polarization: {}".format(zero))
+        logger.info("Zero of polarization: {}".format(qzero))
         logger.info("RMS of zi residuals: {}".format(sig_res))
         logger.info("Reduced chi-square (n={}, DOF={}): {:.2f}".format(n, n-m, chi2))
 
@@ -4277,7 +4599,7 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
     loc["P"] = ppol
     loc["THETA"] = theta
     loc["K"] = kcte
-    loc["ZERO"] = zero
+    loc["ZERO"] = qzero
     loc["CHI2"] = chi2
     loc["RMS"] = sig_res
     loc["TSIGMA"] = theor_sigma
@@ -4493,7 +4815,7 @@ def psf_analysis(filename, aperture=10, half_windowsize=15, nsources=0, percenti
     return loc
 
 
-def stack_and_reduce_sci_images(p, sci_list, reduce_dir, ref_img="", stack_suffix="", force=True, match_frames=True, polarimetry=False, plot=False):
+def stack_and_reduce_sci_images(p, sci_list, reduce_dir, ref_img="", stack_suffix="", force=True, match_frames=True, polarimetry=False, plot=False, plot_proc_frames=False):
     """ Pipeline module to run stack and reduction of science images
 
     Parameters
@@ -4516,6 +4838,8 @@ def stack_and_reduce_sci_images(p, sci_list, reduce_dir, ref_img="", stack_suffi
         is it polarimetry data?
     plot : bool
         do plots
+    plot_proc_frames : bool
+        plot processed frames
 
     Returns
     -------
@@ -4551,6 +4875,10 @@ def stack_and_reduce_sci_images(p, sci_list, reduce_dir, ref_img="", stack_suffi
             last = len(sci_list)
 
         logger.info("Running loop {} of {} -> images in loop: {} to {} ... ".format(loop, nloops, first, last))
+    
+        animated_gif = ""
+        if p['PLOT_PROC_FRAMES'] and p['CREATE_ANIMATED_GIF'] and p['PLOT_TO_FILE']:
+            animated_gif = "{}_{:04d}.gif".format(p['OBJECT_STACK'].replace(".fits",""),loop)
 
         # reduce science data and calculate stack
         p = reduce_science_images(p,
@@ -4559,7 +4887,9 @@ def stack_and_reduce_sci_images(p, sci_list, reduce_dir, ref_img="", stack_suffi
                                   ref_img=ref_img,
                                   force=force,
                                   match_frames=match_frames,
-                                  polarimetry=polarimetry)
+                                  polarimetry=polarimetry,
+                                  plot=plot_proc_frames,
+                                  animated_gif=animated_gif)
 
     # plot stack frame
     if match_frames and plot:
@@ -4584,7 +4914,7 @@ def polar_time_series(sci_pol_list,
                       max_aperture=1024,
                       compute_k=True,
                       force=True):
-    """ Pipeline module to calculate photometry differential time series for a given list of sparc4 sci image products
+    """ Pipeline module to calculate polarimetric time series for a given list of sparc4 sci image products
 
     Parameters
     ----------
