@@ -17,6 +17,10 @@ CALIBDB_DIR: "/Users/eder/sparc4-pipeline/calibdb"
 PLOT_TO_FILE: True
 # set format by extension for plot files
 PLOT_FILE_FORMAT: ".png"
+# plot individual processed frames:
+PLOT_PROC_FRAMES: False
+# to create an animated gif of processed frames. Require installation of ImageMagick "convert" module  
+CREATE_ANIMATED_GIF: False
 
 # set a target list .csv file. Minimal columns: TARGET_ID, RA, DEC
 TARGET_LIST_FILE: ""
@@ -131,7 +135,7 @@ APPLY_BIAS_CORRECTION: True
 APPLY_FLATFIELD_CORRECTION: True
 
 # APPLY FLAT PER WAVEPLATE POSITION
-APPLY_FLAT_PER_WPPOS: True
+APPLY_FLAT_PER_WPPOS: False
 
 # Whether or not to allow using a flat obtained in PHOT mode to correct POLAR images if no POLAR flats were taken.
 ALLOW_USING_PHOTFLAT_TO_CORRECT_POLAR: True
@@ -214,7 +218,7 @@ PHOT_MIN_OFFSET_FOR_SKYOUTERRADIUS: 10
 PHOT_APERTURES: [5,8,10,12,15,20,25]
 
 # Threshold in number of sigmas to detect sources, where sigma = background error
-PHOT_THRESHOLD: 100
+PHOT_THRESHOLD: 15
 #-------------------------------------
 
 #### POLARIMETRY ####
@@ -261,8 +265,8 @@ COMPUTE_K_IN_L4: True
 # whether or not to fit the zero of waveplate in L/4 mode. If False, then use fixed value given by ZERO_OF_WAVEPLATE
 FIT_ZERO_OF_WPPOS_IN_L4: False
 
-# Set zero of polarimetry for CHANNELS=[1,2,3,4]; calibrated from standards
-ZERO_OF_WAVEPLATE: [108.7,108.7,108.7,108.7]
+# Set "zero" of waveplate for CHANNELS=[1,2,3,4]; calibrated from the circularly polarized standard WD 1036-204 observed on 20250224
+ZERO_OF_WAVEPLATE: [119.,117.,118.,120.]
 
 # Plot polarimetry fit
 PLOT_POLARIMETRY_FIT: True
@@ -376,4 +380,15 @@ COORD_SEARCH_RADIUS_IN_ARCSEC: 10
 USE_MEMMAP: False
 # uncomment below to set a cache folder manually
 #MEM_CACHE_FOLDER: '/Users/eder/sparc4-pipeline/cache/'
+#-------------------------------------
+
+#### FOR OBSERVATIONS OF SOLAR SYTEM OBJECTS #####
+# When observations include a Solar System object
+HAS_SOLAR_SYSTEM_BODY: False
+# Set observatory code. For OPD the code is 874. Source: https://minorplanetcenter.net/iau/lists/ObsCodesF.html
+JPL_HORIZONS_OBSERVATORY_CODE: 874
+# whether or not to update the target index to the solar system object detected
+UPDATE_TARGET_INDEX_TO_SS_OBJECT: True
+# plot stack with astrometric stars marked and the SS object identified
+PLOT_STACK_WITH_SS_OBJ_IDENTIFIED: True
 #-------------------------------------
