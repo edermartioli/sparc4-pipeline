@@ -62,3 +62,5 @@ Version 1.3 (2024-06-03)
 - Implemented try/except statements in plots for stability
 - Changed parameter ZERO_OF_WAVEPLATE from single float to array of 4 floats, to handle different values between channels
 - Implemented fixed number of images per polar seq
+- Major changes to implement support for Solar System objects
+- Included new tools to plot individual frames and make an animated gif
