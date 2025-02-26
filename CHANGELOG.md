@@ -39,7 +39,7 @@ Version 1.2 (2024-04-25)
 - Fixed bug to adapt pipeline to a change in the CALW key value from OFF->None
 
 
-Version 1.3 (2024-06-03)
+Versions 0.1.3, 0.1.4, 0.1.5 (2024-06-03)
 ------------------------
 - Bug fixes
 - fixed index in Simbad results for target list
@@ -64,3 +64,6 @@ Version 1.3 (2024-06-03)
 - Implemented fixed number of images per polar seq
 - Major changes to implement support for Solar System objects
 - Included new tools to plot individual frames and make an animated gif
+
+Version 0.1.6 (2025-02-26)
+------------------------
