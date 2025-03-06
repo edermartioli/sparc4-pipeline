@@ -67,3 +67,5 @@ Versions 0.1.3, 0.1.4, 0.1.5 (2024-06-03)
 
 Version 0.1.6 (2025-02-26)
 ------------------------
+- Fixed bug in get_polarimetry_results() as proposed by Claudia and Fernando
+- Updated jupyter notebook for measurement of the zero of waveplate
