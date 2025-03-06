@@ -4366,8 +4366,8 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
 
 def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_aperture=0, max_aperture=1024, compute_k=False, zero=None, zero_err=None, min_n_wppos=4, plot=False, verbose=False, plot_filename='', figsize=(12, 6)):
 
-    """ Pipeline module to compute polarimetry for given polarimetric sequence and
-        saves the polarimetry data into a FITS SPARC4 product
+    """ Pipeline module to compute polarimetry for given polarimetric product.
+        It returns the polarimetry results obtained using the input parameters as a python dict.
 
     Parameters
     ----------
@@ -4566,6 +4566,14 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
                 sig_res = np.nanstd(resids)
                 chi2 = np.nansum((resids/zierrs[keep])**2) / (n - m)
                 theor_sigma = norm.theor_sigma['p']
+                
+                # update polarimetric results
+                qpol = norm.q
+                upol = norm.u
+                vpol = norm.v
+                ppol = norm.p
+                theta = norm.theta
+                kcte.nominal = norm.k
             
         except Exception as e :
             logger.warn("Could not compute polarimetry: {}".format(e))
