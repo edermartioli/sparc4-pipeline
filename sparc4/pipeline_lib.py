@@ -4235,26 +4235,26 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
 
             try:
             
-                logger.info("Computing polarimetry for the following flux array sizes: {} ".format(len(waveplate_angles[keep])))
+                #logger.info("Computing polarimetry for the following flux array sizes: {} ".format(len(waveplate_angles[keep])))
                 
                 # compute polarimetry
                 if len(waveplate_angles[keep]) >= min_n_wppos :
                     norm = pol.compute(waveplate_angles[keep], n_fo[keep], n_fe[keep], f_ord_error=en_fo[keep], f_ext_error=en_fe[keep])
 
                     if wave_plate == 'halfwave':
-                        logger.info("Computing halfwave (L2) observed polarization model for q={} u={} ".format(norm.q.nominal, norm.u.nominal))
+                        #logger.info("Computing halfwave (L2) observed polarization model for q={} u={} ".format(norm.q.nominal, norm.u.nominal))
                     
                         observed_model = halfwave_model(waveplate_angles[keep], norm.q.nominal, norm.u.nominal)
 
                     elif wave_plate == 'quarterwave':
-                        logger.info("Computing quarterwave (L4) observed polarization model for q={} u={} v={} zero={}".format(norm.q.nominal, norm.u.nominal, norm.v.nominal, norm.zero.nominal))
+                        #logger.info("Computing quarterwave (L4) observed polarization model for q={} u={} v={} zero={}".format(norm.q.nominal, norm.u.nominal, norm.v.nominal, norm.zero.nominal))
                     
                         observed_model = quarterwave_model(waveplate_angles[keep], norm.q.nominal, norm.u.nominal, norm.v.nominal, zero=norm.zero.nominal)
 
                     zi[keep] = norm.zi.nominal
                     zi_err[keep] = norm.zi.std_dev
 
-                    logger.info("Computing chi-square for number_of_observations={} and number_of_free_params={}".format(number_of_observations,number_of_free_params))
+                    #logger.info("Computing chi-square for number_of_observations={} and number_of_free_params={}".format(number_of_observations,number_of_free_params))
                     chi2 = np.nansum(((norm.zi.nominal - observed_model)/norm.zi.std_dev)** 2) / (number_of_observations - number_of_free_params)
 
                     polar_flag = 0
