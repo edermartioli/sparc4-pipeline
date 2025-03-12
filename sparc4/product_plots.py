@@ -553,7 +553,9 @@ def plot_polarimetry_results(loc, pos_model_sampling=1, title_label="", wave_pla
 
     qlab = r"q: {:.4f}$\pm${:.4f} %".format(100*qpol.nominal, 100*qpol.std_dev)
     ulab = r"u: {:.4f}$\pm${:.4f} %".format(100*upol.nominal, 100*upol.std_dev)
-    vlab = r"v: {:.4f}$\pm${:.4f} %".format(100*vpol.nominal, 100*vpol.std_dev)
+    vlab = ""
+    if wave_plate == 'quarterwave' :
+        vlab = r"v: {:.4f}$\pm${:.4f} %".format(100*vpol.nominal, 100*vpol.std_dev)
     plab = r"p: {:.4f}$\pm${:.4f} %".format(100*ppol.nominal, 100*ppol.std_dev)
     thetalab = r"$\theta$: {:.2f}$\pm${:.2f} deg".format(theta.nominal, theta.std_dev)
         

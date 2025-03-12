@@ -930,12 +930,12 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
             calw = calws[j]
             calwsuffix = ""
             if calw != "OFF" and calw != "None" :
-                calwsuffix = calw
+                calwsuffix = "_{}".format(calw)
                 
             logger.info("Reducing data for calibration wheel mode: {}".format(calw))
 
             # set suffix for output stack filename
-            stack_suffix = "{}_s4c{}{}_{}{}_{}".format(nightdir, p['CHANNELS'][channel_index], detector_mode_key, obj.replace(" ", ""), polsuffix, calwsuffix)
+            stack_suffix = "{}_s4c{}{}_{}{}{}".format(nightdir, p['CHANNELS'][channel_index], detector_mode_key, obj.replace(" ", ""), polsuffix, calwsuffix)
 
             # get list of science files matching all selection criteria
             sci_list = s4db.get_file_list(db,
@@ -985,7 +985,9 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
             # loop over sets of catalogs to create time series products
             for kk in range(len(lists_of_catalogs)) :
                 # add beam label to suffix
-                ts_suffix_tmp = "{}_{}".format(ts_suffix, p["CATALOG_BEAM_IDS"][kk])
+                ts_suffix_tmp = "{}".format(ts_suffix)
+                if polarimetry :
+                    ts_suffix_tmp = "{}_{}".format(ts_suffix, p["CATALOG_BEAM_IDS"][kk])
                 
                 logger.info("Running photometric time series")
                 # run photometric time series
@@ -1001,7 +1003,6 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
                 # append ts product to a list
                 ts_products.append(phot_ts_product)
             
-                
                 if plot_lc and inst_mode == p['INSTMODE_PHOTOMETRY_KEYVALUE'] :
                     # plot light curve
                     
@@ -4235,7 +4236,7 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
             try:
             
                 logger.info("Computing polarimetry for the following flux array sizes: {} ".format(len(waveplate_angles[keep])))
-            
+                
                 # compute polarimetry
                 if len(waveplate_angles[keep]) >= min_n_wppos :
                     norm = pol.compute(waveplate_angles[keep], n_fo[keep], n_fe[keep], f_ord_error=en_fo[keep], f_ext_error=en_fe[keep])
