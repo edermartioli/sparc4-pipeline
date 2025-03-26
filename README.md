@@ -14,6 +14,13 @@ cd sparc4-pipeline
 
 pip install -U .
 ```
+
+## WARNING:
+The current version of the `sparc4-pipeline` requires a pre-release version of `astropop`. To install this version of `astropop`, use the following command:
+```
+pip install -U --pre astropop
+```
+
 # Execution
 
 Below is an example to run the SPARC4 pipeline :
