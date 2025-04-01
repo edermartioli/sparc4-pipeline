@@ -69,3 +69,6 @@ Version 0.1.6 (2025-02-26)
 ------------------------
 - Fixed bug in get_polarimetry_results() as proposed by Claudia and Fernando
 - Updated jupyter notebook for measurement of the zero of waveplate
+- Fixed bug in polar time series
+- Implemented normalization constant k in get_polarimetry_results() as proposed by Claudia and Ana
+- Updated jupyter notebooks to use a maximum aperture of 20 pixels. 
