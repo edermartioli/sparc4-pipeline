@@ -4365,7 +4365,7 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
     return output_filename
 
 
-def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_aperture=0, max_aperture=1024, compute_k=False, zero=None, zero_err=None, min_n_wppos=4, plot=False, verbose=False, plot_filename='', figsize=(12, 6)):
+def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_aperture=0, max_aperture=1024, compute_k=False, k=None, k_err=None, zero=None, zero_err=None, min_n_wppos=4, plot=False, verbose=False, plot_filename='', figsize=(12, 6)):
 
     """ Pipeline module to compute polarimetry for given polarimetric product.
         It returns the polarimetry results obtained using the input parameters as a python dict.
@@ -4385,6 +4385,10 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
         minimum aperture radius (pix)
     compute_k: bool
         whether or not to compute k
+    k: float
+        normalization factor "k"
+    k_err: float
+        uncertainty of the normalization factor "k"
     zero: float
         zero of waveplate
     zero_err: float
@@ -4492,9 +4496,15 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
     theta = QFloat(np.nan, np.nan)
     kcte = QFloat(np.nan, np.nan)
     qzero = QFloat(np.nan, np.nan)
+    
+    if k is not None :
+        kcte.nominal = k
+    if k_err is not None :
+        kcte.std_dev = k_err
+
     if zero is not None :
         qzero.nominal = zero
-    if zero is not None :
+    if zero_err is not None :
         qzero.std_dev = zero_err
         
     # cast zi data into QFloat
@@ -4517,11 +4527,17 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
         vpol = QFloat(tbl['V'][0], tbl['EV'][0])
         ppol = QFloat(tbl['P'][0], tbl['EP'][0])
         theta = QFloat(tbl['THETA'][0], tbl['ETHETA'][0])
-        kcte = QFloat(tbl['K'][0], tbl['EK'][0])
+        
+        if not np.isfinite(kcte.nominal) :
+            kcte.nominal = tbl['K'][0]
+        if not np.isfinite(kcte.std_dev) :
+            kcte.std_dev = tbl['EK'][0]
+        
         if not np.isfinite(qzero.nominal) :
             qzero.nominal = tbl['ZERO'][0]
         if not np.isfinite(qzero.std_dev) :
             qzero.std_dev = tbl['EZERO'][0]
+            
         rms, theor_sigma = tbl['RMS'][0], tbl['TSIGMA'][0]
         n, m = tbl['NOBS'][0], tbl['NPAR'][0]
 
@@ -4574,7 +4590,8 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
                 vpol = norm.v
                 ppol = norm.p
                 theta = norm.theta
-                kcte.nominal = norm.k
+                if compute_k :
+                    kcte.nominal = norm.k
             
         except Exception as e :
             logger.warn("Could not compute polarimetry: {}".format(e))
@@ -5043,14 +5060,17 @@ def polar_time_series(sci_pol_list,
             tsdata['EQ'] = np.append(tsdata['EQ'], polar['Q'].std_dev)
             tsdata['U'] = np.append(tsdata['U'], polar['U'].nominal)
             tsdata['EU'] = np.append(tsdata['EU'], polar['U'].std_dev)
-            tsdata['V'] = np.append(tsdata['V'], polar['V'].nominal)
-            tsdata['EV'] = np.append(tsdata['EV'], polar['V'].std_dev)
+            if polar['V'] is not None :
+                tsdata['V'] = np.append(tsdata['V'], polar['V'].nominal)
+                tsdata['EV'] = np.append(tsdata['EV'], polar['V'].std_dev)
+            else :
+                tsdata['V'] = np.append(tsdata['V'], np.nan)
+                tsdata['EV'] = np.append(tsdata['EV'], np.nan)
+                
             tsdata['P'] = np.append(tsdata['P'], polar['P'].nominal)
             tsdata['EP'] = np.append(tsdata['EP'], polar['P'].std_dev)
-            tsdata['THETA'] = np.append(
-                tsdata['THETA'], polar['THETA'].nominal)
-            tsdata['ETHETA'] = np.append(
-                tsdata['ETHETA'], polar['THETA'].std_dev)
+            tsdata['THETA'] = np.append(tsdata['THETA'], polar['THETA'].nominal)
+            tsdata['ETHETA'] = np.append(tsdata['ETHETA'], polar['THETA'].std_dev)
             tsdata['K'] = np.append(tsdata['K'], polar['K'].nominal)
             tsdata['EK'] = np.append(tsdata['EK'], polar['K'].std_dev)
             tsdata['ZERO'] = np.append(tsdata['ZERO'], polar['ZERO'].nominal)
