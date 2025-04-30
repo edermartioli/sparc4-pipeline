@@ -266,7 +266,7 @@ COMPUTE_K_IN_L4: True
 FIT_ZERO_OF_WPPOS_IN_L4: False
 
 # Set "zero" of waveplate for CHANNELS=[1,2,3,4]; calibrated from the circularly polarized standard WD 1036-204 observed on 20250224
-ZERO_OF_WAVEPLATE: [119.,117.,118.,120.]
+ZERO_OF_WAVEPLATE: [29.1,28.6,27.1,32.1]
 
 # Plot polarimetry fit
 PLOT_POLARIMETRY_FIT: True

@@ -578,11 +578,9 @@ def plot_polarimetry_results(loc, pos_model_sampling=1, title_label="", wave_pla
     if wave_plate == 'halfwave':
         best_fit_model = halfwave_model(pos_model, qpol.nominal, upol.nominal)
     elif wave_plate == 'quarterwave':
-        best_fit_model = quarterwave_model(
-            pos_model, qpol.nominal, upol.nominal, vpol.nominal, zero=zero.nominal)
+        best_fit_model = quarterwave_model(pos_model, qpol.nominal, upol.nominal, vpol.nominal, zero=zero.nominal)
 
-    axes[0].plot(pos_model, best_fit_model, 'r:',
-                 alpha=0.8, label='Best fit model')
+    axes[0].plot(pos_model, best_fit_model, 'r:', alpha=0.8, label='Best fit model')
     # axes[0].fill_between(pos_model, pred_mean+pred_std, pred_mean-pred_std, color=color, alpha=0.3, edgecolor="none")
 
     # Plot data
@@ -823,7 +821,6 @@ def plot_polar_time_series(filename, target=0, comps=[], nsig=10, plot_total_pol
         axs[axindex].tick_params(which='minor', length=3, width=0.7, direction='in', bottom=True, top=True, left=True, right=True)
         axs[axindex].tick_params(which='major', length=7, width=1.2,direction='in', bottom=True, top=True, left=True, right=True)
     
-    
     results['TIME'] = time
     results['x1'] = x1
     results['y1'] = y1
@@ -932,8 +929,7 @@ def plot_polar_time_series(filename, target=0, comps=[], nsig=10, plot_total_pol
     return results
 
 
-def plot_polarimetry_map(stack_product, polar_product, min_aperture=0, max_aperture=1024, percentile=99.5,ref_catalog="CATALOG_POL_N_AP010", src_label_offset=30,
-    arrow_size_scale=None, compute_k=False, title_label="", output="",figsize=(10, 10)):
+def plot_polarimetry_map(stack_product, polar_product, min_aperture=0, max_aperture=1024, percentile=99.5,ref_catalog="CATALOG_POL_N_AP010", src_label_offset=30, arrow_size_scale=None, compute_k=False, title_label="", output="",figsize=(10, 10)):
     """ Pipeline module to plot polarimetry map
 
     Parameters
