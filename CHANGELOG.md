@@ -72,3 +72,5 @@ Version 0.1.6 (2025-02-26)
 - Fixed bug in polar time series
 - Implemented normalization constant k in get_polarimetry_results() as proposed by Claudia and Ana
 - Updated jupyter notebooks to use a maximum aperture of 20 pixels. 
+- Fixed bug in the calculation of polarimetric RMS and circular polarization
+- Added new measured values for the ZERO_OF_WAVEPLATE
