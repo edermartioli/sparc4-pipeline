@@ -74,3 +74,4 @@ Version 0.1.6 (2025-02-26)
 - Updated jupyter notebooks to use a maximum aperture of 20 pixels. 
 - Fixed bug in the calculation of polarimetric RMS and circular polarization
 - Added new measured values for the ZERO_OF_WAVEPLATE
+- Updated RMS calculation in polarimetry
