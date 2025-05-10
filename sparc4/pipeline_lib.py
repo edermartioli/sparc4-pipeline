@@ -4255,6 +4255,7 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
                     zi_err[keep] = norm.zi.std_dev
 
                     #logger.info("Computing chi-square for number_of_observations={} and number_of_free_params={}".format(number_of_observations,number_of_free_params))
+                    rms = np.sqrt(np.nanmean((norm.zi.nominal - observed_model)**2))
                     chi2 = np.nansum(((norm.zi.nominal - observed_model)/norm.zi.std_dev)** 2) / (number_of_observations - number_of_free_params)
 
                     polar_flag = 0
@@ -4280,8 +4281,10 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
                     if type(norm.zero.nominal) is float :
                         zero, zero_err = norm.zero.nominal, norm.zero.std_dev
        
-                    if type(norm.rms) is float :
-                        z_rms = norm.rms
+                    #if type(norm.rms) is float :
+                    #    z_rms = norm.rms
+                    if type(rms) is float :
+                        z_rms = rms
                     
                     if type(norm.theor_sigma['p']) is float :
                         theor_sigma = norm.theor_sigma['p']
@@ -4572,6 +4575,7 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
                         kcte.nominal = norm.k
                     
                     observed_model[keep] = halfwave_model(waveplate_angles[keep], qpol.nominal, upol.nominal)
+                    
             except Exception as e :
                 logger.warn("Could not compute polarimetry: {}".format(e))
                 pass
@@ -4593,7 +4597,8 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
                     if compute_k :
                         kcte.nominal = norm.k
                 
-                    observed_model[keep] = quarterwave_model(waveplate_angles[keep], qpol.nominal, upol.nominal, vpol.nominal, zero=qzero.nominal)
+                    #observed_model[keep] = quarterwave_model(waveplate_angles[keep], qpol.nominal, upol.nominal, vpol.nominal, zero=qzero.nominal)
+                    observed_model[keep] = norm.model(norm.psi)
                     
             except Exception as e :
                 logger.warn("Could not compute polarimetry: {}".format(e))
@@ -4607,10 +4612,8 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
         # cast zi data into QFloat
         zi = QFloat(zis, zierrs)
         # get statistics
-        abs_resids = np.abs(zis[keep] - observed_model[keep])
-        ### 29 April 2025 - we should also check results using norm.rms 
-        rms = np.nanstd(abs_resids)
-        chi2 = np.nansum((abs_resids/zierrs[keep])**2) / (n - m)
+        rms = np.sqrt(np.nanmean((zis[keep] - observed_model[keep])**2))
+        chi2 = np.nansum(((zis[keep] - observed_model[keep])/zierrs[keep])**2) / (n - m)
         theor_sigma = norm.theor_sigma['p']
         
     else :
