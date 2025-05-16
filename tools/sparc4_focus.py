@@ -158,7 +158,7 @@ def measure_psf(filename, threshold=3., focus_value_key="TELFOCUS", read_noise_k
                 
             fwhmx = np.append(fwhmx,x_fwhm)
             fwhmy = np.append(fwhmy,y_fwhm)
-            fwhm = np.append(fwhm, np.nanmean(np.array([fwhmx,fwhmy])))
+            fwhm = np.append(fwhm, np.nanmean(np.array([x_fwhm,y_fwhm])))
 
             if plot :
                 plt.plot(xcoords,xvalues,"g.")
