@@ -125,7 +125,7 @@ READNOISEKEY: "RDNOISE"
 
 # DEFINE CALIBRATION WHEEL MODES: OFF or None, POLARIZER, or DEPOLARIZER
 # CALW_MODES: ["OFF","None","POLARIZER","DEPOLARIZER"] # uncomment this line to include observations in all CALW modes
-CALW_MODES: ["OFF","None"]
+CALW_MODES: ["OFF","None","NONE","CLEAR"]
 
 # Whether or not to apply cosmic ray rejection algorithm (LACOSMIC)
 DETECT_AND_REJECT_COSMIC_RAYS: False
@@ -188,10 +188,21 @@ USE_ASTROPOP_PHOTOMETRY: False
 # whether or not to recenter aperture for photometry on each source
 RECENTER_APER_FOR_PHOTOMETRY: False
 
-# fit FWHM  -- slower but more accurate.
-FWHM_FROM_FIT: False
-# the switch below is to use a Moffat function instead of a Gaussian to fit the PSH to obtain the FHWMs.
-USE_MOFFAT_FUNC_TO_FIT_FHWM: True
+# fit FWHM  -- slower but more accurate. (for the stack)
+FWHM_FROM_FIT_IN_STACK: True
+# 2D Gaussian fit to a combined profile from all sources in the stacked image to measure the FWHM. This method assumes a common PSF for all sources, resulting in a single FWHM value for all sources.
+FWHM_FROM_GLOBAL_FIT_IN_STACK: False
+
+# 2D Gaussian fit to a combined profile from all sources in the individual frames to measure the FWHM. This method assumes a common PSF for all sources, resulting in a single FWHM value for all sources.
+FWHM_FROM_FIT_IN_INDIVIDUAL_FRAMES: False
+# 2D Gaussian fit to get FHWM using a combined profile from all sources (for individual frames)
+FWHM_FROM_GLOBAL_FIT_IN_INDIVIDUAL_FRAMES: False
+
+# Size of square window (in pixels) to measure FHWM. It must be an odd number!
+WINDOW_SIZE_FOR_PROFILE_FIT: 25
+
+# Update x,y source coordinates from profile fit in stack
+UPDATE_XY_SRC_COORDINATES_FROM_PROFILE_FIT: False
 
 # whether or not to use multiple apertures
 MULTI_APERTURES: True
@@ -279,17 +290,13 @@ PLOT_TOTAL_POLARIZATION: True
 # whether or not to solve astrometry with astrometry.net
 # note: it requires astrometry.net properly installed in the machine (not fully tested)
 SOLVE_ASTROMETRY_WITH_ASTROMETRY_NET: False
-
 # whether or not to solve astrometry in stack frame
 SOLVE_ASTROMETRY_IN_STACK: True
-
 # sip_degree to model geometric distortion.
 SIP_DEGREE: 4
-
 # set number of iterations for astrometric solution
 N_ITER_ASTROMETRY: 1
-
-# use detected sources in stack for astrometry
+# use detected sources in stack for astrometry. ** WARNING ** do not turn this off for polarimetry
 USE_DETECTED_SRC_FOR_ASTROMETRY: True
 
 # Use a Vizier online catalog for astrometric solution. If False, then uses Gaia.
@@ -348,6 +355,7 @@ TIME_SPAN_FOR_RMS: 10.0
 
 # Set a list of aperture radii to include in the time series
 # WARNING: This must be a sub set of photometry apertures defined in PHOT_APERTURES
+#PHOT_APERTURES_FOR_LIGHTCURVES: [5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21]
 PHOT_APERTURES_FOR_LIGHTCURVES: [5,8,10,12,15,20,25]
 
 # List of additional keyword data to be included in the photometric time series for PHOT mode
@@ -389,6 +397,8 @@ HAS_SOLAR_SYSTEM_BODY: False
 JPL_HORIZONS_OBSERVATORY_CODE: 874
 # whether or not to update the target index to the solar system object detected
 UPDATE_TARGET_INDEX_TO_SS_OBJECT: True
+# Update x,y source coordinates from profile fit
+UPDATE_XY_SRC_COORDINATES_FROM_PROFILE_FIT_SS_OBJECT: False
 # plot stack with astrometric stars marked and the SS object identified
 PLOT_STACK_WITH_SS_OBJ_IDENTIFIED: True
 #-------------------------------------
