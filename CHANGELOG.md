@@ -76,3 +76,6 @@ Version 0.1.6 (2025-02-26)
 - Added new measured values for the ZERO_OF_WAVEPLATE
 - Updated RMS calculation in polarimetry
 - Fixed bug in the sparc4_focus routine
+- Implemented new calculation of FWHM
+- Fixed inconsistency in the indexation of sources between apertures. 
+- Fixed bug in the variable norm being called out of context 
