@@ -59,6 +59,7 @@ from astropop.catalogs import gaia
 from astroquery.vizier import Vizier
 from astroquery.gaia import Gaia
 from scipy import stats
+from scipy import optimize
 
 from astropy.coordinates import EarthLocation
 from astroquery.jplhorizons import Horizons
@@ -381,7 +382,7 @@ def astrometry_from_existing_wcs(wcs, img_data, pixel_coords=None, sky_coords=No
     return wcs
     
 @timeout(10)
-def aperture_photometry_wrapper(img_data, x, y, err_data=None, aperture_radius=10, r_in=25, r_out=50, sigma_clip_threshold=3.0, read_noise=0.0, recenter=False, ap_phot=None, fwhm_from_fit=False, use_moffat=False) :
+def aperture_photometry_wrapper(img_data, x, y, err_data=None, aperture_radius=10, r_in=25, r_out=50, sigma_clip_threshold=3.0, read_noise=0.0, recenter=False, ap_phot=None, fwhm_from_fit=False, use_moffat=False, window_size=25, update_xycenter_from_profile_fit=False, update_xycenter_threshold=5, global_fit=True, calculate_fwhm=True) :
 
     """ Pipeline module to run aperture photometry of sources in an image
     Parameters
@@ -412,7 +413,17 @@ def aperture_photometry_wrapper(img_data, x, y, err_data=None, aperture_radius=1
         calcualte fwhm from psf fit
     use_moffat : bool
         use Moffat function. If False, it adopts a Gaussian profile
-
+    window_size : int
+        square window size (pixels) for profile fit
+    update_xycenter_from_profile_fit : bool
+        to update x- and y-center positions using fitted values from 2D Gaussian fits
+    update_xycenter_threshold : float
+        threshold in units of pixels to limit update in xy center coordinates from fit
+    global_fit : bool
+        to use a single fit to the combined profile from all sources
+    calculate_fwhm : bool, True
+        to calculate fwhm
+        
     Returns
         ap_phot : Table()
             ap_phot['original_x']: numpy.ndarray ()
@@ -446,7 +457,7 @@ def aperture_photometry_wrapper(img_data, x, y, err_data=None, aperture_radius=1
     """
     
     # when err_data array is not provided, then calculate it
-    if err_data == None :
+    if err_data is None :
         err_data = np.sqrt(img_data + read_noise*read_noise)
 
     # set array of tuples with x,y positions of sources
@@ -454,7 +465,7 @@ def aperture_photometry_wrapper(img_data, x, y, err_data=None, aperture_radius=1
     # set circular apertures for photometry
     apertures = photutils.aperture.CircularAperture(positions, r=aperture_radius)
     # calculate photometric quantities for all sources
-    aper_stats = photutils.aperture.ApertureStats(img_data, apertures, error=err_data)
+    aper_stats = photutils.aperture.ApertureStats(img_data, apertures, sum_method='exact', error=err_data)
     
     # create a copy of x,y vectors
     new_x, new_y = deepcopy(x), deepcopy(y)
@@ -468,7 +479,7 @@ def aperture_photometry_wrapper(img_data, x, y, err_data=None, aperture_radius=1
         # reset circular apertures for photometry
         apertures = photutils.aperture.CircularAperture(positions, r=aperture_radius)
         # recalculate photometric quantities for all sources
-        aper_stats = photutils.aperture.ApertureStats(img_data, apertures, error=err_data)
+        aper_stats = photutils.aperture.ApertureStats(img_data, apertures, sum_method='exact', error=err_data)
 
     # set annulus aperture for background measurements
     annulus_apertures = photutils.aperture.CircularAnnulus(positions, r_in=r_in, r_out=r_out)
@@ -482,7 +493,7 @@ def aperture_photometry_wrapper(img_data, x, y, err_data=None, aperture_radius=1
     # estimate total background flux error
     total_bkg_err = bkg_stats.std * np.sqrt(aper_stats.sum_aper_area.value)
 
-    # calcualte background subtracted flux
+    # calculate background subtracted flux
     apersum_bkgsub = aper_stats.sum - total_bkg
     # propagate uncertainties from background subtraction
     apersum_bkgsub_err = np.sqrt(aper_stats.sum_err**2 + total_bkg_err**2)
@@ -500,28 +511,217 @@ def aperture_photometry_wrapper(img_data, x, y, err_data=None, aperture_radius=1
     ap_phot['flags'] = np.full_like(x,0)
 
     fwhms = np.full_like(x, np.nan)
+    xypos = []
+    for i in range(len(x)) :
+        xypos.append((x[i],y[i]))
+
+    # create mask to identify NaNs
+    mask = np.isfinite(aper_stats.fwhm.value)
+
+    if calculate_fwhm :
+        # Measure fwhms from data
+        fwhms = measure_fwhm(img_data, xypos, window_size=window_size, plot=False, verbose=False)
+        # create mask to identify NaNs
+        mask = np.isfinite(fwhms)
+    
+    # Replace NaNs by default values
+    #   the fwhm values below are not correct, but the factor 2 helps to bring them closer to the true fwhm.
+    fwhms[~mask] = aper_stats.fwhm.value[~mask] / 2.
+    
     # if performing a fit
-    if fwhm_from_fit :
-        xypos = []
-        for i in range(len(x)) :
-            xypos.append((x[i],y[i]))
+    if fwhm_from_fit and calculate_fwhm :
         try :
-            fwhms, fwhms_x , fwhms_y = measure_fwhm(img_data, xypos, window_size=2*aperture_radius, use_moffat=use_moffat, plot=False)
+            fwhms_x, fwhms_y, xc, yc = measure_fwhm_from_2DGaussianFit(img_data, xypos, err_data=err_data, window_size=window_size, global_fit=global_fit, plot=False, verbose=False)
             ap_phot['fwhm_x'] = fwhms_x
             ap_phot['fwhm_y'] = fwhms_y
+            newmask = (np.isfinite(fwhms_x)) & (np.isfinite(fwhms_y))
+            fwhms[newmask] = (fwhms_x[newmask] + fwhms_y[newmask]) / 2.
+            
+            if update_xycenter_from_profile_fit :
+                keep = (np.abs(xc-ap_phot['x']) < update_xycenter_threshold) & (np.abs(yc-ap_phot['y']) < update_xycenter_threshold)
+                ap_phot['x'][keep] = xc[keep]
+                ap_phot['y'][keep] = yc[keep]
+                logger.info("Updated x,y coordinates for {} of {} sources detected".format(len(xc[keep]),len(xc)))
+            
         except Exception as e :
-            logger.warn("Could not be fit FWHM, using values from photutils. {}".format(e))
-            fwhms = aper_stats.fwhm.value / 2.
-    else :
-       # the fwhm values below are not correct, but the factor 2. helps to bring them closer to the true fwhm.
-        fwhms = aper_stats.fwhm.value / 2.
+            logger.warn("Could not measure FWHM from 2D Gaussian fit; using values from standard method. {}".format(e))
         
     ap_phot['fwhm'] = fwhms
 
     return ap_phot
 
 
-def measure_fwhm(img_data, xypos, sigma_ini=3, window_size=10, use_moffat=False, plot=False) :
+def measure_fwhm(img_data, xypos, window_size=24, plot=False, verbose=False) :
+
+    """ Pipeline module to measure fwhm quickly, without fitting the data
+    Parameters
+    ----------
+    img_data : numpy.ndarray (n x m)
+        float array containing the image data (electrons)
+    xypos : list of tuples (x,y)
+        list of x,y coordinates
+    window_size : int
+        size of window to fit data
+    plot : bool
+        plot img data
+    verbose : bool
+        print fit data
+    Returns
+        fwhms: np.array(dtype=float)
+            Full Width at Half Maximum (FWHM)
+    """
+
+    fwhms = np.array([])
+    ny, nx = np.shape(img_data)
+
+    for i in range(len(xypos)) :
+        try :
+            xc, yc = xypos[i][0], xypos[i][1]
+        
+            x1, y1 =int(np.floor((xc+0.5) - (window_size-1)/2)), int(np.floor((yc+0.5) - (window_size-1)/2))
+            x2, y2 = x1 + window_size - 1, y1 + window_size - 1
+       
+            if x1 < 0 : x1, x2 = 0, window_size - 1
+            if x2 > nx - 1: x1, x2 = nx - window_size, nx - 1
+            if y1 < 0 : y1, y2 = 0, window_size - 1
+            if y2 > ny - 1: y1, y2 = ny - window_size, ny - 1
+
+            box_data = deepcopy(img_data[y1:y2,x1:x2])
+            bkg_value = np.nanmedian(box_data)
+            box_data -= bkg_value
+            box_data[box_data < 0] = 0
+
+            flux_max = np.nanmax(box_data)
+            sum_flux = np.nansum(box_data)
+            
+            fwhm_value = 2.355 * np.sqrt( sum_flux / (2.*np.pi*flux_max) )
+        
+            if plot :
+                plt.imshow(box_data)
+                plt.show()
+        
+            fwhms = np.append(fwhms,fwhm_value)
+            
+            if verbose :
+                print("Source index={} sum_flux={:.2f} flux_max={:.2f} window_size={}x{} pixels FHWM = {:.2f} pixels -> {:.2f} arcsec".format(i,sum_flux,flux_max,window_size,window_size,fwhm_value,fwhm_value*0.335))
+                
+        except Exception as e :
+        
+            fwhms = np.append(fwhms,np.nan)
+            logger.warn("Could not measure FWHM for source index={}: {}".format(i,e))
+            
+    return fwhms
+
+
+
+def twoD_Gaussian(xy, amplitude, xo, yo, sigma_x, sigma_y, offset):
+    """ 2D Gaussian model
+    Parameters
+    ----------
+    xy : (numpy.ndarray,numpy.ndarray)
+        arrays of x and y coordinates in image
+    amplitude : float
+        amplitude of Gaussian
+    amplitude : float
+        amplitude of Gaussian
+    xo : float
+        x-center of Gaussian
+    yo : float
+        y-center of Gaussian
+    sigma_x : float
+        sigma in x-direction
+    sigma_y : float
+        sigma in y-direction
+    offset : float
+        baseline offset
+    Returns
+        residuals: numpy.ndarray
+            flattened array of residuals given by the image array - 2D Gaussian model
+    """
+    theta = 0 # could become an input parameter
+    x, y = xy
+    xo = float(xo)
+    yo = float(yo)
+    a = (np.cos(theta)**2)/(2*sigma_x**2) + (np.sin(theta)**2)/(2*sigma_y**2)
+    b = -(np.sin(2*theta))/(4*sigma_x**2) + (np.sin(2*theta))/(4*sigma_y**2)
+    c = (np.sin(theta)**2)/(2*sigma_x**2) + (np.cos(theta)**2)/(2*sigma_y**2)
+    g = offset + amplitude*np.exp( - (a*((x-xo)**2) + 2*b*(x-xo)*(y-yo) + c*((y-yo)**2)))
+    return g
+
+
+def errfunc_2DGaussian(params, xy, img, errors=None) :
+    """ Pipeline module to get error function for a 2D Gaussian fit
+    Parameters
+    ----------
+    params : numpy.ndarray
+        2D Gaussian fit parameters: (amp, xcenter, ycenter, sigmaX, sigmaY, offset)
+    xy : (numpy.ndarray,numpy.ndarray)
+        array of x and y source positions in the original image array
+    img : numpy.ndarray(float)
+        image array
+    Returns
+        residuals: numpy.ndarray
+            flattened array of residuals given by the image array - 2D Gaussian model
+    """
+    if errors is not None :
+        residuals = (img - twoD_Gaussian(xy, *params)) / errors
+    else :
+        residuals = img - twoD_Gaussian(xy, *params)
+
+    
+    return residuals.ravel()
+
+def fit_2DGaussian(img, errors=None, plot=False):
+    """ Pipeline module to get fwhm_x, fwhm_y, and xc, yc through a 2D Gaussian fit
+    Parameters
+    ----------
+    img : numpy.ndarray (n x m)
+        float array containing the image data (electrons)
+    errors : numpy.ndarray (n x m)
+        float array containing the errors data (electrons)
+    plot : bool
+        plot data and fit
+    Returns
+        popt, FWHM_x, FWHM_y, xcenter, ycenter: np.array(dtype=float), float, float, float, float
+            popt : 2D Gaussian fit parameters
+            FWHM_x: Full Width at Half Maximum (FWHM) fit value in x-direction
+            FWHM_y: Full Width at Half Maximum (FWHM) fit value in y-direction
+            xcenter: x-center fit value
+            ycenter: y-center fit value
+    """
+    ny, nx = img.shape
+
+    x = np.linspace(0.5, nx-0.5, nx)
+    y = np.linspace(0.5, ny-0.5, ny)
+    xy = np.meshgrid(x, y)
+    
+    win_cen_x = (x[-1]+x[0]+1)/2
+    win_cen_y = (x[-1]+x[0]+1)/2
+
+    #Parameters: amp, xpos, ypos, sigmaX, sigmaY, baseline
+    initial_guess = [np.nanmax(img), win_cen_x, win_cen_y, 5., 5., 0.0001]
+
+    # fit 2D Gaussian to the data
+    popt, success = optimize.leastsq(errfunc_2DGaussian, initial_guess, args=(xy,img,errors))
+        
+    # get fitted parameters
+    amp, xcenter, ycenter, sigmaX, sigmaY, offset = popt[0], popt[1], popt[2], popt[3], popt[4], popt[5]
+    
+    if plot :
+        data_fitted = twoD_Gaussian(xy, *popt)
+        fig, ax = plt.subplots(1, 1)
+        ax.imshow(img, cmap=plt.cm.jet, origin='lower',extent=(0, nx, 0, ny))
+        ax.contour(x, y, data_fitted, 8, colors='w')
+        plt.plot(np.array([win_cen_x]),np.array([win_cen_y]),"y+",lw=2)
+        plt.show()
+    
+    FWHM_x = np.abs(4*sigmaX*np.sqrt(-0.5*np.log(0.5)))
+    FWHM_y = np.abs(4*sigmaY*np.sqrt(-0.5*np.log(0.5)))
+    
+    return popt, FWHM_x, FWHM_y, xcenter-win_cen_x, ycenter-win_cen_y
+
+
+def measure_fwhm_from_2DGaussianFit(img_data, xypos, err_data=None, sigma_ini=3, window_size=24, global_fit=True, plot=False, verbose=False) :
 
     """ Pipeline module to measure fwhm through a Gaussian fit
     Parameters
@@ -529,89 +729,99 @@ def measure_fwhm(img_data, xypos, sigma_ini=3, window_size=10, use_moffat=False,
     img_data : numpy.ndarray (n x m)
         float array containing the image data (electrons)
     xypos : list of tuples (x,y)
-        list of x,y coordinates
+        list of x,y coordinates in units of pixels
+    err_data : numpy.ndarray (n x m)
+        float array containing the error data (electrons)
     sigma_ini : float
-        initial value of sigma
+        initial value of sigma in units of pixels
     window_size : int
-        size of window to fit data
-    use_moffat : bool
-        use Moffat function instead of Gaussian
+        size of window to fit data in units of pixels
+    global_fit : bool
+        run global fit instead of individual fit
     plot : bool
-        plot data and fit
+        plot fit data
+    verbose : bool
+        print fit data
     Returns
-        fwhm, fwhmx, fwhmy: np.array(dtype=float)
-            Full Width at Half Maximum (FWHM) fit values
+        fwhmx, fwhmy, out_xc, out_yc: np.array(dtype=float)
+            fwhmx, fwhmy: Full Width at Half Maximum (FWHM) fit values
+            out_xc, out_yc: fit values of center of coordinates in pixel values
     """
 
-    fwhm, fwhmx, fwhmy = np.array([]), np.array([]), np.array([])
-    
+    fwhmx, fwhmy = np.array([]), np.array([])
+    out_xc, out_yc = np.array([]), np.array([])
+
     ny, nx = np.shape(img_data)
-    
-    sigma_to_fwhm = 2.*np.sqrt(2.*np.log(2.))
-        
+
+    if global_fit :
+        cube = np.zeros((len(xypos), window_size, window_size))
+
     for i in range(len(xypos)) :
     
         xc, yc = xypos[i][0], xypos[i][1]
         
-        x1, x2 = int(np.floor(xc - window_size/2)), int(np.ceil(xc + window_size/2))
-        y1, y2 = int(np.floor(yc - window_size/2)), int(np.ceil(yc + window_size/2))
-        
-        if x1 < 0 : x1, x2 = 0, window_size
-        if x2 > nx - 1: x1, x2 = nx - window_size - 1, nx - 1
-        if y1 < 0 : y1, y2 = 0, window_size
-        if y2 > ny - 1: y1, y2 = ny - window_size - 1, ny - 1
+        x1, y1 =int(np.floor((xc+0.5) - (window_size-1)/2)), int(np.floor((yc+0.5) - (window_size-1)/2))
+        x2, y2 = x1 + window_size - 1, y1 + window_size - 1
+       
+        if x1 < 0 : x1, x2 = 0, window_size - 1
+        if x2 > nx - 1: x1, x2 = nx - window_size, nx - 1
+        if y1 < 0 : y1, y2 = 0, window_size - 1
+        if y2 > ny - 1: y1, y2 = ny - window_size, ny - 1
     
-        box_data = img_data[y1:y2,x1:x2]
-        
-        xvalues, yvalues = np.mean(box_data,0), np.mean(box_data,1)
-        xcoords, ycoords = np.arange(len(xvalues)), np.arange(len(yvalues))
+        box_data = deepcopy(img_data[y1:y2,x1:x2])
+        bkg_value = np.nanmedian(box_data)
+        box_data -= bkg_value
+        box_data[box_data < 0] = 0
 
-        if len (xcoords) and len (ycoords):
+        if global_fit :
+            # for global fit, normalize the data
+            box_data /= np.nanmax(box_data)
+            cube[i,:,:] = box_data
+        else :
+            try :
+                box_errors = deepcopy(err_data[y1:y2,x1:x2])
+                popt, fwhm_x, fwhm_y, fitted_xc, fitted_yc = fit_2DGaussian(box_data, errors=box_errors, plot=plot)
+    
+                fwhmx = np.append(fwhmx,fwhm_x)
+                fwhmy = np.append(fwhmy,fwhm_y)
         
-            xvalues -= np.min(xvalues)
-            yvalues -= np.min(yvalues)
+                if verbose :
+                    print("Source index={} flux_max={} window_size={}x{} pixels FHWM_X = {:.2f} pix -> {:.2f} arcsec FHWM_Y = {:.2f} pix -> {:.2f} arcsec".format(i,np.nanmax(box_data),window_size,window_size,fwhm_x,fwhm_x*0.335,fwhm_y,fwhm_y*0.335))
 
-            max_value = np.nanmax(box_data)
+                out_xc = np.append(out_xc,fitted_xc+xc)
+                out_yc = np.append(out_yc,fitted_yc+yc)
+            except Exception as e :
+                logger.warn("Could not fit 2D Gaussian and measure FWHM for source index={} {}".format(i,e))
+                fwhmx = np.append(fwhmx,np.nan)
+                fwhmy = np.append(fwhmy,np.nan)
+                out_xc = np.append(out_xc,np.nan)
+                out_yc = np.append(out_yc,np.nan)
+
+
+    if global_fit :
+        median_slice = np.nanmedian(cube,axis=0)
+        bkg_value = np.nanmedian(median_slice)
+        median_slice -= bkg_value
+        median_slice[median_slice < 0] = 0
+        #sig_slice = np.nanmedian(np.abs(cube-median_slice),axis=0) / 0.67449
+        try :
+            popt, fwhm_x, fwhm_y, fitted_xc, fitted_yc = fit_2DGaussian(median_slice, plot=plot)
+            if verbose :
+                print("Global FIT: flux_max={} window_size={}x{} pixels FHWM_X = {:.2f} pix -> {:.2f} arcsec FHWM_Y = {:.2f} pix -> {:.2f} arcsec".format(np.nanmax(median_slice),window_size,window_size,fwhm_x,fwhm_x*0.335,fwhm_y,fwhm_y*0.335))
+        except Exception as e :
+            logger.warn("Could not fit 2D Gaussian and measure FWHM from global fit: {}".format(e))
+            popt, fwhm_x, fwhm_y, fitted_xc, fitted_yc = None, np.nan, np.nan, 0., 0.
+            
+        xcs, ycs = np.array([]), np.array([])
+        for i in range(len(xypos)) :
+            xcs = np.append(xcs,xypos[i][0])
+            ycs = np.append(ycs,xypos[i][1])
+        fwhmx = np.full_like(xcs, fwhm_x)
+        fwhmy = np.full_like(ycs, fwhm_y)
+        out_xc = xcs + fitted_xc
+        out_yc = ycs + fitted_yc
         
-            fit_g = fitting.LevMarLSQFitter()
-            if use_moffat :
-                g_init = models.Moffat1D(amplitude=max_value, x_0=np.nanargmax(xvalues), gamma=sigma_ini, alpha=1)
-            else :
-                g_init = models.Gaussian1D(amplitude=max_value, mean=np.nanargmax(xvalues), stddev=sigma_ini)
-            gx = fit_g(g_init, xcoords, xvalues, maxiter=200)
-         
-            if use_moffat :
-                x_fwhm = gx.fwhm
-            else :
-                x_fwhm = sigma_to_fwhm * gx.stddev.value
-            fwhmx = np.append(fwhmx,x_fwhm)
-            
-            fit_g = fitting.LevMarLSQFitter()
-            if use_moffat :
-                g_init = models.Moffat1D(amplitude=max_value, x_0=np.nanargmax(yvalues), gamma=sigma_ini, alpha=1)
-            else :
-                g_init = models.Gaussian1D(amplitude=max_value, mean=np.nanargmax(yvalues), stddev=sigma_ini)
-            gy = fit_g(g_init, ycoords, yvalues, maxiter=200)
-
-            if use_moffat :
-                y_fwhm = gy.fwhm
-            else :
-                y_fwhm = sigma_to_fwhm * gy.stddev.value
-            fwhmy = np.append(fwhmy,y_fwhm)
-            
-            fwhm = np.append(fwhm, np.nanmean(np.array([fwhmx,fwhmy])))
-            
-            if plot :
-                plt.plot(xcoords,xvalues,"g.")
-                plt.plot(xcoords,gx(xcoords),"g-",lw=2,label="Fit in x-direction")
-            
-                plt.plot(ycoords,yvalues,"r.")
-                plt.plot(ycoords,gy(ycoords),"r-",lw=2,label="Fit in y-direction")
-            
-                #plt.imshow(box_data)
-                plt.show()
-          
-    return fwhm, fwhmx, fwhmy
+    return fwhmx, fwhmy, out_xc, out_yc
 
 
 def init_s4_p(nightdir, datadir="", reducedir="", channels="", print_report=False, param_file=""):
@@ -946,6 +1156,9 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
                                           calwheel_mode=calw,
                                           detector_mode=detector_mode)
                                           
+            ################################################
+            ## REDUCE, CREATE CATALOGS, and DO PHOTOMETRY ##
+            ################################################
             # run stack and reduce individual science images (produce *_proc.fits)
             p = stack_and_reduce_sci_images(p,
                                             sci_list,
@@ -1026,9 +1239,10 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
                                        output_lc=plot_lc_file)
                     except Exception as e:
                         logger.warn("Could not generate plot for product {} : {}".format(phot_ts_product, e))
-            ##############################################
+                        
+            ##################################################################
             ## POLARIMETRY AND TIME SERIES FOR POLARIMETRIC MODE (L2 OR L4) ##
-            ##############################################
+            ##################################################################
             if inst_mode == p['INSTMODE_POLARIMETRY_KEYVALUE']:
         
                 logger.info("Combining light curve data from the two beams")
@@ -1665,8 +1879,7 @@ def reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", match_fr
         # get basename
         basename = os.path.basename(obj_fg.files[i])
         # create output name in the reduced dir
-        output = os.path.join(
-            reduce_dir, basename.replace(".fits", "_proc.fits"))
+        output = os.path.join(reduce_dir, basename.replace(".fits", "_proc.fits"))
         obj_red_images.append(output)
 
         red_status = False
@@ -2542,7 +2755,7 @@ def calculate_aperture_radius(p, data):
     return p
 
 
-def run_aperture_photometry(img_data, x, y, aperture_radius, r_ann, err_data=None, output_mag=True, exptime=1.0, recenter=False, recenter_limit=5., readnoise=0., use_astropop=False, fwhm_from_fit=False, use_moffat=False):
+def run_aperture_photometry(img_data, x, y, aperture_radius, r_ann, err_data=None, output_mag=True, exptime=1.0, recenter=False, recenter_limit=5., readnoise=0., use_astropop=False, fwhm_from_fit=False, use_moffat=False, window_size=24, update_xycenter_from_profile_fit=False, global_fit=True, calculate_fwhm=True):
     """ Pipeline module to run aperture photometry of sources in an image
     Parameters
     ----------
@@ -2556,6 +2769,8 @@ def run_aperture_photometry(img_data, x, y, aperture_radius, r_ann, err_data=Non
         aperture radius within which to perform aperture photometry
     r_ann : tuple: (float,float)
         sky annulus inner and outer radii
+    err_data : numpy.ndarray (n x m)
+        float array containing the error data (electrons)
     output_mag : bool, optional
         to convert output flux into magnitude
     exptime : float, optional
@@ -2572,7 +2787,15 @@ def run_aperture_photometry(img_data, x, y, aperture_radius, r_ann, err_data=Non
         calcualte fwhm from psf fit
     use_moffat : bool
         use Moffat function. If False, it adopts a Gaussian profile
-
+    window_size : int
+        square window size (pixels) for profile fit
+    update_xycenter_from_profile_fit : bool
+        to update x- and y-center positions using fitted values from 2D Gaussian fits
+    global_fit : bool
+        to use a single fit to the combined profile from all sources
+    calculate_fwhm : bool
+        to calculate fwhm
+        
     Returns
         x, y, mag, mag_error, smag, smag_error, fwhm, flags
     -------
@@ -2604,7 +2827,7 @@ def run_aperture_photometry(img_data, x, y, aperture_radius, r_ann, err_data=Non
         ap_phot['fwhm'] = np.full_like(ap_phot['flux'],0.)
     else :
         try:
-            ap_phot = aperture_photometry_wrapper(img_data, x, y,  err_data=err_data, aperture_radius=aperture_radius, r_in=r_ann[0], r_out=r_ann[1], read_noise=readnoise, recenter=recenter, fwhm_from_fit=fwhm_from_fit, use_moffat=use_moffat)
+            ap_phot = aperture_photometry_wrapper(img_data, x, y,  err_data=err_data, aperture_radius=aperture_radius, r_in=r_ann[0], r_out=r_ann[1], read_noise=readnoise, recenter=recenter, fwhm_from_fit=fwhm_from_fit, use_moffat=use_moffat, window_size=window_size, update_xycenter_from_profile_fit=update_xycenter_from_profile_fit, global_fit=global_fit, calculate_fwhm=calculate_fwhm)
         except Exception as e:
             logger.warn("{}".format(e))
             pass
@@ -2620,6 +2843,9 @@ def run_aperture_photometry(img_data, x, y, aperture_radius, r_ann, err_data=Non
     sky_error = np.array(ap_phot['bkg_stddev']) / exptime
     fwhm = np.array(ap_phot['fwhm'])
     flags = np.array(ap_phot['flags'])
+    
+    #for i in range(len(x)):
+    #    print("*** Aperture={} Src_idx={} x,y={:.1f},{:.1f} flux={:.1f}+/-{:.1f} sky={:.1f}+/-{:.1f} fwhm={:.1f}".format(aperture_radius,i,x[i],y[i],flux[i],flux_error[i],sky[i],sky_error[i],fwhm[i]))
     
     if output_mag:
         mag, mag_error = np.full_like(flux, np.nan), np.full_like(flux, np.nan)
@@ -2739,7 +2965,7 @@ def set_wcs_from_astrom_ref_image(ref_filename, header, ra_deg=None, dec_deg=Non
     return w
 
 
-def generate_catalogs(p, data, hdr, sources, fwhm, catalogs=[], catalogs_label='', aperture_radius=10, r_ann=(25, 50), sortbyflux=True, maxnsources=0, polarimetry=False, use_e_beam_for_astrometry=True, solve_astrometry=False, exptime=1.0, readnoise=0., ssobj_raw_index=None):
+def generate_catalogs(p, data, hdr, sources, fwhm, err_data=None, catalogs=[], catalogs_label='', aperture_radius=10, r_ann=(25, 50), sortbyflux=True, maxnsources=0, polarimetry=False, use_e_beam_for_astrometry=True, solve_astrometry=False, exptime=1.0, readnoise=0., ssobj_raw_index=None, update_xycenter_from_profile_fit=False, fwhm_from_global_fit=True, calculate_fwhm=False):
     """ Pipeline module to generate new catalogs and append it
     to a given list of catalogs
     Parameters
@@ -2754,6 +2980,8 @@ def generate_catalogs(p, data, hdr, sources, fwhm, catalogs=[], catalogs_label='
         container of sources data, returned from source detection routine
     fwhm : float
         full width at half maximum
+    err_data : numpy.ndarray (n x m)
+        float array containing the error data (electrons)
     catalogs : list of dicts, optional
         list of catalogs of sources. An empty list indicates a new catalog list to be generated
     catalogs_label : str
@@ -2778,6 +3006,13 @@ def generate_catalogs(p, data, hdr, sources, fwhm, catalogs=[], catalogs_label='
         readout noise in e-
     ssobj_raw_index : int
         raw index of solar system object. In polarimetry the raw index is different than the final index because the two beams will share the same final index
+    update_xycenter_from_profile_fit : bool
+        to update x- and y-center positions using fitted values from 2D Gaussian fits
+    fwhm_from_global_fit : bool
+        to use a single fit to the combined profile from all sources
+    calculate_fwhm : bool
+        to calculate fwhm, if False it will try to use data in p['FHWMS']
+    
     Returns
         catalogs: list of dicts
             returns a list of catalog dictionaries, where the new catalogs
@@ -2830,25 +3065,41 @@ def generate_catalogs(p, data, hdr, sources, fwhm, catalogs=[], catalogs_label='
         # print("sources:\n",sources)
         # print("\n\nsources_table:\n",sources_table)
 
-        xo, yo, mago, mago_error, smago, smago_error, fwhmso, flagso = run_aperture_photometry(data, sources_table['x_o'], sources_table['y_o'], aperture_radius, r_ann, output_mag=True, exptime=exptime, recenter=p["RECENTER_APER_FOR_PHOTOMETRY"], readnoise=readnoise, use_astropop=p["USE_ASTROPOP_PHOTOMETRY"], fwhm_from_fit=p['FWHM_FROM_FIT'], use_moffat=p['USE_MOFFAT_FUNC_TO_FIT_FHWM'])
+        xo, yo, mago, mago_error, smago, smago_error, fwhmso, flagso = run_aperture_photometry(data, sources_table['x_o'], sources_table['y_o'], aperture_radius, r_ann, err_data=None, output_mag=True, exptime=exptime, recenter=p["RECENTER_APER_FOR_PHOTOMETRY"], readnoise=readnoise, use_astropop=p["USE_ASTROPOP_PHOTOMETRY"], fwhm_from_fit=p['FWHM_FROM_FIT_IN_STACK'], window_size=p['WINDOW_SIZE_FOR_PROFILE_FIT'], update_xycenter_from_profile_fit=update_xycenter_from_profile_fit, global_fit=fwhm_from_global_fit, calculate_fwhm=calculate_fwhm)
+            
+        xe, ye, mage, mage_error, smage, smage_error, fwhmse, flagse = run_aperture_photometry(data, sources_table['x_e'], sources_table['y_e'], aperture_radius, r_ann, err_data=None, output_mag=True, exptime=exptime, recenter=p["RECENTER_APER_FOR_PHOTOMETRY"], readnoise=readnoise, use_astropop=p["USE_ASTROPOP_PHOTOMETRY"], fwhm_from_fit=p['FWHM_FROM_FIT_IN_STACK'], window_size=p['WINDOW_SIZE_FOR_PROFILE_FIT'], update_xycenter_from_profile_fit=update_xycenter_from_profile_fit, global_fit=fwhm_from_global_fit, calculate_fwhm=calculate_fwhm)
 
-        sorted = np.full_like(xo, True, dtype=bool)
+        if calculate_fwhm :
+            # update FHWMs in the parameter dict
+            p['FHWMS_O'] = fwhmso
+            p['FHWMS_E'] = fwhmse
+        else:
+            # update FWHMs using values from parameter dict
+            if 'FHWMS_O' in p.keys() and len(p['FHWMS_O']) == len(mago) :
+                fwhmso = p['FHWMS_O']
+            if 'FHWMS_E' in p.keys() and len(p['FHWMS_E']) == len(mage) :
+                fwhmse = p['FHWMS_E']
+
+        # create a sorted mask to sort data by magnitude if requested
+        sortedmask = np.full_like(xo, True, dtype=bool)
+        if 'SORTED_MASK' in p.keys() :
+            sortedmask = deepcopy(p['SORTED_MASK'])
         if sortbyflux:
-            sorted = np.argsort(mago)
+            sortedmask = np.argsort(mago)
+        # save sortedmask into a globoal variable in the paramters file
+        p['SORTED_MASK'] = sortedmask
+            
+        xo, yo = xo[sortedmask], yo[sortedmask]
+        mago, mago_error = mago[sortedmask], mago_error[sortedmask]
+        smago, smago_error = smago[sortedmask], smago_error[sortedmask]
+        fwhmso = fwhmso[sortedmask]
+        flagso = flagso[sortedmask]
 
-        xe, ye, mage, mage_error, smage, smage_error, fwhmse, flagse = run_aperture_photometry(data, sources_table['x_e'], sources_table['y_e'], aperture_radius, r_ann, output_mag=True, exptime=exptime, recenter=p["RECENTER_APER_FOR_PHOTOMETRY"], readnoise=readnoise, use_astropop=p["USE_ASTROPOP_PHOTOMETRY"], fwhm_from_fit=p['FWHM_FROM_FIT'], use_moffat=p['USE_MOFFAT_FUNC_TO_FIT_FHWM'])
-
-        xo, yo = xo[sorted], yo[sorted]
-        mago, mago_error = mago[sorted], mago_error[sorted]
-        smago, smago_error = smago[sorted], smago_error[sorted]
-        fwhmso = fwhmso[sorted]
-        flagso = flagso[sorted]
-
-        xe, ye = xe[sorted], ye[sorted]
-        mage, mage_error = mage[sorted], mage_error[sorted]
-        smage, smage_error = smage[sorted], smage_error[sorted]
-        fwhmse = fwhmse[sorted]
-        flagse = flagse[sorted]
+        xe, ye = xe[sortedmask], ye[sortedmask]
+        mage, mage_error = mage[sortedmask], mage_error[sortedmask]
+        smage, smage_error = smage[sortedmask], smage_error[sortedmask]
+        fwhmse = fwhmse[sortedmask]
+        flagse = flagse[sortedmask]
 
         if use_e_beam_for_astrometry:
             xs_for_astrometry = xe
@@ -2862,7 +3113,6 @@ def generate_catalogs(p, data, hdr, sources, fwhm, catalogs=[], catalogs_label='
             pixel_coords[j] = [xs_for_astrometry[j],ys_for_astrometry[j]]
             
         if solve_astrometry:
-            
             try:
                 if p["SOLVE_ASTROMETRY_WITH_ASTROMETRY_NET"] :
                     logger.info ("Trying to solve astrometry in PHOT-MODE using astrometry.net")
@@ -2919,14 +3169,29 @@ def generate_catalogs(p, data, hdr, sources, fwhm, catalogs=[], catalogs_label='
             p['SOLAR_SYSTEM_OBJECT_INDEX'] = ssobj_raw_index
         
         # x, y = np.array(sources['x']), np.array(sources['y'])
-        x, y, mag, mag_error, smag, smag_error, fwhms, flags = run_aperture_photometry(data, sources['x'], sources['y'], aperture_radius, r_ann, output_mag=True, exptime=exptime, recenter=p["RECENTER_APER_FOR_PHOTOMETRY"], readnoise=readnoise, use_astropop=p["USE_ASTROPOP_PHOTOMETRY"], fwhm_from_fit=p['FWHM_FROM_FIT'], use_moffat=p['USE_MOFFAT_FUNC_TO_FIT_FHWM'])
+        x, y, mag, mag_error, smag, smag_error, fwhms, flags = run_aperture_photometry(data, sources['x'], sources['y'], aperture_radius, r_ann, err_data=None, output_mag=True, exptime=exptime, recenter=p["RECENTER_APER_FOR_PHOTOMETRY"], readnoise=readnoise, use_astropop=p["USE_ASTROPOP_PHOTOMETRY"], fwhm_from_fit=p['FWHM_FROM_FIT_IN_STACK'], window_size=p['WINDOW_SIZE_FOR_PROFILE_FIT'], update_xycenter_from_profile_fit=update_xycenter_from_profile_fit, global_fit=fwhm_from_global_fit, calculate_fwhm=calculate_fwhm)
 
+        if calculate_fwhm :
+            # update FHWMs in the parameter dict
+            p['FHWMS'] = fwhms
+        else:
+            # update FWHMs using values from parameter dict
+            if 'FHWMS' in p.keys() and len(p['FHWMS']) == len(mag) :
+                fwhms = p['FHWMS']
+
+        # create a sorted mask to sort data by magnitude if requested
+        sortedmask = np.full_like(x, True, dtype=bool)
+        if 'SORTED_MASK' in p.keys() :
+            sortedmask = deepcopy(p['SORTED_MASK'])
         if sortbyflux:
-            sorted = np.argsort(mag)
-            x, y = x[sorted], y[sorted]
-            mag, mag_error = mag[sorted], mag_error[sorted]
-            smag, smag_error = smag[sorted], smag_error[sorted]
-            fwhms, flags = fwhms[sorted], flags[sorted]
+            sortedmask = np.argsort(mag)
+        # save sortedmask into a globoal variable in the paramters file
+        p['SORTED_MASK'] = sortedmask
+            
+        x, y = x[sortedmask], y[sortedmask]
+        mag, mag_error = mag[sortedmask], mag_error[sortedmask]
+        smag, smag_error = smag[sortedmask], smag_error[sortedmask]
+        fwhms, flags = fwhms[sortedmask], flags[sortedmask]
 
         pixel_coords = np.ndarray((len(x), 2))
         for j in range(len(x)) :
@@ -2975,7 +3240,7 @@ def generate_catalogs(p, data, hdr, sources, fwhm, catalogs=[], catalogs_label='
         # save photometry data into the catalog
         for i in range(nsources):
             catalogs[current_catalogs_len]["{}".format(i)] = (i, ras[i], decs[i], x[i], y[i], fwhms[i], fwhms[i], mag[i], mag_error[i], smag[i], smag_error[i], aperture_radius, flags[i])
-
+    
     return catalogs, p
 
 
@@ -3415,7 +3680,7 @@ def build_catalogs(p, data, hdr, catalogs=[], xshift=0., yshift=0., solve_astrom
         
         # The step below is important to solve astrometry before add targets from user or object header key
         # print("Running aperture photometry with aperture_radius={} r_ann={}".format(aperture_radius,r_ann))
-        new_catalogs, p = generate_catalogs(p, data, hdr, sources, fwhm, catalogs=[], aperture_radius=p['PHOT_FIXED_APERTURE'], r_ann=r_ann, polarimetry=polarimetry, solve_astrometry=p["SOLVE_ASTROMETRY_IN_STACK"], exptime=exptime, readnoise=readnoise)
+        new_catalogs, p = generate_catalogs(p, data, hdr, sources, fwhm, err_data=rms, catalogs=[], aperture_radius=p['PHOT_FIXED_APERTURE'], r_ann=r_ann, sortbyflux=True, polarimetry=polarimetry, solve_astrometry=p["SOLVE_ASTROMETRY_IN_STACK"], exptime=exptime, readnoise=readnoise, update_xycenter_from_profile_fit=p["UPDATE_XY_SRC_COORDINATES_FROM_PROFILE_FIT"], fwhm_from_global_fit=p["FWHM_FROM_GLOBAL_FIT_IN_STACK"], calculate_fwhm=True)
         
         p['SOLAR_SYSTEM_OBJECT_INDEX'] = None
         if p['SOLAR_SYSTEM_OBJECT'] :
@@ -3425,7 +3690,11 @@ def build_catalogs(p, data, hdr, catalogs=[], xshift=0., yshift=0., solve_astrom
             logger.info("The raw index of the Solar System object is {}".format(p['SOLAR_SYSTEM_OBJECT_INDEX']))
             
             if len(target_sky_coords) :
-                new_catalogs, p = generate_catalogs(p, data, hdr, sources, fwhm, catalogs=[], aperture_radius=p['PHOT_FIXED_APERTURE'], r_ann=r_ann, polarimetry=polarimetry, solve_astrometry=p["SOLVE_ASTROMETRY_IN_STACK"], exptime=exptime, readnoise=readnoise, sortbyflux=False, ssobj_raw_index=p['SOLAR_SYSTEM_OBJECT_INDEX'])
+            
+                # delete preview sorted mask, which has a size inconsistent with the new one
+                del p['SORTED_MASK']
+                # generate catalogs again, now with the SS object added
+                new_catalogs, p = generate_catalogs(p, data, hdr, sources, fwhm, err_data=rms, catalogs=[], aperture_radius=p['PHOT_FIXED_APERTURE'], r_ann=r_ann, polarimetry=polarimetry, solve_astrometry=p["SOLVE_ASTROMETRY_IN_STACK"], exptime=exptime, readnoise=readnoise, sortbyflux=True, ssobj_raw_index=p['SOLAR_SYSTEM_OBJECT_INDEX'], update_xycenter_from_profile_fit=p["UPDATE_XY_SRC_COORDINATES_FROM_PROFILE_FIT_SS_OBJECT"], fwhm_from_global_fit=p["FWHM_FROM_GLOBAL_FIT_IN_STACK"], calculate_fwhm=True)
             # update main target index to the Solar System object index
             if p['UPDATE_TARGET_INDEX_TO_SS_OBJECT'] :
                 p['TARGET_INDEX'] = p['SOLAR_SYSTEM_OBJECT_INDEX']
@@ -3437,8 +3706,10 @@ def build_catalogs(p, data, hdr, catalogs=[], xshift=0., yshift=0., solve_astrom
             sources, target_sky_coords, p = add_targets_from_users_file(p, data, sources, dist_threshold=2*fwhm, polarimetry=polarimetry, plot=False)
             
             if len(target_sky_coords) :
+                # delete preview sorted mask, which has a size inconsistent with the new one
+                del p['SORTED_MASK']
                 # generate catalogs again, now with the new targets added
-                new_catalogs, p = generate_catalogs(p, data, hdr, sources, fwhm, catalogs=[], aperture_radius=p['PHOT_FIXED_APERTURE'], r_ann=r_ann, polarimetry=polarimetry, solve_astrometry=p["SOLVE_ASTROMETRY_IN_STACK"], exptime=exptime, readnoise=readnoise, sortbyflux=False)
+                new_catalogs, p = generate_catalogs(p, data, hdr, sources, fwhm, err_data=rms, catalogs=[], aperture_radius=p['PHOT_FIXED_APERTURE'], r_ann=r_ann, polarimetry=polarimetry, solve_astrometry=p["SOLVE_ASTROMETRY_IN_STACK"], exptime=exptime, readnoise=readnoise, sortbyflux=True, update_xycenter_from_profile_fit=p["UPDATE_XY_SRC_COORDINATES_FROM_PROFILE_FIT"], fwhm_from_global_fit=p["FWHM_FROM_GLOBAL_FIT_IN_STACK"], calculate_fwhm=True)
                
                 if p['UPDATE_TARGET_INDEX_FROM_INPUT'] and not p['UPDATE_TARGET_INDEX_TO_SS_OBJECT']:
                     # use current wcs to generate the set of pixel coordinates of input targets
@@ -3467,7 +3738,7 @@ def build_catalogs(p, data, hdr, catalogs=[], xshift=0., yshift=0., solve_astrom
                 r_ann = set_sky_aperture(p, aperture_radius)
 
                 # print("Running aperture photometry with aperture_radius={} r_ann={}".format(aperture_radius,r_ann))
-                new_catalogs, p = generate_catalogs(p, data, hdr, sources, fwhm, new_catalogs, aperture_radius=aperture_radius, r_ann=r_ann, polarimetry=polarimetry, exptime=exptime, readnoise=readnoise)
+                new_catalogs, p = generate_catalogs(p, data, hdr, sources, fwhm, err_data=rms, catalogs=new_catalogs, aperture_radius=aperture_radius, r_ann=r_ann, sortbyflux=False, polarimetry=polarimetry, exptime=exptime, readnoise=readnoise, update_xycenter_from_profile_fit=p["UPDATE_XY_SRC_COORDINATES_FROM_PROFILE_FIT"], fwhm_from_global_fit=p["FWHM_FROM_GLOBAL_FIT_IN_STACK"], calculate_fwhm=False)
                 
     else:
         # Here's when a catalog is provided:
@@ -3502,8 +3773,14 @@ def build_catalogs(p, data, hdr, catalogs=[], xshift=0., yshift=0., solve_astrom
         # update wcs header in parameters dict
         p['WCS_HEADER'] = p['WCS'].to_header(relax=True)
         
+        # initialize switch to calculate fwhm
+        calculate_fwhm = True
+        lim_index = 0
+        if polarimetry :
+            lim_index = 1
+            
         for j in range(len(catalogs)):
-        
+            
             # load coordinates from an input catalog
             ras, decs, x, y = read_catalog_coords(deepcopy(catalogs[j]))
                 
@@ -3536,14 +3813,40 @@ def build_catalogs(p, data, hdr, catalogs=[], xshift=0., yshift=0., solve_astrom
             #logger.info("Running aperture photometry for catalog={}/{} xshift={} yshift={} with aperture_radius={} r_ann={}".format(j+1,len(catalogs),xshift,yshift,aperture_radius,r_ann))
             
             # run aperture photometry
-            x, y, mag, mag_error, smag, smag_error, fwhms, flags = run_aperture_photometry(data, x, y, aperture_radius, r_ann, output_mag=True, exptime=exptime, recenter=p["RECENTER_APER_FOR_PHOTOMETRY"], readnoise=readnoise, use_astropop=p["USE_ASTROPOP_PHOTOMETRY"], fwhm_from_fit=p['FWHM_FROM_FIT'], use_moffat=p['USE_MOFFAT_FUNC_TO_FIT_FHWM'])
-
+            x, y, mag, mag_error, smag, smag_error, fwhms, flags = run_aperture_photometry(data, x, y, aperture_radius, r_ann, output_mag=True, exptime=exptime, recenter=p["RECENTER_APER_FOR_PHOTOMETRY"], readnoise=readnoise, use_astropop=p["USE_ASTROPOP_PHOTOMETRY"], fwhm_from_fit=p['FWHM_FROM_FIT_IN_INDIVIDUAL_FRAMES'], window_size=p['WINDOW_SIZE_FOR_PROFILE_FIT'], update_xycenter_from_profile_fit=False, global_fit=p['FWHM_FROM_GLOBAL_FIT_IN_INDIVIDUAL_FRAMES'], calculate_fwhm=calculate_fwhm)
+    
+            # update values of FHWMs if they have been calculated, and get from p when they haven't.
+            if polarimetry :
+                if calculate_fwhm :
+                    if (j % 2) == 0 :
+                        p['FHWMS_O'] = fwhms
+                    else :
+                        p['FHWMS_E'] = fwhms
+                else:
+                    if (j % 2) == 0 :
+                        # update FWHMs using values from parameter dict
+                        if 'FHWMS_O' in p.keys() and len(p['FHWMS_O']) == len(mag) :
+                            fwhms = p['FHWMS_O']
+                    else :
+                        if 'FHWMS_E' in p.keys() and len(p['FHWMS_E']) == len(mag) :
+                            fwhms = p['FHWMS_E']
+            else :
+                if calculate_fwhm :
+                    p['FWHM'] = fwhms
+                else :
+                    if 'FHWMS' in p.keys() and len(p['FHWMS']) == len(mag) :
+                        fwhms = p['FWHM']
+    
             #logger.info("Photometry of source=0: x={:.2f} y={:.2f} mag={:.5f} emag={:.5f} smag={:.5f} esmag={:.5f} fwhm={:.2f} flag={}".format(x[0], y[0], mag[0], mag_error[0], smag[0], smag_error[0], fwhms[0], flags[0]))
             
             # save data back into the catalog
             for i in range(len(mag)):
                 new_catalogs[j]["{}".format(i)] = (i, ras[i], decs[i], x[i], y[i], fwhms[i], fwhms[i], mag[i], mag_error[i], smag[i], smag_error[i], aperture_radius, flags[i])
 
+            # turn off calculating fwhm for improved performance.
+            if j == lim_index :
+                calculate_fwhm = False
+                
     return p, new_catalogs
 
 
@@ -4234,7 +4537,6 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
             observed_model = np.full_like(waveplate_angles[keep], np.nan)
 
             try:
-            
                 #logger.info("Computing polarimetry for the following flux array sizes: {} ".format(len(waveplate_angles[keep])))
                 
                 # compute polarimetry
@@ -4290,7 +4592,7 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
                         theor_sigma = norm.theor_sigma['p']
 
             except Exception as e:
-                logger.warn("Could not calculate polarimetry for source_index={} and aperture={} pixels: {}".format(j, apertures[i], e))
+                logger.warn("Could not compute polarimetry for source_index={} and aperture={} pixels: {}".format(j, apertures[i], e))
 
             var_values = [i, apertures[i], j,
                           ra, dec, x1, y1, x2, y2,
@@ -4424,7 +4726,7 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
     aperture_index = 1
 
     # if an aperture index is not given, then consider the one with minimum chi2
-    if aperture_radius == None:
+    if aperture_radius is None:
         minchi2 = 1e30
         for i in range(len(hdul)):
             if hdul[i].name == 'PRIMARY' or hdul[i].header['APRADIUS'] < min_aperture or hdul[i].header['APRADIUS'] > max_aperture:
@@ -4576,6 +4878,11 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
                     
                     observed_model[keep] = halfwave_model(waveplate_angles[keep], qpol.nominal, upol.nominal)
                     
+                    # get zis
+                    zis[keep] = norm.zi.nominal
+                    zierrs[keep] = norm.zi.std_dev
+                    theor_sigma = norm.theor_sigma['p']
+                    
             except Exception as e :
                 logger.warn("Could not compute polarimetry: {}".format(e))
                 pass
@@ -4600,21 +4907,20 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
                     #observed_model[keep] = quarterwave_model(waveplate_angles[keep], qpol.nominal, upol.nominal, vpol.nominal, zero=qzero.nominal)
                     observed_model[keep] = norm.model(norm.psi)
                     
+                    # get zis
+                    zis[keep] = norm.zi.nominal
+                    zierrs[keep] = norm.zi.std_dev
+                    theor_sigma = norm.theor_sigma['p']
+                    
             except Exception as e :
                 logger.warn("Could not compute polarimetry: {}".format(e))
                 pass
-
-                
-        # get zis
-        zis[keep] = norm.zi.nominal
-        zierrs[keep] = norm.zi.std_dev
 
         # cast zi data into QFloat
         zi = QFloat(zis, zierrs)
         # get statistics
         rms = np.sqrt(np.nanmean((zis[keep] - observed_model[keep])**2))
         chi2 = np.nansum(((zis[keep] - observed_model[keep])/zierrs[keep])**2) / (n - m)
-        theor_sigma = norm.theor_sigma['p']
         
     else :
         logger.warn("No useful polarization data for Source index: {}  and aperture: {} pix ".format(source_index, aperture_radius))
@@ -4950,6 +5256,11 @@ def stack_and_reduce_sci_images(p, sci_list, reduce_dir, ref_img="", stack_suffi
                 s4plt.plot_sci_frame(p['OBJECT_STACK'], nstars=20, use_sky_coords=True, output=stack_plot_file)
         except Exception as e:
             logger.warn("Could not generate plot for product {} : {}".format(p['OBJECT_STACK'], e))
+            
+    # clean up catalogs
+    if 'CATALOGS' in p.keys() :
+        del p['CATALOGS']
+        
     return p
 
 

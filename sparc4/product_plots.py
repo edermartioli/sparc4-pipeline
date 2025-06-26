@@ -193,13 +193,10 @@ def plot_sci_frame(filename, cat_ext=3, nstars=5, percentile=98, use_sky_coords=
     else:
 
         plt.plot(x, y, 'wo', ms=mean_aper, fillstyle='none', lw=1.5, alpha=0.7)
-        plt.plot(x[:nstars], y[:nstars], 'k+',
-                 ms=2*mean_aper/3, lw=1.0, alpha=0.7)
+        plt.plot(x[:nstars], y[:nstars], 'k+',ms=2*mean_aper/3, lw=1.0, alpha=0.7)
         for i in range(nstars):
-            plt.text(x[i]+1.1*mean_aper, y[i], '{}'.format(i),
-                     c='darkred', weight='bold', fontsize=18)
-        plt.imshow(img_data, vmin=np.percentile(img_data, 100. - percentile),
-                   vmax=np.percentile(img_data, percentile), origin='lower')
+            plt.text(x[i]+1.1*mean_aper, y[i], '{}'.format(i),c='darkred', weight='bold', fontsize=18)
+        plt.imshow(img_data, vmin=np.percentile(img_data, 100. - percentile),vmax=np.percentile(img_data, percentile), origin='lower')
         plt.xlabel("columns (pixel)", fontsize=18)
         plt.ylabel("rows (pixel)", fontsize=18)
 
@@ -210,7 +207,7 @@ def plot_sci_frame(filename, cat_ext=3, nstars=5, percentile=98, use_sky_coords=
         plt.show()
 
 
-def plot_sci_polar_frame(filename, percentile=99.5, output="", figsize=(10, 10), toplabel="", bottomlabel=""):
+def plot_sci_polar_frame(filename, ord_catalog_name="CATALOG_POL_N_AP010", ext_catalog_name="CATALOG_POL_S_AP010", percentile=99.5, output="", figsize=(10, 10), toplabel="", bottomlabel=""):
     """ Plot science polar frame
 
     Parameters
@@ -231,10 +228,10 @@ def plot_sci_polar_frame(filename, percentile=99.5, output="", figsize=(10, 10),
     # err_data = hdul["PRIMARY"].data[1]
     # mask_data = hdul["PRIMARY"].data[2]
 
-    x_o, y_o = hdul["CATALOG_POL_N_AP010"].data['x'], hdul["CATALOG_POL_N_AP010"].data['y']
-    x_e, y_e = hdul["CATALOG_POL_S_AP010"].data['x'], hdul["CATALOG_POL_S_AP010"].data['y']
+    x_o, y_o = hdul[ord_catalog_name].data['x'], hdul[ord_catalog_name].data['y']
+    x_e, y_e = hdul[ext_catalog_name].data['x'], hdul[ext_catalog_name].data['y']
 
-    mean_aper = np.mean(hdul["CATALOG_POL_N_AP010"].data['APER'])
+    mean_aper = np.mean(hdul[ord_catalog_name].data['APER'])
 
     fig = plt.figure(figsize=figsize)
 
