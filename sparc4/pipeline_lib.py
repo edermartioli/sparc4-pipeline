@@ -2317,7 +2317,7 @@ def select_files_for_stack(p, inputlist, saturation_limit=32768, imagehdu=0, max
             nsources = 0
             try :
                 # detect sources
-                sources = starfind(red_img, threshold=src_detect_threshold, background=0., noise=rms)
+                sources = starfind(red_img, threshold=src_detect_threshold, background=0., noise=rms, sharp_limit=(0.2, 3.0))
                 nsources = len(sources)
             except :
                 logger.info("STACK: skipping image {} of {}: i={} {} -> NSOURCES: {}  bkg: {} meanflux: {} ".format(i+1,max_number_of_files,idx[i],os.path.basename(inputlist[idx[i]]), 0, mbkg, 0))
@@ -2740,7 +2740,7 @@ def calculate_aperture_radius(p, data):
 
     try :
         # detect sources
-        sources = starfind(data, threshold=p['PHOT_THRESHOLD'], background=bkg, noise=rms)
+        sources = starfind(data, threshold=p['PHOT_THRESHOLD'], background=bkg, noise=rms, sharp_limit=(0.2, 3.0))
         # get fwhm
         fwhm = sources.meta['astropop fwhm']
     except Exception as e:
@@ -3665,11 +3665,11 @@ def build_catalogs(p, data, hdr, catalogs=[], xshift=0., yshift=0., solve_astrom
     
         try :
             # detect sources
-            sources = starfind(data, threshold=p["PHOT_THRESHOLD"], background=bkg, noise=rms)
+            sources = starfind(data, threshold=p["PHOT_THRESHOLD"], background=bkg, noise=rms, sharp_limit=(0.2, 3.0))
         except Exception as e:
             logger.warn("Could not build catalog of sources -- ERROR on astropop.starfind() -> {}".format(e))
             return p, new_catalogs
-            
+
         # get fwhm
         fwhm = sources.meta['astropop fwhm']
 
@@ -3694,7 +3694,7 @@ def build_catalogs(p, data, hdr, catalogs=[], xshift=0., yshift=0., solve_astrom
                 # delete preview sorted mask, which has a size inconsistent with the new one
                 del p['SORTED_MASK']
                 # generate catalogs again, now with the SS object added
-                new_catalogs, p = generate_catalogs(p, data, hdr, sources, fwhm, err_data=rms, catalogs=[], aperture_radius=p['PHOT_FIXED_APERTURE'], r_ann=r_ann, polarimetry=polarimetry, solve_astrometry=p["SOLVE_ASTROMETRY_IN_STACK"], exptime=exptime, readnoise=readnoise, sortbyflux=True, ssobj_raw_index=p['SOLAR_SYSTEM_OBJECT_INDEX'], update_xycenter_from_profile_fit=p["UPDATE_XY_SRC_COORDINATES_FROM_PROFILE_FIT_SS_OBJECT"], fwhm_from_global_fit=p["FWHM_FROM_GLOBAL_FIT_IN_STACK"], calculate_fwhm=True)
+                new_catalogs, p = generate_catalogs(p, data, hdr, sources, fwhm, err_data=rms, catalogs=[], aperture_radius=p['PHOT_FIXED_APERTURE'], r_ann=r_ann, polarimetry=polarimetry, solve_astrometry=p["SOLVE_ASTROMETRY_IN_STACK"], exptime=exptime, readnoise=readnoise, sortbyflux=False, ssobj_raw_index=p['SOLAR_SYSTEM_OBJECT_INDEX'], update_xycenter_from_profile_fit=p["UPDATE_XY_SRC_COORDINATES_FROM_PROFILE_FIT_SS_OBJECT"], fwhm_from_global_fit=p["FWHM_FROM_GLOBAL_FIT_IN_STACK"], calculate_fwhm=True)
             # update main target index to the Solar System object index
             if p['UPDATE_TARGET_INDEX_TO_SS_OBJECT'] :
                 p['TARGET_INDEX'] = p['SOLAR_SYSTEM_OBJECT_INDEX']
@@ -3709,7 +3709,7 @@ def build_catalogs(p, data, hdr, catalogs=[], xshift=0., yshift=0., solve_astrom
                 # delete preview sorted mask, which has a size inconsistent with the new one
                 del p['SORTED_MASK']
                 # generate catalogs again, now with the new targets added
-                new_catalogs, p = generate_catalogs(p, data, hdr, sources, fwhm, err_data=rms, catalogs=[], aperture_radius=p['PHOT_FIXED_APERTURE'], r_ann=r_ann, polarimetry=polarimetry, solve_astrometry=p["SOLVE_ASTROMETRY_IN_STACK"], exptime=exptime, readnoise=readnoise, sortbyflux=True, update_xycenter_from_profile_fit=p["UPDATE_XY_SRC_COORDINATES_FROM_PROFILE_FIT"], fwhm_from_global_fit=p["FWHM_FROM_GLOBAL_FIT_IN_STACK"], calculate_fwhm=True)
+                new_catalogs, p = generate_catalogs(p, data, hdr, sources, fwhm, err_data=rms, catalogs=[], aperture_radius=p['PHOT_FIXED_APERTURE'], r_ann=r_ann, polarimetry=polarimetry, solve_astrometry=p["SOLVE_ASTROMETRY_IN_STACK"], exptime=exptime, readnoise=readnoise, sortbyflux=False, update_xycenter_from_profile_fit=p["UPDATE_XY_SRC_COORDINATES_FROM_PROFILE_FIT"], fwhm_from_global_fit=p["FWHM_FROM_GLOBAL_FIT_IN_STACK"], calculate_fwhm=True)
                
                 if p['UPDATE_TARGET_INDEX_FROM_INPUT'] and not p['UPDATE_TARGET_INDEX_TO_SS_OBJECT']:
                     # use current wcs to generate the set of pixel coordinates of input targets
@@ -5212,6 +5212,19 @@ def stack_and_reduce_sci_images(p, sci_list, reduce_dir, ref_img="", stack_suffi
                              stack_suffix=stack_suffix,
                              polarimetry=polarimetry)
 
+    # plot stack frame
+    if match_frames and plot:
+        stack_plot_file = ""
+        if p['PLOT_TO_FILE'] :
+            stack_plot_file = p['OBJECT_STACK'].replace(".fits",p['PLOT_FILE_FORMAT'])
+        try :
+            if polarimetry :
+                s4plt.plot_sci_polar_frame(p['OBJECT_STACK'], percentile=99.5, output=stack_plot_file)
+            else :
+                s4plt.plot_sci_frame(p['OBJECT_STACK'], nstars=20, use_sky_coords=True, output=stack_plot_file)
+        except Exception as e:
+            logger.warn("Could not generate plot for product {} : {}".format(p['OBJECT_STACK'], e))
+    
     # set numbe of science reduction loops to avoid memory issues.
     nloops = int(np.ceil(len(sci_list) / p['MAX_NUMBER_OF_SCI_FRAMES_PER_LOOP']))
 
@@ -5243,19 +5256,6 @@ def stack_and_reduce_sci_images(p, sci_list, reduce_dir, ref_img="", stack_suffi
                                   polarimetry=polarimetry,
                                   plot=plot_proc_frames,
                                   animated_gif=animated_gif)
-
-    # plot stack frame
-    if match_frames and plot:
-        stack_plot_file = ""
-        if p['PLOT_TO_FILE'] :
-            stack_plot_file = p['OBJECT_STACK'].replace(".fits",p['PLOT_FILE_FORMAT'])
-        try :
-            if polarimetry :
-                s4plt.plot_sci_polar_frame(p['OBJECT_STACK'], percentile=99.5, output=stack_plot_file)
-            else :
-                s4plt.plot_sci_frame(p['OBJECT_STACK'], nstars=20, use_sky_coords=True, output=stack_plot_file)
-        except Exception as e:
-            logger.warn("Could not generate plot for product {} : {}".format(p['OBJECT_STACK'], e))
             
     # clean up catalogs
     if 'CATALOGS' in p.keys() :
