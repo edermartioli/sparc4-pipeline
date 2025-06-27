@@ -79,3 +79,7 @@ Version 0.1.6 (2025-02-26)
 - Implemented new calculation of FWHM
 - Fixed inconsistency in the indexation of sources between apertures. 
 - Fixed bug in the variable norm being called out of context 
+
+Version 0.1.7 (2025-07-26)
+------------------------
+- Updated starfind sharp_limit=(0.2, 3.0)
