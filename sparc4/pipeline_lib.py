@@ -2172,10 +2172,15 @@ def stack_science_images(p, inputlist, reduce_dir="./", force=False, stack_suffi
         
             wppos = 0
             if 'WPPOS' in frames[i].header :
-                wppos = int(frames[i].header['WPPOS'])
-                
-            if p["APPLY_FLAT_PER_WPPOS"] and polarimetry and wppos != 0:
-                wppos = int(frames[i].header['WPPOS'])
+                wppos = frames[i].header['WPPOS']
+                if wppos is not int :
+                    try :
+                        wppos = int(frames[i].header['WPPOS'])
+                    except Exception as e:
+                        logger.info("Could not convert the 'WPPOS' keyword value {} to an integer.".format(frames[i].header['WPPOS']))
+                        wppos = 0
+                        
+            if p["APPLY_FLAT_PER_WPPOS"] and polarimetry and type(wppos) is int and wppos != 0:
                 master_flat = p["wppos{:02d}_master_flat".format(wppos)]
                 if os.path.exists(master_flat) :
                     flat_pol_wppos = s4p.getFrameFromMasterCalibration(master_flat)
