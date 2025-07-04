@@ -83,3 +83,4 @@ Version 0.1.6 (2025-02-26)
 Version 0.1.7 (2025-07-26)
 ------------------------
 - Updated starfind sharp_limit=(0.2, 3.0)
+- Fixed bug in casting WPPOS to integer
