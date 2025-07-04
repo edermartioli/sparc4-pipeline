@@ -1939,7 +1939,7 @@ def reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", match_fr
                         wppos = frames[i].header['WPPOS']
                         if wppos is not int :
                             try :
-                                wppos = int(frames[i].header['WPPOS'])
+                                wppos = int(wppos)
                             except Exception as e:
                                 wppos = 0
                                 
@@ -2179,10 +2179,10 @@ def stack_science_images(p, inputlist, reduce_dir="./", force=False, stack_suffi
                 wppos = frames[i].header['WPPOS']
                 if wppos is not int :
                     try :
-                        wppos = int(frames[i].header['WPPOS'])
+                        wppos = int(wppos)
                     except Exception as e:
                         # It is commented below to avoid
-                        logger.warn("Could not convert the 'WPPOS' keyword value {} to an integer.".format(frames[i].header['WPPOS']))
+                        #logger.warn("Could not convert the 'WPPOS' keyword value {} to an integer.".format(frames[i].header['WPPOS']))
                         wppos = 0
                         
             if p["APPLY_FLAT_PER_WPPOS"] and polarimetry and type(wppos) is int and wppos != 0:
