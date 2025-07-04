@@ -1935,9 +1935,14 @@ def reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", match_fr
                     processing.subtract_bias(frame, bias, inplace=True)
                 if p["APPLY_FLATFIELD_CORRECTION"] :
                     wppos = 0
-                    if 'WPPOS' in frames[i].header :
-                        wppos = int(frames[i].header['WPPOS'])
-                        
+                    if 'WPPOS' in frames[i].header  :
+                        wppos = frames[i].header['WPPOS']
+                        if wppos is not int :
+                            try :
+                                wppos = int(frames[i].header['WPPOS'])
+                            except Exception as e:
+                                wppos = 0
+                                
                     if p["APPLY_FLAT_PER_WPPOS"] and polarimetry and wppos != 0:
                         master_flat = p["wppos{:02d}_master_flat".format(wppos)]
                         if os.path.exists(master_flat) :
