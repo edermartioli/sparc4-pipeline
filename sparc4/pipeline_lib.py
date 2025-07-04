@@ -2169,15 +2169,15 @@ def stack_science_images(p, inputlist, reduce_dir="./", force=False, stack_suffi
             processing.subtract_bias(frame, bias, inplace=True)
             
         if p["APPLY_FLATFIELD_CORRECTION"] :
-        
             wppos = 0
-            if 'WPPOS' in frames[i].header :
+            if 'WPPOS' in frames[i].header  and polarimetry:
                 wppos = frames[i].header['WPPOS']
                 if wppos is not int :
                     try :
                         wppos = int(frames[i].header['WPPOS'])
                     except Exception as e:
-                        logger.info("Could not convert the 'WPPOS' keyword value {} to an integer.".format(frames[i].header['WPPOS']))
+                        # It is commented below to avoid
+                        logger.warn("Could not convert the 'WPPOS' keyword value {} to an integer.".format(frames[i].header['WPPOS']))
                         wppos = 0
                         
             if p["APPLY_FLAT_PER_WPPOS"] and polarimetry and type(wppos) is int and wppos != 0:
