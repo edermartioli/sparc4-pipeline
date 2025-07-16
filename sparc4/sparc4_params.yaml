@@ -18,9 +18,9 @@ PLOT_TO_FILE: True
 # set format by extension for plot files
 PLOT_FILE_FORMAT: ".png"
 # plot individual processed frames:
-PLOT_PROC_FRAMES: False
-# to create an animated gif of processed frames. Require installation of ImageMagick "convert" module  
-CREATE_ANIMATED_GIF: False
+PLOT_PROC_FRAMES: True
+# to create an animated gif of processed frames. Require installation of ImageMagick "convert" module
+CREATE_ANIMATED_GIF: True
 
 # set a target list .csv file. Minimal columns: TARGET_ID, RA, DEC
 TARGET_LIST_FILE: ""
@@ -176,6 +176,7 @@ SCI_STACK_SIGMA_CLIP: 10
 
 # define number of files for stack
 NFILES_FOR_STACK: 30
+
 # define saturation limit in ADU to avoid using saturated images in the stack
 #SATURATION_LIMIT: 32000
 SATURATION_LIMIT: 64000
@@ -229,7 +230,7 @@ PHOT_MIN_OFFSET_FOR_SKYOUTERRADIUS: 10
 PHOT_APERTURES: [5,8,10,12,15,20,25]
 
 # Threshold in number of sigmas to detect sources, where sigma = background error
-PHOT_THRESHOLD: 15
+PHOT_THRESHOLD: 20
 #-------------------------------------
 
 #### POLARIMETRY ####
@@ -292,10 +293,12 @@ PLOT_TOTAL_POLARIZATION: True
 SOLVE_ASTROMETRY_WITH_ASTROMETRY_NET: False
 # whether or not to solve astrometry in stack frame
 SOLVE_ASTROMETRY_IN_STACK: True
-# sip_degree to model geometric distortion.
-SIP_DEGREE: 4
-# set number of iterations for astrometric solution
-N_ITER_ASTROMETRY: 1
+# sip_degree to model geometric distortion. Leave it empty if you do not wish to use a SIP model
+SIP_DEGREE:
+# set number of iterations for astrometric solution. Do not iterate more than 4 times.
+N_ITER_ASTROMETRY: 0
+# set factor to enlarge fov to search astrometric references
+FOV_SERACH_FACTOR: 1.5
 # use detected sources in stack for astrometry. ** WARNING ** do not turn this off for polarimetry
 USE_DETECTED_SRC_FOR_ASTROMETRY: True
 
@@ -310,14 +313,14 @@ VIZIER_CATALOG_IDX: 2
 # whether or not to plot stack frame with matched Gaia sources
 # note: by activating this, the plot will pause the reduction processing and will
 #       continue only when the plot window is closed
-PLOT_ASTROMETRY_RESULTS_IN_STACK: False
+PLOT_ASTROMETRY_RESULTS_IN_STACK: True
 
 # whether or not to solve astrometry in individual frames
 # note: depending on the number of frames it will make reduction very slow
 SOLVE_ASTROMETRY_IN_INDIVIDUAL_FRAMES: False
 
 # set maximum number of Gaia source to be matched for astrometric solution
-MAX_NUMBER_OF_GAIA_SRCS_FOR_ASTROMETRY: 50
+MAX_NUMBER_OF_GAIA_SRCS_FOR_ASTROMETRY: 100
 
 # set image plate scale in units of arcseconds per pixel
 PLATE_SCALE: 0.335  # ARCSEC/PIXEL -> SPARC4 1x1 binning

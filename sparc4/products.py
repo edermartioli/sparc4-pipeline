@@ -237,7 +237,8 @@ def scienceImageProduct(original_image, img_data=[], info={}, catalogs=[], polar
     info['POLAR'] = (polarimetry, 'polarimetry frame')
 
     if wcs_header:
-        baseheader += wcs_header
+        baseheader = s4utils.clean_wcs_in_header(baseheader)
+        baseheader.update(wcs_header)
 
     baseheader = s4utils.set_timecoords_keys(baseheader, time_key=time_key, ra=ra, dec=dec)
 

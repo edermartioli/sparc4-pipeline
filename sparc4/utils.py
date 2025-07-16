@@ -30,6 +30,35 @@ from functools import wraps
 
 import logging
 
+from astroquery.gaia import Gaia
+
+
+def clean_wcs_in_header(header) :
+    
+    """ Pipeline module to clean wcs keywords from fits header
+    Parameters
+    ----------
+    header : fits.Header
+        FITS image header
+
+    Returns
+        header : fits.Header
+            Updated clean FITS image header
+    -------
+    """
+
+    wcs_keywords_to_remove = ('WCSAXES', 'CRPIX',
+                              'PC1', 'PC2', 'CDELT', 'CUNIT', 'CTYPE','CRVAL',
+                              'LONPOLE','LATPOLE', 'MJDREF', 'RADESYS',
+                              'A_', 'B_','AP_','BP_')
+    
+    for key in list(header.keys()):
+        if key.startswith(wcs_keywords_to_remove) :
+            del header[key]
+            
+    return header
+
+
 def set_timecoords_keys(hdr, timezone=-3, timetype="", ra="", dec="",
                         set_airmass=True, time_key='DATE-OBS', exptimekey='EXPTIME',
                         longitude=-45.5825, latitude=-22.53444, altitude=1864):
@@ -754,3 +783,53 @@ def start_logger(file_name="") :
         logger.addHandler(file_handler)
     
     return logger
+
+
+
+def gaiadr3_query(ra, dec,
+                  radius=5.,
+                  max_nsrcs=1000,
+                  fields="source_id, ra, dec, parallax, pmra, pmdec, phot_g_mean_mag, phot_bp_mean_mag, phot_rp_mean_mag") :
+
+    """ Pipeline function to perform a query of Gaia sources within a circular sky region of a given radius
+    Parameters
+    ----------
+    ra : float
+        right ascention of the center of the field in degrees
+    dec : float
+        declination of the center of the field in degrees
+    radius : float
+        search radius in arcmin
+    max_nsrcs : int
+        maximum number of sources to return, sorted by magnitude
+    fields : str
+        fields to be returned in output table. WARNING: use only column names of Gaia DR3 table
+
+    Returns
+    -------
+    gaia_tbl : astropy.table.table.Table
+        output table of Gaia DR3 sources
+        
+    """
+
+    radius_deg = radius/60.
+
+    meta = Gaia.load_table('gaiadr3.gaia_source')
+
+    query = f"""SELECT
+                TOP {max_nsrcs}
+                {fields}
+                FROM gaiadr3.gaia_source AS gaia
+                WHERE 1=CONTAINS(
+                    POINT('ICRS', {ra}, {dec}),
+                    CIRCLE('ICRS', gaia.ra, gaia.dec, {radius_deg}))
+                ORDER BY gaia.phot_g_mean_mag
+            """
+    if max_nsrcs < 2000 :
+        job = Gaia.launch_job(query)
+    else :
+        job = Gaia.launch_job_async(query)
+        
+    gaia_tbl = job.get_results()
+    
+    return gaia_tbl

@@ -162,8 +162,9 @@ def plot_sci_frame(filename, cat_ext=3, nstars=5, percentile=98, use_sky_coords=
         # calculate pixel scale
         pixel_scale = proj_plane_pixel_scales(wcs_obj)
 
-        # assume  the N-S component of the pixel scale
+        # assume the N-S component of the pixel scale and convert to arcsec/pixel
         pixel_scale = (pixel_scale[1] * 3600)
+        #print("Pixel scale in Dec: {} arcsec/pixel".format(pixel_scale))
 
         ax = plt.subplot(projection=wcs_obj)
         ax.imshow(img_data, vmin=np.percentile(img_data, 100. - percentile),
