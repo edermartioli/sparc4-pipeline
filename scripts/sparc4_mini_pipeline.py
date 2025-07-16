@@ -55,6 +55,7 @@ p = s4pipelib.init_s4_p(options.nightdir,
                         print_report=options.verbose,
                         param_file=options.params)
 
+
 # Run full reduction for selected channels
 for channel in p['SELECTED_CHANNELS']:
 
@@ -161,6 +162,7 @@ for channel in p['SELECTED_CHANNELS']:
         
             # reduce science data in photometric mode
             p_phot = s4pipelib.reduce_sci_data(db, p_phot, j, p_phot['INSTMODE_PHOTOMETRY_KEYVALUE'], detector_modes[key], options.nightdir, reduce_dir, polar_mode=None, fit_zero=False, detector_mode_key=key, obj=object_id, calw_modes=p_phot['CALW_MODES'], match_frames=p['MATCH_FRAMES'], force=options.force, plot_stack=options.plot, plot_lc=options.plot, plot_polar=False)
+            
         except Exception as e:
             # log messages:
             logger.warn("Could not reduce {} mode, detector mode {} : {}".format(p_phot['INSTMODE_PHOTOMETRY_KEYVALUE'], key, e))
