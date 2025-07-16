@@ -84,3 +84,5 @@ Version 0.1.7 (2025-07-26)
 ------------------------
 - Updated starfind sharp_limit=(0.2, 3.0)
 - Fixed bug in casting WPPOS to integer
+- Changed identification of sources in astrometry using the new pipeline function utils.gaiadr3_query() instead of twirl
+- Fixed bugs in the indexing of SS objects  
