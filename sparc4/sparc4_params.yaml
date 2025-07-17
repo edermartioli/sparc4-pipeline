@@ -18,9 +18,9 @@ PLOT_TO_FILE: True
 # set format by extension for plot files
 PLOT_FILE_FORMAT: ".png"
 # plot individual processed frames:
-PLOT_PROC_FRAMES: True
+PLOT_PROC_FRAMES: False
 # to create an animated gif of processed frames. Require installation of ImageMagick "convert" module
-CREATE_ANIMATED_GIF: True
+CREATE_ANIMATED_GIF: False
 
 # set a target list .csv file. Minimal columns: TARGET_ID, RA, DEC
 TARGET_LIST_FILE: ""
