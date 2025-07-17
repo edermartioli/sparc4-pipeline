@@ -313,7 +313,7 @@ VIZIER_CATALOG_IDX: 2
 # whether or not to plot stack frame with matched Gaia sources
 # note: by activating this, the plot will pause the reduction processing and will
 #       continue only when the plot window is closed
-PLOT_ASTROMETRY_RESULTS_IN_STACK: True
+PLOT_ASTROMETRY_RESULTS_IN_STACK: False
 
 # whether or not to solve astrometry in individual frames
 # note: depending on the number of frames it will make reduction very slow
