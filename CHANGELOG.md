@@ -86,3 +86,5 @@ Version 0.1.7 (2025-07-26)
 - Fixed bug in casting WPPOS to integer
 - Changed identification of sources in astrometry using the new pipeline function utils.gaiadr3_query() instead of twirl
 - Fixed bugs in the indexing of SS objects  
+- Fixed bug in the reduction of SS objects in PHOT mode
+- Fixed bug in plotting 
