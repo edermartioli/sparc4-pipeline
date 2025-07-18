@@ -994,7 +994,7 @@ def get_list_of_catalogs(apertures, inst_mode="PHOT", polar_beam="") :
     return list_of_catalogs
     
 
-def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, reduce_dir, polar_mode=None, fit_zero=False, detector_mode_key="", obj=None, calw_modes=["OFF","None"], match_frames=True, force=False, plot_stack=False, plot_lc=False, plot_polar=False):
+def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, reduce_dir, polar_mode=None, fit_zero=False, detector_mode_key="", obj=None, calw_modes=["OFF","None","CLEAR"], match_frames=True, force=False, plot_stack=False, plot_lc=False, plot_polar=False):
     """ Pipeline module to run the reduction of science data
 
     Parameters
@@ -1106,13 +1106,13 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
         for j in range(len(calws)) :
             calw = calws[j]
             calwsuffix = ""
-            if calw != "OFF" and calw != "None" :
+            if calw != "OFF" and calw != "None" and calw != "CLEAR":
                 calwsuffix = "_{}".format(calw)
                 
             logger.info("Reducing data for calibration wheel mode: {}".format(calw))
 
             # set suffix for output stack filename
-            stack_suffix = "{}_s4c{}{}_{}{}{}".format(nightdir, p['CHANNELS'][channel_index], detector_mode_key, obj.replace(" ", ""), polsuffix, calwsuffix)
+            stack_suffix = "{}_s4c{}{}_{}{}{}".format(nightdir, p['CHANNELS'][channel_index], detector_mode_key, obj.replace(" ", "").replace("/",""), polsuffix, calwsuffix)
 
             # get list of science files matching all selection criteria
             sci_list = s4db.get_file_list(db,
@@ -1139,7 +1139,7 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
                                             plot_proc_frames=p['PLOT_PROC_FRAMES'])
 
             # set suffix for output time series filename
-            ts_suffix = "{}_s4c{}_{}{}".format(nightdir, p['CHANNELS'][channel_index], obj.replace(" ", ""), polsuffix)
+            ts_suffix = "{}_s4c{}_{}{}".format(nightdir, p['CHANNELS'][channel_index], obj.replace(" ", "").replace("/",""), polsuffix)
 
             logger.info("Start generating photometric time series products with suffix: {}".format(ts_suffix))
     
@@ -1990,7 +1990,7 @@ def reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", match_fr
                     frame_catalogs = []
 
                 logger.info("Saving frame {} of {}: {} -> {}".format(i+1, len(frames), obj_fg.files[i], obj_red_images[i]))
-
+                
                 frame_wcs_header = deepcopy(p['WCS_HEADER'])
 
                 # call function to generate final product
@@ -3806,12 +3806,15 @@ def build_catalogs(p, data, hdr, catalogs=[], xshift=0., yshift=0., solve_astrom
                 #eph = ssobj.ephemerides()
                 ss_pix_coords = np.array(p["WCS"].world_to_pixel_values([[eph['RA'][0], eph['DEC'][0]]]))
                 
-                if (j % 2) == 0 :
-                    x[idx], y[idx] = ss_pix_coords[0][0], ss_pix_coords[0][1]
+                if polarimetry :
+                    if (j % 2) == 0 :
+                        x[idx], y[idx] = ss_pix_coords[0][0], ss_pix_coords[0][1]
+                    else :
+                        x[idx] = ss_pix_coords[0][0]+p["POLAR_DUAL_BEAM_PIX_DISTANCE_X"]
+                        y[idx] = ss_pix_coords[0][1]+p["POLAR_DUAL_BEAM_PIX_DISTANCE_Y"]
                 else :
-                    x[idx] = ss_pix_coords[0][0]+p["POLAR_DUAL_BEAM_PIX_DISTANCE_X"]
-                    y[idx] = ss_pix_coords[0][1]+p["POLAR_DUAL_BEAM_PIX_DISTANCE_Y"]
-                
+                    x[idx], y[idx] = ss_pix_coords[0][0], ss_pix_coords[0][1]
+                    
             aperture_radius = catalogs[j]['0'][11]
             r_ann = set_sky_aperture(p, aperture_radius)
 

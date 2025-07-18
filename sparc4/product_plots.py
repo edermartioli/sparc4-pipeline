@@ -146,14 +146,6 @@ def plot_sci_frame(filename, cat_ext=3, nstars=5, percentile=98, use_sky_coords=
         nstars = len(x)
 
     fig = plt.figure(figsize=figsize)
-
-    if toplabel != "" :
-        xmax, ymax = np.shape(img_data)
-        plt.annotate(toplabel, [xmax-500, ymax-40], color='w', fontsize=17, alpha=0.75)
-        
-    if bottomlabel != "" :
-        xmax, ymax = np.shape(img_data)
-        plt.annotate(bottomlabel, [xmax-550, 10], color='w', fontsize=14, alpha=0.75)
         
     if use_sky_coords:
         # load WCS from image header
@@ -200,6 +192,14 @@ def plot_sci_frame(filename, cat_ext=3, nstars=5, percentile=98, use_sky_coords=
         plt.imshow(img_data, vmin=np.percentile(img_data, 100. - percentile),vmax=np.percentile(img_data, percentile), origin='lower')
         plt.xlabel("columns (pixel)", fontsize=18)
         plt.ylabel("rows (pixel)", fontsize=18)
+
+    if toplabel != "" :
+        xmax, ymax = np.shape(img_data)
+        plt.annotate(toplabel, [xmax-500, ymax-40], color='w', fontsize=17, alpha=0.75)
+        
+    if bottomlabel != "" :
+        xmax, ymax = np.shape(img_data)
+        plt.annotate(bottomlabel, [xmax-550, 10], color='w', fontsize=14, alpha=0.75)
 
     if output != '' :
         fig.savefig(output, bbox_inches='tight')
