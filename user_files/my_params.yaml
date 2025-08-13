@@ -323,7 +323,7 @@ SOLVE_ASTROMETRY_IN_INDIVIDUAL_FRAMES: False
 MAX_NUMBER_OF_GAIA_SRCS_FOR_ASTROMETRY: 100
 
 # set image plate scale in units of arcseconds per pixel
-PLATE_SCALE: 0.335  # ARCSEC/PIXEL -> SPARC4 1x1 binning
+PLATE_SCALE: 0.341  # ARCSEC/PIXEL -> SPARC4 1x1 binning
 
 # order of polynomial to fit astrometry solution
 TWEAK_ORDER: 3
