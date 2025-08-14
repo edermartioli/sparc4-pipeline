@@ -175,7 +175,7 @@ def readScienceImageCatalogs(input):
     return catalogs
 
 
-def scienceImageProduct(original_image, img_data=[], info={}, catalogs=[], polarimetry=False, filename="", catalog_beam_ids=["S", "N"], wcs_header=None, time_key="DATE-OBS", ra="", dec=""):
+def scienceImageProduct(original_image, img_data=[], info={}, catalogs=[], polarimetry=False, filename="", catalog_beam_ids=["S", "N"], wcs_header=None, time_key="DATE-OBS", exptime_key="EXPTIME", ra="", dec=""):
     """ Create a Science FITS image product
 
     Parameters
@@ -214,6 +214,8 @@ def scienceImageProduct(original_image, img_data=[], info={}, catalogs=[], polar
         FITS header containing the WCS information. This will be appended to the main header.
     time_key : str, optional
         string to point to the main date keyword in FITS header
+    exptime_key : str, optional
+        string to point to the main exposure time keyword in FITS header
     ra : str, optional
         string to overwrite header RA (Right Ascension) keyword
     dec : str, optional
@@ -240,7 +242,7 @@ def scienceImageProduct(original_image, img_data=[], info={}, catalogs=[], polar
         baseheader = s4utils.clean_wcs_in_header(baseheader)
         baseheader.update(wcs_header)
 
-    baseheader = s4utils.set_timecoords_keys(baseheader, time_key=time_key, ra=ra, dec=dec)
+    baseheader = s4utils.set_timecoords_keys(baseheader, time_key=time_key, ra=ra, dec=dec, exptimekey=exptime_key)
 
     # create primary hdu with header of base image
     primary_hdu = fits.PrimaryHDU(header=baseheader)

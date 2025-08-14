@@ -1133,9 +1133,9 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
                                             ref_img="",
                                             stack_suffix=stack_suffix,
                                             force=force,
-                                            match_frames=match_frames,
                                             polarimetry=polarimetry,
                                             plot=plot_stack,
+                                            match_frames=match_frames,
                                             plot_proc_frames=p['PLOT_PROC_FRAMES'])
 
             # set suffix for output time series filename
@@ -1401,8 +1401,7 @@ def run_master_calibration(p, inputlist=[], output="", obstype='bias', data_dir=
 
     if inputlist == []:
         # select FITS files in the data directory and build database
-        main_fg = FitsFileGroup(
-            location=data_dir, fits_ext=p['CALIB_WILD_CARDS'], ext=0)
+        main_fg = FitsFileGroup(location=data_dir, fits_ext=p['CALIB_WILD_CARDS'], ext=0)
         # print total number of files selected:
         logger.info(f'Total number of files selected : {len(main_fg)}')
 
@@ -1963,7 +1962,10 @@ def reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", match_fr
                         info['YSHIFT'] = (p["YSHIFTS"][i], "register y shift (pixel)")
                     else:
                         info['YSHIFTST'] = ("UNDEFINED", "y shift status")
-            
+                else :
+                    p["XSHIFTS"][i] = 0
+                    p["YSHIFTS"][i] = 0
+                    
                 # get data arrays
                 img_data = np.array(frame.data)
                 #err_data = np.array(frame.get_uncertainty())
@@ -1980,7 +1982,7 @@ def reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", match_fr
                 logger.info("Exposure time: {:.2f} s; Readout noise: {:.2f} e-".format(exptime,readnoise))
                 try:
                     # make catalog
-                    if match_frames and "CATALOGS" in p.keys():
+                    if "CATALOGS" in p.keys():
                         p, frame_catalogs = build_catalogs(p, img_data, frames[i].header, deepcopy(p["CATALOGS"]), xshift=p["XSHIFTS"][i], yshift=p["YSHIFTS"][i], polarimetry=polarimetry, exptime=exptime, readnoise=readnoise, set_wcs_from_database=False)
                     else:
                         p, frame_catalogs = build_catalogs(p, img_data, frames[i].header, polarimetry=polarimetry, exptime=exptime, readnoise=readnoise, set_wcs_from_database=False)
@@ -1994,7 +1996,7 @@ def reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", match_fr
                 frame_wcs_header = deepcopy(p['WCS_HEADER'])
 
                 # call function to generate final product
-                hdul_frame = s4p.scienceImageProduct(obj_fg.files[i], img_data=img_data, info=info, catalogs=frame_catalogs,polarimetry=polarimetry,filename=obj_red_images[i], catalog_beam_ids=p['CATALOG_BEAM_IDS'],wcs_header=frame_wcs_header,time_key=p["TIME_KEY"], ra=ra, dec=dec)
+                hdul_frame = s4p.scienceImageProduct(obj_fg.files[i], img_data=img_data, info=info, catalogs=frame_catalogs,polarimetry=polarimetry,filename=obj_red_images[i], catalog_beam_ids=p['CATALOG_BEAM_IDS'],wcs_header=frame_wcs_header,time_key=p["TIME_KEY"], exptime_key=p["EXPTIMEKEY"], ra=ra, dec=dec)
                 
                 # plot individual proc frames
                 if plot :
@@ -2652,7 +2654,7 @@ def run_register_frames(p, inframes, inobj_files, info, output_stack="", force=F
     # save stack product
     if output_stack != "":
         if not os.path.exists(output_stack) or force:
-            s4p.scienceImageProduct(obj_files[0], img_data=img_data, info=info, catalogs=p["CATALOGS"], polarimetry=polarimetry,filename=output_stack, catalog_beam_ids=p['CATALOG_BEAM_IDS'], wcs_header=p['WCS_HEADER'], time_key=p["TIME_KEY"])
+            s4p.scienceImageProduct(obj_files[0], img_data=img_data, info=info, catalogs=p["CATALOGS"], polarimetry=polarimetry,filename=output_stack, catalog_beam_ids=p['CATALOG_BEAM_IDS'], wcs_header=p['WCS_HEADER'], time_key=p["TIME_KEY"], exptime_key=p["EXPTIMEKEY"])
 
     return p
 
@@ -2874,7 +2876,7 @@ def read_catalog_coords(catalog):
     return ra, dec, x, y
 
 
-def set_wcs_from_astrom_ref_image(ref_filename, header, ra_deg=None, dec_deg=None):
+def set_wcs_from_astrom_ref_image(ref_filename, header, ra_deg=None, dec_deg=None, time_key="DATE-OBS"):
     """ Pipeline module to set WCS header parameters from an input header of a
             reference image. The reference image is usually an astrometric field.
     Parameters
@@ -2887,6 +2889,9 @@ def set_wcs_from_astrom_ref_image(ref_filename, header, ra_deg=None, dec_deg=Non
         right ascension in deg, overwrite header value
     dec_deg : float, optional
         declination in deg, overwrite header value
+    time_key : str, optional
+        time keyword
+        
     Returns
         w :
         updated WCS object
@@ -2895,12 +2900,16 @@ def set_wcs_from_astrom_ref_image(ref_filename, header, ra_deg=None, dec_deg=Non
     """
     
     if (ra_deg is None) or (dec_deg is None) :
-        # get ra and dec from current header
-        ra, dec = header['RA'].split(":"), header['DEC'].split(":")
+        try :
+            # get ra and dec from current header
+            ra, dec = header['RA'].split(":"), header['DEC'].split(":")
+        except :
+            ra = ["0","0","0"]
+            dec = ["0","0","0"]
+            
         ra_str = '{:02d}h{:02d}m{:.2f}s'.format(int(ra[0]), int(ra[1]), float(ra[2]))
         dec_str = '{:02d}d{:02d}m{:.2f}s'.format(int(dec[0]), int(dec[1]), float(dec[2]))
         #print("RA=",ra_str, "DEC=",dec_str)
-    
         # set object coordinates as SkyCoords
         coord = SkyCoord(ra_str, dec_str, frame='icrs')
     
@@ -2927,7 +2936,7 @@ def set_wcs_from_astrom_ref_image(ref_filename, header, ra_deg=None, dec_deg=Non
     wcs_hdr = w.to_header(relax=True)
     
     # update date-obs in wcs
-    wcs_hdr['DATE-OBS'] = header["DATE-OBS"]
+    wcs_hdr['DATE-OBS'] = header[time_key]
         
     # update wcs object
     w = WCS(wcs_hdr,naxis=2)
@@ -3120,7 +3129,7 @@ def generate_catalogs(p, data, hdr, sources, fwhm, err_data=None, catalogs=[], c
             except Exception as e:
             
                 logger.warn("Could not solve astrometry in POLAR-MODE, using WCS from database: {}".format(e))
-                p['WCS'] = set_wcs_from_astrom_ref_image(p["ASTROM_REF_IMG"], hdr, ra_deg=p['RA_DEG'], dec_deg=p['DEC_DEG'])
+                p['WCS'] = set_wcs_from_astrom_ref_image(p["ASTROM_REF_IMG"], hdr, ra_deg=p['RA_DEG'], dec_deg=p['DEC_DEG'],time_key=p['TIME_KEY'])
             
         if 'WCS_HEADER' in p.keys() :
             # clean wcs header keywords
@@ -3210,7 +3219,7 @@ def generate_catalogs(p, data, hdr, sources, fwhm, err_data=None, catalogs=[], c
                     
             except Exception as e:
                 logger.warn("Could not solve astrometry in PHOT-MODE, using WCS from database: {}".format(e))
-                p['WCS'] = set_wcs_from_astrom_ref_image(p["ASTROM_REF_IMG"], hdr, ra_deg=p['RA_DEG'], dec_deg=p['DEC_DEG'])
+                p['WCS'] = set_wcs_from_astrom_ref_image(p["ASTROM_REF_IMG"], hdr, ra_deg=p['RA_DEG'], dec_deg=p['DEC_DEG'],time_key=p['TIME_KEY'])
                 
         if 'WCS_HEADER' in p.keys() :
             # clean wcs header keywords
@@ -3631,8 +3640,11 @@ def build_catalogs(p, data, hdr, catalogs=[], xshift=0., yshift=0., solve_astrom
     # hdul = fits.open(image_name, mode = "readonly")
     # data = np.array(hdul[0].data, dtype=float)
        
-    p['RA_DEG'], p['DEC_DEG'] = None, None
-    
+    if 'RA_DEG' not in p.keys():
+        p['RA_DEG'] = None
+    if 'DEC_DEG' not in p.keys():
+        p['DEC_DEG'] = None
+       
     if p['SOLAR_SYSTEM_OBJECT'] :
         # For solar system object, query object id through JPL Horizons to get ephemerides for observation time
         obstime = Time(hdr[p['TIME_KEY']], format='isot', scale='utc')
@@ -3643,7 +3655,7 @@ def build_catalogs(p, data, hdr, catalogs=[], xshift=0., yshift=0., solve_astrom
         logger.info("Solar System object {} detected, setting coordinates at center: RA={} Dec={}".format(p['SOLAR_SYSTEM_OBJECT_ID'],p['RA_DEG'], p['DEC_DEG']))
         
     # set wcs from a reference image in the database
-    p['WCS'] = set_wcs_from_astrom_ref_image(p["ASTROM_REF_IMG"], hdr, ra_deg=p['RA_DEG'], dec_deg=p['DEC_DEG'])
+    p['WCS'] = set_wcs_from_astrom_ref_image(p["ASTROM_REF_IMG"], hdr, ra_deg=p['RA_DEG'], dec_deg=p['DEC_DEG'],time_key=p['TIME_KEY'])
     
     #print("******* DEBUG ASTROMETRY **********")
     #print("WCS:\n{}".format(p['WCS']))
@@ -3874,6 +3886,10 @@ def phot_time_series(sci_list,
                      catalog_names=[],
                      time_span_for_rms=5,
                      keys_to_add_header_data=[],
+                     filter=None,
+                     photometric_system="SPARC4",
+                     ra_deg=None,
+                     dec_deg=None,
                      best_apertures=False,
                      force=True):
     """ Pipeline module to calculate photometry differential time series for a given list of sparc4 sci image products
@@ -3905,6 +3921,10 @@ def phot_time_series(sci_list,
         calculate running rms.
     keys_to_add_header_data : list of str, optional
         list of header keywords to get data from and include in time series
+    filter : str (optional)
+        pass band filter name
+    photometric_system : str (optional)
+        photometric system for the pass band
     best_apertures : bool, optional
         Boolean to include extension with best apertures
     force : bool, optional
@@ -3986,17 +4006,29 @@ def phot_time_series(sci_list,
     info['OBSALT'] = (altitude, '[m] observatory altitude')
     info['TELESCOP'] = ('OPD-PE 1.6m', 'telescope')
     info['INSTRUME'] = ('SPARC4', 'instrument')
-    info['CHANNEL'] = (hdr["CHANNEL"], 'Instrument channel')
-    info['OBJECT'] = (hdr["OBJECT"], 'ID of object of interest')
+    if filter :
+        info['FILTER'] = (filter, 'filter')
+    if "CHANNEL" in hdr.keys() :
+        info['CHANNEL'] = (hdr["CHANNEL"], 'Instrument channel')
+    if "OBJECT" in hdr.keys() :
+        info['OBJECT'] = (hdr["OBJECT"], 'ID of object of interest')
     equinox = 'J2000.0'
-    source = SkyCoord(hdr["RA"], hdr["DEC"], unit=(
-        u.hourangle, u.deg), frame='icrs', equinox=equinox)
-    info['RA'] = (source.ra.value, '[DEG] RA of object of interest')
-    info['DEC'] = (source.dec.value, '[DEG] DEC of object of interest')
+
+    if "RA" in hdr.keys() and "DEC" in hdr.keys() :
+        source = SkyCoord(hdr["RA"], hdr["DEC"], unit=(
+            u.hourangle, u.deg), frame='icrs', equinox=equinox)
+        info['RA'] = (source.ra.value, '[DEG] RA of object of interest')
+        info['DEC'] = (source.dec.value, '[DEG] DEC of object of interest')
+        
+    if ra_deg :
+        info['RA'] = (ra_deg, '[DEG] RA of object of interest')
+    if dec_deg :
+        info['DEC'] = (dec_deg, '[DEG] DEC of object of interest')
+
     info['RADESYS'] = ('ICRS    ', 'reference frame of celestial coordinates')
     info['EQUINOX'] = (2000.0, 'equinox of celestial coordinate system')
     info['PHZEROP'] = (0., '[mag] photometric zero point')
-    info['PHOTSYS'] = ("SPARC4", 'photometric system')
+    info['PHOTSYS'] = (photometric_system, 'photometric system')
     info['TIMEKEY'] = (time_key, 'keyword used to extract times')
     info['TIMEFMT'] = (time_format, 'time format in img files')
     info['TIMESCL'] = (time_scale, 'time scale')
@@ -5180,7 +5212,7 @@ def psf_analysis(filename, aperture=10, half_windowsize=15, nsources=0, percenti
     return loc
 
 
-def stack_and_reduce_sci_images(p, sci_list, reduce_dir, ref_img="", stack_suffix="", force=True, match_frames=True, polarimetry=False, plot=False, plot_proc_frames=False):
+def stack_and_reduce_sci_images(p, sci_list, reduce_dir, ref_img="", stack_suffix="", force=True, polarimetry=False, match_frames=True, plot=False, plot_proc_frames=False):
     """ Pipeline module to run stack and reduction of science images
 
     Parameters
@@ -5197,10 +5229,10 @@ def stack_and_reduce_sci_images(p, sci_list, reduce_dir, ref_img="", stack_suffi
         suffix to be appended to the output stack file name
     force : bool
         force reduction, even if products already exist
-    match_frames : bool
-        match frames in sci list
     polarimetry : bool
         is it polarimetry data?
+    match_frames : bool
+        whether or not to apply shifts to match frames
     plot : bool
         do plots
     plot_proc_frames : bool
@@ -5225,7 +5257,7 @@ def stack_and_reduce_sci_images(p, sci_list, reduce_dir, ref_img="", stack_suffi
                              polarimetry=polarimetry)
 
     # plot stack frame
-    if match_frames and plot:
+    if plot:
         stack_plot_file = ""
         if p['PLOT_TO_FILE'] :
             stack_plot_file = p['OBJECT_STACK'].replace(".fits",p['PLOT_FILE_FORMAT'])

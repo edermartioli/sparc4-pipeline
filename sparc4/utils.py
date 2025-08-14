@@ -31,6 +31,7 @@ from functools import wraps
 import logging
 
 from astroquery.gaia import Gaia
+from astroquery.simbad import Simbad
 
 
 def clean_wcs_in_header(header) :
@@ -833,3 +834,47 @@ def gaiadr3_query(ra, dec,
     gaia_tbl = job.get_results()
     
     return gaia_tbl
+
+
+def match_object_with_simbad(obj_id, ra=None, dec=None, search_radius_arcsec=10) :
+
+    """ Module to match a given object id with Simbad
+    Parameters
+    ----------
+    objprods: dict
+        data container to store products
+    ra: float (optional)
+        right ascension (deg)
+    dec: float (optional)
+        declination (deg)
+    search_radius_arcsec: float
+        search radius in units of arcseconds
+    Returns
+        obj_match_simbad, coord: simbad_entry, SkyCoord()
+    -------
+    """
+
+    obj_match_simbad, coord = None, None
+    
+    try :
+        print("Querying SIMBAD database to match object ID={}".format(obj_id))
+        # query SIMBAD repository to match object by ID
+        obj_match_simbad = Simbad.query_object(obj_id)
+    except :
+        if ra is not None and dec is not None :
+            print("Querying SIMBAD database to match an object at RA={} DEC={}".format(ra, dec))
+            # cast input coordinates into SkyCoord
+            coord = SkyCoord(ra, dec, unit=(u.deg, u.deg), frame='icrs')
+            # query SIMBAD repository to match an object by coordinates
+            obj_match_simbad = Simbad.query_region(coord, radius = search_radius_arcsec * (1./3600.) * u.deg)
+        else :
+            print("WARNING: could not find Simbad match for object {}".format(obj_id))
+
+    if obj_match_simbad is not None :
+        ra = obj_match_simbad["RA"][0]
+        dec = obj_match_simbad["DEC"][0]
+    
+        # cast coordinates into SkyCoord
+        coord = SkyCoord(ra, dec, unit=(u.hourangle, u.deg), frame='icrs')
+
+    return obj_match_simbad, coord
