@@ -152,7 +152,8 @@ SHIFT_ALGORITHM: 'cross-correlation'
 UPSAMPLEFACTOR: 4
 
 ### STACK ###
-# whether or not to match frames with the stack for registration
+# whether or not to match frames with the stack for registration.
+# Turning off this parameter can be useful for reducing data obtained with a polarizer.
 MATCH_FRAMES: True
 
 # method to select files for stack
