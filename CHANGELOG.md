@@ -1,11 +1,11 @@
-Version 0.1.0 (2023-XX-XX)
+Version 1.0 (2023-XX-XX)
 ------------------------
 
 - First initial stable release.
 - Included pip instalation using pyproject.toml
 - Reorganized layout using `sparc4` module. All library routines goes there.
 
-Version 0.1.1 (2024-04-10)
+Version 1.1 (2024-04-10)
 ------------------------
 
 - Allows modifying the directory tree with the channels inside the night directory.
@@ -19,7 +19,7 @@ Version 0.1.1 (2024-04-10)
 - Flats usage implemented by blade position.
 - plot_light_curve() function transformed into an analysis tool. Allows saving the analysis to a file.
 
-Version 0.1.2 (2024-04-25)
+Version 1.2 (2024-04-25)
 ------------------------
 
 - New text file containing a "night report"
@@ -88,3 +88,7 @@ Version 0.1.7 (2025-07-26)
 - Fixed bugs in the indexing of SS objects  
 - Fixed bug in the reduction of SS objects in PHOT mode
 - Fixed bug in plotting 
+- Improved robustness to allow using the pipeline with another instrument
+- Included the robo43_pipeline.py   
+- Fixed bugs when not using match_frames option
+ 
