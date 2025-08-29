@@ -178,7 +178,7 @@ def plot_sci_frame(filename, cat_ext=3, nstars=5, percentile=98, use_sky_coords=
                          weight='bold', fontsize=18,
                          transform=ax.get_transform('icrs'))
 
-        plt.xlabel(r'rA', fontsize=14)
+        plt.xlabel(r'ra', fontsize=14)
         plt.ylabel(r'dec', fontsize=14)
         overlay = ax.get_coords_overlay('icrs')
         overlay.grid(color='white', ls='dotted')
@@ -391,21 +391,29 @@ def plot_light_curve(filename, target=0, comps=[], nsig=10,
     fwhm = target_tbl['FWHM']
 
     if plot_coords:
-        fig = plt.figure(figsize=figsize)
+    
+        fig, axs = plt.subplots(3, figsize=figsize, sharex=True, sharey=False)
+        
         use_sky_coords = True
         platescale, unit = 1.0, 'pix'
         if use_sky_coords:
             platescale, unit = 0.335, 'arcsec'
         
-        pixoffset = 7*platescale
         # fig, axs = plt.subplots(4, 1, figsize=(12, 6), sharex=True, sharey=False, gridspec_kw={'hspace': 0, 'height_ratios': [1, 1, 1, 1]})
-        plt.plot(time, (x-np.nanmedian(x))*platescale + pixoffset, '.', color='darkblue', label='x-offset')
-        plt.plot(time, (y-np.nanmedian(y))*platescale - pixoffset, '.', color='brown', label='y-offset')
+        axs[0].plot(time, (x-np.nanmedian(x))*platescale, '.', color='darkblue', label='x-offset')
+        axs[0].set_ylabel(r"$\Delta$x ({})".format(unit), fontsize=14)
+        axs[0].legend(fontsize=10)
+
+        axs[1].plot(time, (y-np.nanmedian(y))*platescale, '.', color='brown', label='y-offset')
+        axs[1].set_ylabel(r"$\Delta$y ({})".format(unit), fontsize=14)
+        axs[1].legend(fontsize=10)
+
         mfhwm = np.nanmedian(fwhm)
-        plt.plot(time, (fwhm-mfhwm)*platescale, '.', color='darkgreen', label='FWHM - median={:.1f} {}'.format(mfhwm*platescale, unit))
-        plt.xlabel(r"time (BJD)", fontsize=16)
-        plt.ylabel(r"$\Delta$ {}".format(unit), fontsize=16)
-        plt.legend(fontsize=10)
+        axs[2].plot(time, (fwhm-mfhwm)*platescale, '.', color='darkgreen', label='FWHM - median={:.1f} {}'.format(mfhwm*platescale, unit))
+        axs[2].set_ylabel(r"$\Delta$FWHM ({})".format(unit), fontsize=14)
+
+        axs[2].set_xlabel(r"time (BJD)", fontsize=14)
+        axs[2].legend(fontsize=10)
         if output_coords != '' :
             fig.savefig(output_coords, bbox_inches='tight')
             plt.close(fig)

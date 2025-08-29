@@ -994,7 +994,7 @@ def get_list_of_catalogs(apertures, inst_mode="PHOT", polar_beam="") :
     return list_of_catalogs
     
 
-def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, reduce_dir, polar_mode=None, fit_zero=False, detector_mode_key="", obj=None, calw_modes=["OFF","None","CLEAR"], match_frames=True, force=False, plot_stack=False, plot_lc=False, plot_polar=False):
+def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, reduce_dir, polar_mode=None, fit_zero=False, detector_mode_key="", obj=None, calw_modes=["OFF","None","NONE","CLEAR"], match_frames=True, force=False, plot_stack=False, plot_lc=False, plot_polar=False):
     """ Pipeline module to run the reduction of science data
 
     Parameters
@@ -2629,11 +2629,14 @@ def run_register_frames(p, inframes, inobj_files, info, output_stack="", force=F
     # print(shift_list)
 
     # register frames
-    if p['SHIFT_ALGORITHM'] == 'cross-correlation':
-        registered_frames = register_framedata_list(frames, algorithm=p['SHIFT_ALGORITHM'], ref_image=0, inplace=False, skip_failure=True, upsample_factor=p['UPSAMPLEFACTOR'])
+    if p['MATCH_FRAMES'] :
+        if p['SHIFT_ALGORITHM'] == 'cross-correlation':
+            registered_frames = register_framedata_list(frames, algorithm=p['SHIFT_ALGORITHM'], ref_image=0, inplace=False, skip_failure=True, upsample_factor=p['UPSAMPLEFACTOR'])
+        else :
+            registered_frames = register_framedata_list(frames, algorithm=p['SHIFT_ALGORITHM'], ref_image=0, inplace=False, skip_failure=True)
     else :
-        registered_frames = register_framedata_list(frames, algorithm=p['SHIFT_ALGORITHM'], ref_image=0, inplace=False, skip_failure=True)
-
+        registered_frames = frames
+        
     # stack all object files
     combined = imcombine(registered_frames, method=stack_method, sigma_clip=p['SCI_STACK_SIGMA_CLIP'], sigma_cen_func='median', sigma_dev_func='std')
 
@@ -2945,6 +2948,7 @@ def set_wcs_from_astrom_ref_image(ref_filename, header, ra_deg=None, dec_deg=Non
 
 
 def generate_catalogs(p, data, hdr, sources, fwhm, err_data=None, catalogs=[], catalogs_label='', aperture_radius=10, r_ann=(25, 50), sortbyflux=True, maxnsources=0, polarimetry=False, use_e_beam_for_astrometry=True, solve_astrometry=False, exptime=1.0, readnoise=0., ssobj_raw_index=None, update_xycenter_from_profile_fit=False, fwhm_from_global_fit=True, calculate_fwhm=False):
+
     """ Pipeline module to generate new catalogs and append it
     to a given list of catalogs
     Parameters
@@ -3663,7 +3667,7 @@ def build_catalogs(p, data, hdr, catalogs=[], xshift=0., yshift=0., solve_astrom
     # create a copy of input catalogs
     new_catalogs = deepcopy(catalogs)
  
-    if stackmode:
+    if stackmode :
         new_catalogs = []
 
     # When no catalog is provided, generate a new one (usually on stack image)
