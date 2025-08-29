@@ -91,4 +91,9 @@ Version 0.1.7 (2025-07-26)
 - Improved robustness to allow using the pipeline with another instrument
 - Included the robo43_pipeline.py   
 - Fixed bugs when not using match_frames option
- 
+- Fixed bug in all time quantities (BJD, MJD, etc.) introduced by the WCS update
+- Removed calculations of shifts for stacking when turn off parameter "MATCH_FRAMES: False"
+- Implemented a 3-panels format for the x,y,fwhm plot
+
+Version 0.1.8 (2025-08-28)
+------------------------
