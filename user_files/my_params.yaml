@@ -123,8 +123,8 @@ EXPTIMEKEY: 'EXPTIME' # for SPARC4
 # readout noise keyword in the header of raw images
 READNOISEKEY: "RDNOISE"
 
-# DEFINE CALIBRATION WHEEL MODES: OFF or None, POLARIZER, or DEPOLARIZER
-# CALW_MODES: ["OFF","None","POLARIZER","DEPOLARIZER"] # uncomment this line to include observations in all CALW modes
+# DEFINE CALIBRATION WHEEL MODES: OFF or None or CLEAR, POLARIZER, or DEPOLARIZER
+#CALW_MODES: ["OFF","None","NONE","CLEAR","POLARIZER","DEPOLARIZER"] # uncomment this line to include observations in all CALW modes
 CALW_MODES: ["OFF","None","NONE","CLEAR"]
 
 # Whether or not to apply cosmic ray rejection algorithm (LACOSMIC)
@@ -152,7 +152,7 @@ SHIFT_ALGORITHM: 'cross-correlation'
 UPSAMPLEFACTOR: 4
 
 ### STACK ###
-# whether or not to match frames with the stack for registration.
+# whether or not to match frames with the stack for registration. All SHIFTS are set to zero.
 # Turning off this parameter can be useful for reducing data obtained with a polarizer.
 MATCH_FRAMES: True
 
@@ -173,7 +173,7 @@ SIMIL_SKIP_N_BRIGHTEST: 2
 #SCI_STACK_METHOD: 'median'
 SCI_STACK_METHOD: 'mean'
 # set number of sigmas to clip in case of 'mean' method
-SCI_STACK_SIGMA_CLIP: 10
+SCI_STACK_SIGMA_CLIP: 20
 
 # define number of files for stack
 NFILES_FOR_STACK: 30
