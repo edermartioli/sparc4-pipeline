@@ -97,3 +97,10 @@ Version 0.1.7 (2025-07-26)
 
 Version 0.1.8 (2025-08-28)
 ------------------------
+- Fixed bug in s4db.get_file_list(), when selecting data by obstype
+- Include division of total flux by the number of frames in polar sequence for consistency
+- Inlcuded explicitly the ICRS frame in WCS from astrometric solution. 
+- Fixed possible bug in s4pipelib.build_target_list_from_data()
+- Fixed DeprecationWarning: replaced logging.warn by logging.warning throughout the packages 
+- Fixed problem with units of TimeDelta, which is probably what was causing the skipped objects
+- Included k in the label of polar plot
