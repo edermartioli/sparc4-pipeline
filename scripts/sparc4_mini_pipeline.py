@@ -101,7 +101,7 @@ for channel in p['SELECTED_CHANNELS']:
     
     if db is None :
         # log messages:
-        logger.warn("No files detected for reduction of channel {}, skipping channel.".format(channel))
+        logger.warning("No files detected for reduction of channel {}, skipping channel.".format(channel))
         continue
         
     # Create target list file name for a given night and channel
@@ -120,10 +120,11 @@ for channel in p['SELECTED_CHANNELS']:
     logger.info("Generating target list and saving to file: {}".format(p["TARGET_LIST_FILE"]))
     # Add targets that has a SIMBAD match with either the OBJECT or RA/DEC key values
     target_list = s4pipelib.build_target_list_from_data(p['objects'][j], p['obj_skycoords'][j], search_radius_arcsec=p["COORD_SEARCH_RADIUS_IN_ARCSEC"], target_list=options.target_list, output=p["TARGET_LIST_FILE"])
+    
     if options.verbose :
         print("Target list table:")
         print(target_list)
-
+    
     # log messages:
     logger.info("Identifying detector modes")
     # detect all detector modes
@@ -164,7 +165,7 @@ for channel in p['SELECTED_CHANNELS']:
             p_phot = s4pipelib.reduce_sci_data(db, p_phot, j, p_phot['INSTMODE_PHOTOMETRY_KEYVALUE'], detector_modes[key], options.nightdir, reduce_dir, polar_mode=None, fit_zero=False, detector_mode_key=key, obj=object_id, calw_modes=p_phot['CALW_MODES'], match_frames=p['MATCH_FRAMES'], force=options.force, plot_stack=options.plot, plot_lc=options.plot, plot_polar=False)
         except Exception as e:
             # log messages:
-            logger.warn("Could not reduce {} mode, detector mode {} : {}".format(p_phot['INSTMODE_PHOTOMETRY_KEYVALUE'], key, e))
+            logger.warning("Could not reduce {} mode, detector mode {} : {}".format(p_phot['INSTMODE_PHOTOMETRY_KEYVALUE'], key, e))
         
         try:
             # log messages:
@@ -174,7 +175,7 @@ for channel in p['SELECTED_CHANNELS']:
             p_polarl2 = s4pipelib.reduce_sci_data(db, p_polarl2, j, p_polarl2['INSTMODE_POLARIMETRY_KEYVALUE'], detector_modes[key], options.nightdir, reduce_dir, polar_mode=p_polarl2['POLARIMETRY_L2_KEYVALUE'], fit_zero=False, detector_mode_key=key, obj=object_id, calw_modes=p_polarl2['CALW_MODES'], match_frames=p['MATCH_FRAMES'], force=options.force, plot_stack=options.plot, plot_lc=options.plot, plot_polar=p["PLOT_POLARIMETRY_FIT"]&options.plot)
         except Exception as e:
             # log messages:
-            logger.warn("Could not reduce {}-{} mode, detector mode {} : {}".format(p_polarl2['INSTMODE_POLARIMETRY_KEYVALUE'], p_polarl2['POLARIMETRY_L2_KEYVALUE'], key, e))
+            logger.warning("Could not reduce {}-{} mode, detector mode {} : {}".format(p_polarl2['INSTMODE_POLARIMETRY_KEYVALUE'], p_polarl2['POLARIMETRY_L2_KEYVALUE'], key, e))
         
         try:
             # log messages:
@@ -184,7 +185,7 @@ for channel in p['SELECTED_CHANNELS']:
             p_polarl4 = s4pipelib.reduce_sci_data(db, p_polarl4, j, p_polarl4['INSTMODE_POLARIMETRY_KEYVALUE'], detector_modes[key], options.nightdir, reduce_dir, polar_mode=p_polarl4['POLARIMETRY_L4_KEYVALUE'], fit_zero=p['FIT_ZERO_OF_WPPOS_IN_L4'], detector_mode_key=key, obj=object_id, calw_modes=p_polarl4['CALW_MODES'], match_frames=p['MATCH_FRAMES'], force=options.force, plot_stack=options.plot, plot_lc=options.plot, plot_polar=p_polarl4["PLOT_POLARIMETRY_FIT"]&options.plot)
         except Exception as e:
             # log messages:
-            logger.warn("Could not reduce {}-{} mode, detector mode {} : {}".format(p_polarl4['INSTMODE_POLARIMETRY_KEYVALUE'], p_polarl4['POLARIMETRY_L4_KEYVALUE'], key, e))
+            logger.warning("Could not reduce {}-{} mode, detector mode {} : {}".format(p_polarl4['INSTMODE_POLARIMETRY_KEYVALUE'], p_polarl4['POLARIMETRY_L4_KEYVALUE'], key, e))
         
         # log messages:
         logger.info("Finished reducing channel {} detector mode {} ".format(channel,key))

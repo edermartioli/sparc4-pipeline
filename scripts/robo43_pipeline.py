@@ -10,10 +10,16 @@
 
     Simple usage examples:
 
+    # for Zyla detector, it is required to explode the data cubes in the fits images prior to run the pipeline
     python /Users/eder/Data/OPD/ROBO40/robo40_fix_kinetic_images.py --input=/Users/eder/Data/ROBO43/20250810/*.fits
     python /Users/eder/Data/OPD/ROBO40/robo40_fix_kinetic_images.py --input=/Users/eder/Data/ROBO43/20250811/*.fits
 
     python -W"ignore" scripts/robo43_pipeline.py --bias=/Users/eder/Data/ROBO43/20250810/*dark*.fits --flat=/Users/eder/Data/ROBO43/20250811/skyflat_R_*.fits --science=/Users/eder/Data/ROBO43/20250810/M8_R_*.fits --reducedir=/Users/eder/Data/ROBO43/reduced/ --time_key="FRAME" --object="M8" --filter="R" -pv
+
+    # for QHY600 detector, it is required to trim the zero column. WARNING: the processing below is irreversible
+    python robo43_trim_QHY600M_data.py --input=/Users/eder/Data/ROBO43/raw/20250911/*.fits
+
+    python -W"ignore" scripts/robo43_pipeline.py --bias=/Users/eder/Data/ROBO43/raw/20250911/*Dark*.fits --flat=/Users/eder/Data/ROBO43/raw/20250911/*FlatR*.fits --science=/Users/eder/Data/ROBO43/raw/20250911/*WASP-145*.fits --reducedir=/Users/eder/Data/ROBO43/reduced/20250911 --time_key="DATE-OBS" --object="WASP-145" --filter="R" -pv
     """
 
 import glob
@@ -95,13 +101,13 @@ except :
     p['DEC_DEG'] = 0.0
     print("WARNING: Could not find Simbad match to object {}".format(options.object))
         
-p["ASTROM_REF_IMG"] = "/Users/eder/Data/ROBO43/ref_image_robo43.fits"
+p["ASTROM_REF_IMG"] = "/Users/eder/Data/ROBO43/ref_image_robo43_trimmed.fits"
 p['TIME_KEY'] = 'FRAME'
 p['EXPTIMEKEY'] = 'EXPOSURE'
 if options.time_key != "":
     p["TIME_KEY"] = options.time_key
 # define number of files for stack
-p['NFILES_FOR_STACK'] = 10
+p['NFILES_FOR_STACK'] = 30
 # define saturation limit
 p['SATURATION_LIMIT'] = 65000
 # define threshold for source detection
@@ -171,8 +177,8 @@ target = p['TARGET_INDEX']
 comps = p['COMPARISONS']
 
 # Uncomment below to override deafult target/comparison definitions
-target = 5
-comps = [2, 3, 4, 6, 7]
+target = 9
+comps = [3,4,5,6,7,8,10,11,12,13,14,15,16]
 
 plot_coords_file = phot_ts_product.replace(".fits","_coords{}".format(p['PLOT_FILE_FORMAT']))
 plot_rawmags_file = phot_ts_product.replace(".fits","_rawmags{}".format(p['PLOT_FILE_FORMAT']))
