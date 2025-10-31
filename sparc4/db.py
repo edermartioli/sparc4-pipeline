@@ -319,7 +319,7 @@ def get_file_list(tbl, object_id=None, inst_mode=None, polar_mode=None, obstype=
         tbl = tbl[(tbl["OBSTYPE"] == 'SFLAT') | (tbl["OBSTYPE"] == 'SKYFLAT') | (
             tbl["OBJECT"] == 'SFLAT') | (tbl["OBJECT"] == 'SKYFLAT')]
 
-    if (obstype is not None) and (obstype in ["ZERO", "FLAT", "OBJECT"]):
+    if obstype is not None :
         tbl = tbl[tbl["OBSTYPE"] == obstype]
 
     if detector_mode is not None:

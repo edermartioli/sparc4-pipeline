@@ -133,10 +133,6 @@ def set_timecoords_keys(hdr, timezone=-3, timetype="", ra="", dec="",
     # hdr.set("RA_DEG",radeg,"Requested Right Ascension (deg)")
     # hdr.set("DEC_DEG",decdeg,"Requested Declination (deg)")
 
-    # set time zone
-    timeZone = TimeDelta(timezone*u.hour, scale='tai')
-    # hdr.set("TIMEZONE",timezone,"time zone in hours e.g. BRT = UT - 3 hr")
-
     # try to set time from DATE-OBS keyword or try the patch if it doesn't work
     try:
         timestr = hdr[time_key]
@@ -149,11 +145,14 @@ def set_timecoords_keys(hdr, timezone=-3, timetype="", ra="", dec="",
     hdr.set("DATE-OBS", timestr, "UT date at start of exposure ISOT")
 
     if timetype == "LT":
+        print("INFO: setting time zone and applying it calculate local time")
+        timeZone = TimeDelta(timezone*60*60, scale='tai', format='sec')
+        #hdr.set("TIMEZONE",timezone,"time zone in hours e.g. BRT = UT - 3 hr")
         obstime = obstime - timeZone
+        hdr.set("LTDATE", (obstime+timeZone).isot,"LT date at start of exposure ISOT")
 
     hdr.set("UTDATE", obstime.isot.split("T")[0], "UT date at start of exposure")
     hdr.set("UTTIME", obstime.isot.split("T")[1], "UT time at start of exposure")
-    hdr.set("LTDATE", (obstime+timeZone).isot,"LT date at start of exposure ISOT")
 
     jd = obstime.jd
     mjd = obstime.mjd
@@ -166,15 +165,19 @@ def set_timecoords_keys(hdr, timezone=-3, timetype="", ra="", dec="",
     ltt_helio = obstime.light_travel_time(source, 'heliocentric')  # para o HJD
     hjd = obstime.tdb.jd + ltt_helio
 
-    exptime = TimeDelta(get_exptime(hdr,exptimekey=exptimekey), format='sec')
+    # get the exposure time from the header (in seconds) and convert it to days.
+    exptime = get_exptime(hdr,exptimekey=exptimekey) / (24*60*60)
 
-    midjd = (obstime+exptime/2).jd
-    midmjd = (obstime+exptime/2).mjd
+    # Compute the time at the middle of the exposure (i.e., halfway through exptime).
+    midjd = obstime.jd + exptime/2
+    midmjd = obstime.mjd + exptime/2
+    midbjd = bjd.value + exptime/2
+    midhjd = hjd.value + exptime/2
 
     hdr.set("JD", midjd, "Julian date at middle of exposure")
     hdr.set("MJD", midmjd, "Modified Julian date at middle of exposure")
-    hdr.set("BJD", (bjd+exptime/2).value, "Barycentric Julian date at middle of exposure")
-    hdr.set("HJD", (hjd+exptime/2).value, "Heliocentric Julian date at middle of exposure")
+    hdr.set("BJD", midbjd, "Barycentric Julian date at middle of exposure")
+    hdr.set("HJD", midhjd, "Heliocentric Julian date at middle of exposure")
 
     hdr.set("STARTJD", jd, "Julian date at start of exposure")
     hdr.set("STARTMJD", mjd, "Modified Julian date at start of exposure")

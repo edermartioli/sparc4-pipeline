@@ -107,36 +107,55 @@ def build_target_list_from_data(object_list=[], skycoords_list=[], search_radius
             ras.append(intbl["RA"][i])
             decs.append(intbl["DEC"][i])
     
+    match_status = []
+    for j in range(len(object_list)) :
+        match_status.append(False)
+        
     # loop over all observed objects given as a list
-    for obj_id in object_list :
+    for j in range(len(object_list)) :
+    
+        obj_id = object_list[j]
+        
         try :
             logger.info("Querying SIMBAD database to match object {}".format(obj_id))
             
+            Simbad.add_votable_fields('ra', 'dec')
             # query SIMBAD repository to match object by name
             obj_match_simbad = Simbad.query_object(obj_id)
-        
+    
             if obj_match_simbad is None :
                 continue
                 
+            main_id = obj_match_simbad['MAIN_ID'][0]
+            ra, dec = obj_match_simbad['RA'][0],obj_match_simbad['DEC'][0]
+
             # append
             if update_ids :
-                ids.append(obj_match_simbad["MAIN_ID"][0])
+                ids.append(main_id)
             else :
                 ids.append(obj_id)
 
             # cast coordinates into SkyCoord
-            coord = SkyCoord(obj_match_simbad["RA"][0], obj_match_simbad["DEC"][0], unit=(u.hourangle, u.deg), frame='icrs')
+            coord = SkyCoord(ra, dec, unit=(u.hourangle, u.deg), frame='icrs')
             
             # append coordinates into arrays
             ras.append(coord.ra.deg)
             decs.append(coord.dec.deg)
-
+            
+            match_status[j] = True
+            
         except Exception as e:
-            logger.warn("Failed to retrieve SIMBAD info for object {} : {}".format(obj_id, e))
+            logger.warning("Failed to retrieve SIMBAD info for object {} : {}".format(obj_id, e))
             continue
     
     # loop over all observed coordinates given as a list
-    for coords in skycoords_list :
+    for j in range(len(object_list)) :
+    
+        coords = skycoords_list[j]
+    
+        if match_status[j] :
+            continue
+    
         try :
             logger.info("Querying SIMBAD database to match an object at RA={} DEC={}".format(coords[0], coords[1]))
 
@@ -162,7 +181,7 @@ def build_target_list_from_data(object_list=[], skycoords_list=[], search_radius
                     ras.append(res_coord.ra.deg)
                     decs.append(res_coord.dec.deg)
         except  Exception as e:
-            logger.warn("Failed to retrieve SIMBAD info for coordinates RA={} DEC={}: {}".format(coords[0], coords[1], e))
+            logger.warning("Failed to retrieve SIMBAD info for coordinates RA={} DEC={}: {}".format(coords[0], coords[1], e))
             continue
     
     if len(ids) and len(ras) and len(decs) :
@@ -280,7 +299,7 @@ def astrometry_from_existing_wcs(wcs, img_data, pixel_coords=None, sky_coords=No
                     sources_skycoords = np.array([gaia_tbl["ra"].value.data, gaia_tbl["dec"].value.data]).T
   
                 except Exception as e :
-                    logger.warn("Could not acesss Gaia, using Vizier -> {}:  {}".format(vizier_catalogs,e))
+                    logger.warning("Could not acesss Gaia, using Vizier -> {}:  {}".format(vizier_catalogs,e))
                     result = Vizier.query_region(center, width=[fov_search_factor * fov,fov_search_factor * fov], catalog=vizier_catalogs)
                     sources_skycoords = []
                     for i in range(len(result[vizier_catalog_idx])) :
@@ -315,7 +334,7 @@ def astrometry_from_existing_wcs(wcs, img_data, pixel_coords=None, sky_coords=No
             matched_sky_coords = np.array(wcs.pixel_to_world_values(target_pos_array))
 
             # cast list of coordinates into SkyCoords
-            all_sky_coords = SkyCoord(matched_sky_coords, unit='deg')
+            all_sky_coords = SkyCoord(matched_sky_coords, unit='deg', frame='icrs')
             
             # generate wcs from fit to array of sources
             wcs = fit_wcs_from_points(np.array([source_pos_array[:,0], source_pos_array[:,1]]), all_sky_coords, proj_point='center', projection='TAN', sip_degree=sip_degree)
@@ -323,13 +342,13 @@ def astrometry_from_existing_wcs(wcs, img_data, pixel_coords=None, sky_coords=No
                 
             loc['ASTROMETRY_SOURCES_SKYCOORDS'] = sources_skycoords[:max_number_of_catalog_sources]
         else :
-            all_sky_coords = SkyCoord(sky_coords, unit='deg')
+            all_sky_coords = SkyCoord(sky_coords, unit='deg', frame='icrs')
             wcs = fit_wcs_from_points(np.array([pixel_coords[:,0], pixel_coords[:,1]]), all_sky_coords, proj_point='center', projection='TAN', sip_degree=sip_degree)
             loc['ASTROMETRY_SOURCES_SKYCOORDS'] = sky_coords
 
     except Exception as e :
         loc['ASTROMETRY_SOURCES_SKYCOORDS'] = np.array(wcs.pixel_to_world_values(pixel_coords))
-        logger.warn("Could not solve astrometry : {}".format(e))
+        logger.warning("Could not solve astrometry : {}".format(e))
 
     # plot Gaia sources using new wcs to visually check if solution is correct
     astrometry_sources_pixcoords = np.array(wcs.world_to_pixel_values(loc['ASTROMETRY_SOURCES_SKYCOORDS'][:nsources_to_plot]))
@@ -511,7 +530,7 @@ def aperture_photometry_wrapper(img_data, x, y, err_data=None, aperture_radius=1
                 logger.info("Updated x,y coordinates for {} of {} sources detected".format(len(xc[keep]),len(xc)))
             
         except Exception as e :
-            logger.warn("Could not measure FWHM from 2D Gaussian fit; using values from standard method. {}".format(e))
+            logger.warning("Could not measure FWHM from 2D Gaussian fit; using values from standard method. {}".format(e))
         
     ap_phot['fwhm'] = fwhms
 
@@ -575,7 +594,7 @@ def measure_fwhm(img_data, xypos, window_size=24, plot=False, verbose=False) :
         except Exception as e :
         
             fwhms = np.append(fwhms,np.nan)
-            logger.warn("Could not measure FWHM for source index={}: {}".format(i,e))
+            logger.warning("Could not measure FWHM for source index={}: {}".format(i,e))
             
     return fwhms
 
@@ -758,7 +777,7 @@ def measure_fwhm_from_2DGaussianFit(img_data, xypos, err_data=None, sigma_ini=3,
                 out_xc = np.append(out_xc,fitted_xc+xc)
                 out_yc = np.append(out_yc,fitted_yc+yc)
             except Exception as e :
-                logger.warn("Could not fit 2D Gaussian and measure FWHM for source index={} {}".format(i,e))
+                logger.warning("Could not fit 2D Gaussian and measure FWHM for source index={} {}".format(i,e))
                 fwhmx = np.append(fwhmx,np.nan)
                 fwhmy = np.append(fwhmy,np.nan)
                 out_xc = np.append(out_xc,np.nan)
@@ -776,7 +795,7 @@ def measure_fwhm_from_2DGaussianFit(img_data, xypos, err_data=None, sigma_ini=3,
             if verbose :
                 print("Global FIT: flux_max={} window_size={}x{} pixels FHWM_X = {:.2f} pix -> {:.2f} arcsec FHWM_Y = {:.2f} pix -> {:.2f} arcsec".format(np.nanmax(median_slice),window_size,window_size,fwhm_x,fwhm_x*0.335,fwhm_y,fwhm_y*0.335))
         except Exception as e :
-            logger.warn("Could not fit 2D Gaussian and measure FWHM from global fit: {}".format(e))
+            logger.warning("Could not fit 2D Gaussian and measure FWHM from global fit: {}".format(e))
             popt, fwhm_x, fwhm_y, fitted_xc, fitted_yc = None, np.nan, np.nan, 0., 0.
             
         xcs, ycs = np.array([]), np.array([])
@@ -918,7 +937,7 @@ def update_params(p, param_file) :
         if key in p.keys() :
             p[key] = params[key]
         else :
-            logger.warn("Parameter {} is not a valid parameter, ignoring...".format(key))
+            logger.warning("Parameter {} is not a valid parameter, ignoring...".format(key))
             continue
     return p
     
@@ -1058,9 +1077,9 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
     # if table of objects observed is empty, print a message and leave
     if len(objs) == 0 :
         if inst_mode == p['INSTMODE_POLARIMETRY_KEYVALUE'] :
-            logger.warn("No objects observed in the {} mode, detector mode {} ".format(polsuffix.replace("_"," "), detector_mode_key))
+            logger.warning("No objects observed in the {} mode, detector mode {} ".format(polsuffix.replace("_"," "), detector_mode_key))
         else :
-            logger.warn("No objects observed in the {} mode, detector mode {} ".format(inst_mode, detector_mode_key))
+            logger.warning("No objects observed in the {} mode, detector mode {} ".format(inst_mode, detector_mode_key))
         return p
     
     # cast output table of objects observed into a list
@@ -1205,7 +1224,7 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
                                        output_rawmags=plot_rawmags_file,
                                        output_lc=plot_lc_file)
                     except Exception as e:
-                        logger.warn("Could not generate plot for product {} : {}".format(phot_ts_product, e))
+                        logger.warning("Could not generate plot for product {} : {}".format(phot_ts_product, e))
                         
             ##################################################################
             ## POLARIMETRY AND TIME SERIES FOR POLARIMETRIC MODE (L2 OR L4) ##
@@ -1239,7 +1258,7 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
                                            output_rawmags=plot_rawmags_file,
                                            output_lc=plot_lc_file)
                     except Exception as e:
-                        logger.warn("Could not generate plot for product {} : {}".format(outlc, e))
+                        logger.warning("Could not generate plot for product {} : {}".format(outlc, e))
                         
                 compute_k, zero = p['COMPUTE_K_IN_L2'], 0
                 wave_plate = 'halfwave'
@@ -1276,10 +1295,10 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
                     if plot_polar :
                         # Get polarimetry from polarimetry product
                         pol_results = get_polarimetry_results(polarproduct,
-                                                          source_index=p['TARGET_INDEX'],
-                                                          min_aperture=p['MIN_APERTURE_FOR_POLARIMETRY'],
-                                                          max_aperture=p['MAX_APERTURE_FOR_POLARIMETRY'],
-                                                          compute_k=compute_k)
+                                                              source_index=p['TARGET_INDEX'],
+                                                              min_aperture=p['MIN_APERTURE_FOR_POLARIMETRY'],
+                                                              max_aperture=p['MAX_APERTURE_FOR_POLARIMETRY'],
+                                                              compute_k=compute_k)
                         polar_plot_file = ""
                         if p['PLOT_TO_FILE'] :
                             polar_plot_file = polarproduct.replace(".fits",p['PLOT_FILE_FORMAT'])
@@ -1287,7 +1306,7 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
                             try :
                                 s4plt.plot_polarimetry_results(pol_results, title_label=pol_results['TITLE_LABEL'], wave_plate=wave_plate, output=polar_plot_file)
                             except Exception as e:
-                                logger.warn("Could not generate plot for product {} : {}".format(polarproduct, e))
+                                logger.warning("Could not generate plot for product {} : {}".format(polarproduct, e))
                                 
                     p['PolarProducts'].append(polarproduct)
 
@@ -1313,7 +1332,7 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
                                                  plot_total_polarization=p["PLOT_TOTAL_POLARIZATION"],
                                                  output=polar_ts_plot_file)
                     except Exception as e:
-                        logger.warn("Could not generate plot for product {} : {}".format(p['PolarTimeSeriesProduct'], e))
+                        logger.warning("Could not generate plot for product {} : {}".format(p['PolarTimeSeriesProduct'], e))
                     
                 logger.info("Running {} polarimetry for {} frames -- static polar".format(wave_plate, len(p['OBJECT_REDUCED_IMAGES'])))
                     
@@ -1343,7 +1362,7 @@ def reduce_sci_data(db, p, channel_index, inst_mode, detector_mode, nightdir, re
                         try :
                             s4plt.plot_polarimetry_results(static_polar_results, title_label=static_polar_results['TITLE_LABEL'], wave_plate=wave_plate, output=static_polar_plot_file)
                         except Exception as e:
-                            logger.warn("Could not generate plot for product {} : {}".format(static_polar_product, e))
+                            logger.warning("Could not generate plot for product {} : {}".format(static_polar_product, e))
                         
     return p
 
@@ -1384,7 +1403,7 @@ def run_master_calibration(p, inputlist=[], output="", obstype='bias', data_dir=
     elif obstype == 'object':
         obstype_keyvalue = p['OBJECT_OBSTYPE_KEYVALUE']
     else:
-        logger.warn("obstype={} not recognized, setting to default = {}".format(obstype, obstype_keyvalue))
+        logger.warning("obstype={} not recognized, setting to default = {}".format(obstype, obstype_keyvalue))
 
     if output == "":
         output = os.path.join(reduce_dir, "master_{}.fits".format(obstype))
@@ -1479,7 +1498,7 @@ def run_master_calibration(p, inputlist=[], output="", obstype='bias', data_dir=
             else :
                 s4plt.plot_cal_frame(output, percentile=99.5, xcut=512, ycut=512, output=plot_file)
         except Exception as e:
-            logger.warn("Could not generate plot for product {} : {}".format(output, e))
+            logger.warning("Could not generate plot for product {} : {}".format(output, e))
 
     return p
 
@@ -1574,7 +1593,7 @@ def run_master_zero_calibration(p, db, nightdir, data_dir, reduce_dir, channel, 
         p["APPLY_BIAS_CORRECTION"] = False
         p["master_bias"] = "None"
         # log messages:
-        logger.warn("No ZERO images for detector mode {}. Turning off zero correction.".format(detector_mode_key))
+        logger.warning("No ZERO images for detector mode {}. Turning off zero correction.".format(detector_mode_key))
         
     return p
 
@@ -1636,8 +1655,10 @@ def run_master_flat_calibrations(p, db, nightdir, data_dir, reduce_dir, channel,
 
     # create a list of dome flats for current detector mode and for photometry mode
     phot_flat_list = s4db.get_file_list(db, inst_mode=p['INSTMODE_PHOTOMETRY_KEYVALUE'], obstype=p['FLAT_OBSTYPE_KEYVALUE'], detector_mode=detector_mode)
+    
     # create a list of dome flats for current detector mode and for polarimetry L2 mode
     polar_l2_flat_list = s4db.get_file_list(db, inst_mode=p['INSTMODE_POLARIMETRY_KEYVALUE'], polar_mode=p['POLARIMETRY_L2_KEYVALUE'], obstype=p['FLAT_OBSTYPE_KEYVALUE'], detector_mode=detector_mode)
+    
     # create a list of dome flats for current detector mode and for polarimetry L4 mode
     polar_l4_flat_list = s4db.get_file_list(db, inst_mode=p['INSTMODE_POLARIMETRY_KEYVALUE'], polar_mode=p['POLARIMETRY_L4_KEYVALUE'], obstype=p['FLAT_OBSTYPE_KEYVALUE'], detector_mode=detector_mode)
 
@@ -1656,7 +1677,7 @@ def run_master_flat_calibrations(p, db, nightdir, data_dir, reduce_dir, channel,
         p_phot["master_flat"] = "None"
         
         # log messages:
-        logger.warn("No flats for PHOT mode in detector mode {}. Turning off flat correction in PHOT mode.".format(detector_mode_key))
+        logger.warning("No flats for PHOT mode in detector mode {}. Turning off flat correction in PHOT mode.".format(detector_mode_key))
             
     if len(polar_l2_flat_list):
         # calculate master dome flat
@@ -1720,7 +1741,7 @@ def run_master_flat_calibrations(p, db, nightdir, data_dir, reduce_dir, channel,
                     p_polarl2["wppos{:02d}_master_flat".format(wppos)] = p_polarl4["wppos{:02d}_master_flat".format(wppos)]
             
             # log messages:
-            logger.warn("Using flats in POLAR L4 mode to correct POLAR L2 mode; in detector mode {}".format(detector_mode_key))
+            logger.warning("Using flats in POLAR L4 mode to correct POLAR L2 mode; in detector mode {}".format(detector_mode_key))
         else :
             if p_polarl2["ALLOW_USING_PHOTFLAT_TO_CORRECT_POLAR"] and "phot_master_flat" in flats.keys() :
                 p_polarl2["master_flat"] = flats["phot_master_flat"]
@@ -1728,14 +1749,14 @@ def run_master_flat_calibrations(p, db, nightdir, data_dir, reduce_dir, channel,
                     p_polarl2["wppos{:02d}_master_flat".format(wppos)] = flats["phot_master_flat"]
                         
                 # log messages:
-                logger.warn("Using flats in PHOT mode to correct POLAR L2 mode; in detector mode {}".format(detector_mode_key))
+                logger.warning("Using flats in PHOT mode to correct POLAR L2 mode; in detector mode {}".format(detector_mode_key))
             else :
                 p_polarl2["APPLY_FLATFIELD_CORRECTION"] = False
                 p_polarl2["master_flat"] = "None"
                 for wppos in range(1,17) :
                     p_polarl2["wppos{:02d}_master_flat".format(wppos)] = "None"
                 # log messages:
-                logger.warn("No flats for POLAR L2, L4 nor PHOT mode in detector mode {}. Turning off flat correction.".format(detector_mode_key))
+                logger.warning("No flats for POLAR L2, L4 nor PHOT mode in detector mode {}. Turning off flat correction.".format(detector_mode_key))
                     
     if len(polar_l4_flat_list) == 0 :
         if p_polarl4["ALLOW_INTERCHANGE_L2L4_FLATS"] and "polar_l2_master_flat" in flats.keys() :
@@ -1745,7 +1766,7 @@ def run_master_flat_calibrations(p, db, nightdir, data_dir, reduce_dir, channel,
                     p_polarl4["wppos{:02d}_master_flat".format(wppos)] = p_polarl2["wppos{:02d}_master_flat".format(wppos)]
 
             # log messages:
-            logger.warn("Using flats in POLAR L2 mode to correct POLAR L4 mode; in detector mode {}".format(detector_mode_key))
+            logger.warning("Using flats in POLAR L2 mode to correct POLAR L4 mode; in detector mode {}".format(detector_mode_key))
         else :
             if p_polarl4["ALLOW_USING_PHOTFLAT_TO_CORRECT_POLAR"] and "phot_master_flat" in flats.keys() :
                 p_polarl4["master_flat"] = flats["phot_master_flat"]
@@ -1753,14 +1774,14 @@ def run_master_flat_calibrations(p, db, nightdir, data_dir, reduce_dir, channel,
                     p_polarl4["wppos{:02d}_master_flat".format(wppos)] = flats["phot_master_flat"]
 
                 # log messages:
-                logger.warn("Using flats in PHOT mode to correct POLAR L4 mode; in detector mode {}".format(detector_mode_key))
+                logger.warning("Using flats in PHOT mode to correct POLAR L4 mode; in detector mode {}".format(detector_mode_key))
             else :
                 p_polarl4["APPLY_FLATFIELD_CORRECTION"] = False
                 p_polarl4["master_flat"] = "None"
                 for wppos in range(1,17) :
                     p_polarl4["wppos{:02d}_master_flat".format(wppos)] = "None"
                 # log messages:
-                logger.warn("No flats for POLAR L2, L4 nor PHOT mode in detector mode {}. Turning off flat correction.".format(detector_mode_key))
+                logger.warning("No flats for POLAR L2, L4 nor PHOT mode in detector mode {}. Turning off flat correction.".format(detector_mode_key))
 
     return p_phot, p_polarl2, p_polarl4
 
@@ -1974,7 +1995,7 @@ def reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", match_fr
                 try :
                     exptime = s4utils.get_exptime(frames[i].header,exptimekey=p["EXPTIMEKEY"])
                 except :
-                    logger.warn("Exposure time could not be retrieved from header keyword {}".format(p["EXPTIMEKEY"]))
+                    logger.warning("Exposure time could not be retrieved from header keyword {}".format(p["EXPTIMEKEY"]))
                 
                 # get readout noise from header
                 readnoise = float(frames[i].header[p["READNOISEKEY"]])
@@ -1987,7 +2008,7 @@ def reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", match_fr
                     else:
                         p, frame_catalogs = build_catalogs(p, img_data, frames[i].header, polarimetry=polarimetry, exptime=exptime, readnoise=readnoise, set_wcs_from_database=False)
                 except Exception as e:
-                    logger.warn("Could not build frame catalog: {}".format(e))
+                    logger.warning("Could not build frame catalog: {}".format(e))
                     # set local
                     frame_catalogs = []
 
@@ -2011,7 +2032,7 @@ def reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", match_fr
                             else :
                                 s4plt.plot_sci_frame(obj_red_images[i], nstars=20, use_sky_coords=True, output=proc_plot_file, toplabel="UT {}".format(frame_obstime[:-3]), bottomlabel=os.path.basename(obj_fg.files[i]))
                         except Exception as e:
-                            logger.warn("Could not generate plot for product {} : {}".format(obj_red_images[i], e))
+                            logger.warning("Could not generate plot for product {} : {}".format(obj_red_images[i], e))
                             
         if animated_gif != "" and p['PLOT_TO_FILE'] and p['PLOT_PROC_FRAMES']:
             command = "convert "
@@ -2022,7 +2043,7 @@ def reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", match_fr
                 logger.info("Creating animated gif, executing command: \n {}".format(command))
                 os.system(command)
             except Exception as e:
-                logger.warn("Could not create animated gif {} : {}".format(animated_gif, e))
+                logger.warning("Could not create animated gif {} : {}".format(animated_gif, e))
             
     # save as new or append list of reduced images to p dict, discarding the first element = redundant ref img
     if 'OBJECT_REDUCED_IMAGES' not in p.keys():
@@ -2151,7 +2172,7 @@ def stack_science_images(p, inputlist, reduce_dir="./", force=False, stack_suffi
                         wppos = int(wppos)
                     except Exception as e:
                         # It is commented below to avoid
-                        #logger.warn("Could not convert the 'WPPOS' keyword value {} to an integer.".format(frames[i].header['WPPOS']))
+                        #logger.warning("Could not convert the 'WPPOS' keyword value {} to an integer.".format(frames[i].header['WPPOS']))
                         wppos = 0
                         
             if p["APPLY_FLAT_PER_WPPOS"] and polarimetry and type(wppos) is int and wppos != 0:
@@ -2616,7 +2637,7 @@ def run_register_frames(p, inframes, inobj_files, info, output_stack="", force=F
         try :
             exptime = s4utils.get_exptime(frames[i].header,exptimekey=p["EXPTIMEKEY"])
         except :
-            logger.warn("Exposure time could not be retrieved from header keyword {}".format(p["EXPTIMEKEY"]))
+            logger.warning("Exposure time could not be retrieved from header keyword {}".format(p["EXPTIMEKEY"]))
         meanexptime += exptime
     
     readnoise = float(frames[0].header[p["READNOISEKEY"]])
@@ -2728,7 +2749,7 @@ def calculate_aperture_radius(p, data):
     except Exception as e:
         # set fwhm=3 by default
         fwhm = 3.
-        logger.warn("Could not detect sources. Assuming FWHM = 3: error: {}".format(e))
+        logger.warning("Could not detect sources. Assuming FWHM = 3: error: {}".format(e))
     
     p["PHOT_APERTURE_RADIUS"] = p["PHOT_APERTURE_N_X_FWHM"] * fwhm
     p["PHOT_SKYINNER_RADIUS"] = p["PHOT_SKYINNER_N_X_FWHM"] * fwhm
@@ -2811,11 +2832,11 @@ def run_aperture_photometry(img_data, x, y, aperture_radius, r_ann, err_data=Non
         try:
             ap_phot = aperture_photometry_wrapper(img_data, x, y,  err_data=err_data, aperture_radius=aperture_radius, r_in=r_ann[0], r_out=r_ann[1], read_noise=readnoise, recenter=recenter, fwhm_from_fit=fwhm_from_fit, use_moffat=use_moffat, window_size=window_size, update_xycenter_from_profile_fit=update_xycenter_from_profile_fit, global_fit=global_fit, calculate_fwhm=calculate_fwhm)
         except Exception as e:
-            logger.warn("{}".format(e))
+            logger.warning("{}".format(e))
             pass
     
     if exptime == 0 :
-        logger.warn("Invalid value of EXPTIME=0, resetting EXPTIME=1.0")
+        logger.warning("Invalid value of EXPTIME=0, resetting EXPTIME=1.0")
         exptime = 1.0
         
     x, y = ap_phot['x'], ap_phot['y']
@@ -2839,7 +2860,7 @@ def run_aperture_photometry(img_data, x, y, aperture_radius, r_ann, err_data=Non
                 mag[i], mag_error[i] = umag.nominal_value, umag.std_dev
                 smag[i], smag_error[i] = uskymag.nominal_value, uskymag.std_dev
             except Exception as e:
-                logger.warn("{}".format(e))
+                logger.warning("{}".format(e))
                 continue
                 
         return x, y, mag, mag_error, smag, smag_error, fwhm, flags
@@ -3132,7 +3153,7 @@ def generate_catalogs(p, data, hdr, sources, fwhm, err_data=None, catalogs=[], c
                         
             except Exception as e:
             
-                logger.warn("Could not solve astrometry in POLAR-MODE, using WCS from database: {}".format(e))
+                logger.warning("Could not solve astrometry in POLAR-MODE, using WCS from database: {}".format(e))
                 p['WCS'] = set_wcs_from_astrom_ref_image(p["ASTROM_REF_IMG"], hdr, ra_deg=p['RA_DEG'], dec_deg=p['DEC_DEG'],time_key=p['TIME_KEY'])
             
         if 'WCS_HEADER' in p.keys() :
@@ -3222,7 +3243,7 @@ def generate_catalogs(p, data, hdr, sources, fwhm, err_data=None, catalogs=[], c
                         p['WCS'] = w
                     
             except Exception as e:
-                logger.warn("Could not solve astrometry in PHOT-MODE, using WCS from database: {}".format(e))
+                logger.warning("Could not solve astrometry in PHOT-MODE, using WCS from database: {}".format(e))
                 p['WCS'] = set_wcs_from_astrom_ref_image(p["ASTROM_REF_IMG"], hdr, ra_deg=p['RA_DEG'], dec_deg=p['DEC_DEG'],time_key=p['TIME_KEY'])
                 
         if 'WCS_HEADER' in p.keys() :
@@ -3680,7 +3701,7 @@ def build_catalogs(p, data, hdr, catalogs=[], xshift=0., yshift=0., solve_astrom
             # detect sources
             sources = starfind(data, threshold=p["PHOT_THRESHOLD"], background=bkg, noise=rms, sharp_limit=(0.2, 3.0))
         except Exception as e:
-            logger.warn("Could not build catalog of sources -- ERROR on astropop.starfind() -> {}".format(e))
+            logger.warning("Could not build catalog of sources -- ERROR on astropop.starfind() -> {}".format(e))
             return p, new_catalogs
 
         # get fwhm
@@ -4334,12 +4355,13 @@ def get_qflux(beam, filename, aperture_index, source_index, magkey="MAG", emagke
         qflux = QFloat(uflux.nominal_value, uflux.std_dev)
 
     except Exception as e:
-        logger.warn("Could not retrieve flux data for file={} aperture_index={} source_index={} : {}".format(filename,aperture_index,source_index,e))
+        logger.warning("Could not retrieve flux data for file={} aperture_index={} source_index={} : {}".format(filename,aperture_index,source_index,e))
 
     return qflux
 
 
 def get_photometric_data_for_polar_catalog(beam1, beam2, sci_list, aperture_index=8, source_index=0):
+
     """ Pipeline module to get photometric data from the catalogs of a
     list of polarimetry exposures
 
@@ -4413,7 +4435,7 @@ def get_photometric_data_for_polar_catalog(beam1, beam2, sci_list, aperture_inde
 
     fwhm = np.nanmedian(fwhms)
 
-    flux = flux1 + flux2
+    flux = (flux1 + flux2) / len(sci_list)
     mag = -2.5 * np.log10(flux)
 
     skyflux = (skyflux1 + skyflux2) / (2 * len(sci_list))
@@ -4640,7 +4662,7 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
                         theor_sigma = norm.theor_sigma['p']
 
             except Exception as e:
-                logger.warn("Could not compute polarimetry for source_index={} and aperture={} pixels: {}".format(j, apertures[i], e))
+                logger.warning("Could not compute polarimetry for source_index={} and aperture={} pixels: {}".format(j, apertures[i], e))
 
             var_values = [i, apertures[i], j,
                           ra, dec, x1, y1, x2, y2,
@@ -4932,7 +4954,7 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
                     theor_sigma = norm.theor_sigma['p']
                     
             except Exception as e :
-                logger.warn("Could not compute polarimetry: {}".format(e))
+                logger.warning("Could not compute polarimetry: {}".format(e))
                 pass
                 
         elif wave_plate == "quarterwave":
@@ -4961,7 +4983,7 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
                     theor_sigma = norm.theor_sigma['p']
                     
             except Exception as e :
-                logger.warn("Could not compute polarimetry: {}".format(e))
+                logger.warning("Could not compute polarimetry: {}".format(e))
                 pass
 
         # cast zi data into QFloat
@@ -4971,7 +4993,7 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
         chi2 = np.nansum(((zis[keep] - observed_model[keep])/zierrs[keep])**2) / (n - m)
         
     else :
-        logger.warn("No useful polarization data for Source index: {}  and aperture: {} pix ".format(source_index, aperture_radius))
+        logger.warning("No useful polarization data for Source index: {}  and aperture: {} pix ".format(source_index, aperture_radius))
 
 
     # print results
@@ -5034,7 +5056,7 @@ def get_polarimetry_results(filename, source_index=0, aperture_radius=None, min_
         try :
             s4plt.plot_polarimetry_results(loc, title_label=title_label, wave_plate=wave_plate, output=plot_filename, figsize=figsize)
         except Exception as e:
-            logger.warn("Could not generate polarimetry plot : {}".format(e))
+            logger.warning("Could not generate polarimetry plot : {}".format(e))
             
     hdul.close()
 
@@ -5271,7 +5293,7 @@ def stack_and_reduce_sci_images(p, sci_list, reduce_dir, ref_img="", stack_suffi
             else :
                 s4plt.plot_sci_frame(p['OBJECT_STACK'], nstars=20, use_sky_coords=True, output=stack_plot_file)
         except Exception as e:
-            logger.warn("Could not generate plot for product {} : {}".format(p['OBJECT_STACK'], e))
+            logger.warning("Could not generate plot for product {} : {}".format(p['OBJECT_STACK'], e))
     
     # set numbe of science reduction loops to avoid memory issues.
     nloops = int(np.ceil(len(sci_list) / p['MAX_NUMBER_OF_SCI_FRAMES_PER_LOOP']))

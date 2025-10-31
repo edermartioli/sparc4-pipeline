@@ -72,10 +72,10 @@ def plot_cal_frame(filename, percentile=99.5, xcut=512, ycut=512,
         else:
             print("ERROR: combine method must be mean or median, exiting ...")
             exit()
-        axes[1, 0].plot(x, crow)
+        axes[1, 0].plot(y, crow)
         axes[1, 0].set_ylabel("{} flux".format(combine_method), fontsize=16)
     else:
-        axes[1, 0].plot(x, img_data[ycut, :])
+        axes[1, 0].plot(y, img_data[ycut, :])
         axes[1, 0].set_ylabel("flux".format(ycut), fontsize=16)
     axes[1, 0].set_xlabel("columns (pixel)", fontsize=16)
 
@@ -88,10 +88,10 @@ def plot_cal_frame(filename, percentile=99.5, xcut=512, ycut=512,
         else:
             print("ERROR: combine method must be mean or median, exiting ...")
             exit()
-        axes[2, 0].plot(y, ccol)
+        axes[2, 0].plot(x, ccol)
         axes[2, 0].set_ylabel("{} flux".format(combine_method), fontsize=16)
     else:
-        axes[2, 0].plot(y, img_data[:, xcut])
+        axes[2, 0].plot(x, img_data[:, xcut])
         axes[2, 0].set_ylabel("flux".format(xcut), fontsize=16)
     axes[2, 0].set_xlabel("rows (pixel)", fontsize=16)
 
@@ -102,11 +102,11 @@ def plot_cal_frame(filename, percentile=99.5, xcut=512, ycut=512,
     axes[0, 1].set_xlabel("columns (pixel)", fontsize=16)
     axes[0, 1].set_ylabel("rows (pixel)", fontsize=16)
 
-    axes[1, 1].plot(x, err_data[ycut, :])
+    axes[1, 1].plot(y, err_data[ycut, :])
     axes[1, 1].set_ylabel(r"$\sigma$".format(ycut), fontsize=16)
     axes[1, 1].set_xlabel("columns (pixel)", fontsize=16)
 
-    axes[2, 1].plot(y, err_data[:, xcut])
+    axes[2, 1].plot(x, err_data[:, xcut])
     axes[2, 1].set_ylabel(r"$\sigma$".format(xcut), fontsize=16)
     axes[2, 1].set_xlabel("rows (pixel)", fontsize=16)
 
