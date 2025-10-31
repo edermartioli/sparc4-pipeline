@@ -81,7 +81,6 @@ CALIB_IMCOMBINE_METHOD: 'median'
 BIAS_OBSTYPE_KEYVALUE: 'ZERO'
 # Value of obstype keyword used to identify flat images
 FLAT_OBSTYPE_KEYVALUE: 'FLAT'
-#FLAT_OBSTYPE_KEYVALUE: 'DFLAT'
 # Value of obstype keyword used to identify focus images
 FOCUS_OBSTYPE_KEYVALUE: 'FOCUS'
 # Value of obstype keyword used to identify dark images
