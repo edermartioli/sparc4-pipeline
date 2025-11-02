@@ -46,15 +46,14 @@ except:
     print("Error: check usage with  -h sparc4_mini_pipeline.py")
     sys.exit(1)
 
-
 # initialize pipeline parameters
 p = s4pipelib.init_s4_p(options.nightdir,
                         options.datadir,
                         options.reducedir,
                         options.channels,
                         print_report=options.verbose,
-                        param_file=options.params)
-
+                        param_file=options.params,
+                        save_params=True)
 
 # Run full reduction for selected channels
 for channel in p['SELECTED_CHANNELS']:
