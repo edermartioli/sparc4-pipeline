@@ -810,7 +810,7 @@ def measure_fwhm_from_2DGaussianFit(img_data, xypos, err_data=None, sigma_ini=3,
     return fwhmx, fwhmy, out_xc, out_yc
 
 
-def init_s4_p(nightdir, datadir="", reducedir="", channels="", print_report=False, param_file=""):
+def init_s4_p(nightdir, datadir="", reducedir="", channels="", print_report=False, param_file="", save_params=True):
     """ Pipeline module to initialize SPARC4 parameters
     Parameters
     ----------
@@ -824,6 +824,8 @@ def init_s4_p(nightdir, datadir="", reducedir="", channels="", print_report=Fals
         String to define SPARC4 channels to be reduced, e.g. "1,2"
     print_report : bool, optional
         Boolean to print out report on all existing data for reduction
+    save_params : bool, optional
+        Boolean to save parameters to file
 
     Returns
     -------
@@ -833,6 +835,13 @@ def init_s4_p(nightdir, datadir="", reducedir="", channels="", print_report=Fals
 
     # load pipeline parameters
     p = params.load_sparc4_parameters()
+    
+    # get all input keywords
+    input_keys = p.keys()
+    
+    # Uncomment belwo to print out all paramters
+    #for key in input_keys :
+    #    print(key,":",p[key])
     
     # update parameters from user input file
     if param_file != "" :
@@ -853,6 +862,9 @@ def init_s4_p(nightdir, datadir="", reducedir="", channels="", print_report=Fals
         chs = channels.split(",")
         for ch in chs:
             p['SELECTED_CHANNELS'].append(int(ch))
+
+    # get copy of input parameters to save it to file
+    input_p = deepcopy(p)
 
     # organize files to be reduced
     p = s4utils.identify_files(p, nightdir, print_report=print_report)
@@ -878,6 +890,14 @@ def init_s4_p(nightdir, datadir="", reducedir="", channels="", print_report=Fals
 
         # produce lists of files for all channels
         channel_data_pattern = '{}/{}'.format(night_ch_data_dir,p["PATTERN_TO_INCLUDE_DATA"])
+
+        if save_params :
+            # Specify the filename
+            yaml_param_filename = "{}/{}_params.yaml".format(reduce_dir,nightdir)
+            # Save parameters file
+            with open(yaml_param_filename, 'w') as file:
+                yaml.dump(input_p, file)
+            logger.info("Input parameters saved to file: {}".format(yaml_param_filename))
 
         # get full list using data wildcard pattern defined in parameters file:
         file_list = sorted(glob.glob(channel_data_pattern))
