@@ -104,3 +104,4 @@ Version 0.1.8 (2025-08-28)
 - Fixed DeprecationWarning: replaced logging.warn by logging.warning throughout the packages 
 - Fixed problem with units of TimeDelta, which is probably what was causing the skipped objects
 - Included k in the label of polar plot
+- New feature to save input parameters to file
