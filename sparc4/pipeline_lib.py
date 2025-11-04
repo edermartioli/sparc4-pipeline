@@ -891,6 +891,12 @@ def init_s4_p(nightdir, datadir="", reducedir="", channels="", print_report=Fals
         # produce lists of files for all channels
         channel_data_pattern = '{}/{}'.format(night_ch_data_dir,p["PATTERN_TO_INCLUDE_DATA"])
 
+        # if reduced dir doesn't exist create one
+        os.makedirs(root_reduce_dir, exist_ok=True)
+        
+        # if reduced dir doesn't exist create one
+        os.makedirs(reduce_dir, exist_ok=True)
+        
         if save_params :
             # Specify the filename
             yaml_param_filename = "{}/{}_params.yaml".format(reduce_dir,nightdir)
@@ -916,12 +922,6 @@ def init_s4_p(nightdir, datadir="", reducedir="", channels="", print_report=Fals
 
         p['reduce_directories'].append(reduce_dir)
         p['data_directories'].append(night_ch_data_dir)
-
-        # if reduced dir doesn't exist create one
-        os.makedirs(root_reduce_dir, exist_ok=True)
-
-        # if reduced dir doesn't exist create one
-        os.makedirs(reduce_dir, exist_ok=True)
 
         db_file = '{}/{}_sparc4acs{}_db.csv'.format(reduce_dir, nightdir, p['CHANNELS'][j])
         
