@@ -123,7 +123,7 @@ EXPTIMEKEY: 'EXPTIME' # for SPARC4
 READNOISEKEY: "RDNOISE"
 
 # DEFINE CALIBRATION WHEEL MODES: OFF or None or CLEAR, POLARIZER, or DEPOLARIZER
-#CALW_MODES: ["OFF","None","NONE","CLEAR","POLARIZER","DEPOLARIZER"] # uncomment this line to include observations in all CALW modes
+#CALW_MODES: ["OFF","None","NONE","CLEAR","POLARIZER","DEPOLARIZER"]
 CALW_MODES: ["OFF","None","NONE","CLEAR"]
 
 # Whether or not to apply cosmic ray rejection algorithm (LACOSMIC)
@@ -251,6 +251,9 @@ FIXED_NUMBER_OF_IMAGES_IN_POLAR_SEQUENCE: 0
 
 # [S]outh and [N]orth polarimetric beams
 CATALOG_BEAM_IDS: ["S","N"]
+
+# Default displacement in pixels between the ordinary and extraordinary beams:
+POLAR_PAIRS_DIST: 43
 
 # tolerance for matching pairs in polarimetric images (units of pixels)
 MATCH_PAIRS_TOLERANCE: 3.0

@@ -15,6 +15,12 @@ from copy import deepcopy
 import matplotlib.pyplot as plt
 import numpy as np
 
+import astropy
+import astropop
+import scipy
+import astroquery
+import matplotlib
+
 from astropop.astrometry import solve_astrometry_xy
 from astropop.file_collection import FitsFileGroup
 from astropop.image import imarith, imcombine, processing
@@ -26,7 +32,7 @@ from astropop.photometry.detection import _fwhm_loop
 from astropop.polarimetry import (SLSDualBeamPolarimetry, estimate_dxdy,
                                   halfwave_model, match_pairs,
                                   quarterwave_model)
-
+                                  
 from astropy import units as u
 from astropy.coordinates import SkyCoord
 from astropy.io import fits, ascii
@@ -45,7 +51,8 @@ import sparc4.product_plots as s4plt
 import sparc4.products as s4p
 import sparc4.utils as s4utils
 from sparc4.utils import timeout
-
+import sparc4.version as s4v
+ 
 import photutils
 from photutils.psf import fit_fwhm
 
@@ -835,10 +842,34 @@ def init_s4_p(nightdir, datadir="", reducedir="", channels="", print_report=Fals
 
     # load pipeline parameters
     p = params.load_sparc4_parameters()
-    
+
     # get all input keywords
     input_keys = p.keys()
+
+    p['sparc4-pipeline-version'] = s4v.version
+    logger.info("sparc4-pipeline version: {}".format(p['sparc4-pipeline-version']))
     
+    p['astropy-version'] = astropy.__version__
+    logger.info("astropy version: {}".format(p['astropy-version']))
+    
+    p['numpy-version'] = np.__version__
+    logger.info("numpy version: {}".format(p['numpy-version']))
+
+    p['astropop-version'] = astropop.__version__
+    logger.info("astropop version: {}".format(p['astropop-version']))
+
+    p['scipy-version'] = scipy.__version__
+    logger.info("scipy version: {}".format(p['scipy-version']))
+
+    p['astroquery-version'] = astroquery.__version__
+    logger.info("astroquery version: {}".format(p['astroquery-version']))
+
+    p['matplotlib-version'] = matplotlib.__version__
+    logger.info("matplotlib version: {}".format(p['matplotlib-version']))
+
+    p['photutils-version'] = photutils.__version__
+    logger.info("photutils version: {}".format(p['photutils-version']))
+
     # Uncomment belwo to print out all paramters
     #for key in input_keys :
     #    print(key,":",p[key])
@@ -1483,12 +1514,20 @@ def run_master_calibration(p, inputlist=[], output="", obstype='bias', data_dir=
     if normalize:
         master = imarith(master, norm_mean_value, '/')
         data_units = 'dimensionless'
+        
 
     # write information into an info dict
     info = {'INCOMBME': ('{}'.format(method), 'imcombine method'),
             'INCOMBNI': (len(filter_fg), 'imcombine nimages'),
             'BUNIT': ('{}'.format(data_units), 'data units'),
-            'DRSINFO': ('astropop', 'data reduction software'),
+            'APOPINFO': ('astropop v{}'.format(p['astropop-version']), 'data reduction software'),
+            'APYINFO': ('astropy v{}'.format(p['astropy-version']), 'data reduction software'),
+            'SPYPINFO': ('scipy v{}'.format(p['scipy-version']), 'data reduction software'),
+            'NPYINFO': ('numpy v{}'.format(p['numpy-version']), 'data reduction software'),
+            'AQYINFO': ('astroquery v{}'.format(p['astroquery-version']), 'data reduction software'),
+            'MPLTINFO': ('matplotlib v{}'.format(p['matplotlib-version']), 'data reduction software'),
+            'PHUTINFO': ('photutils v{}'.format(p['photutils-version']), 'data reduction software'),
+            'DRSINFO': ('sparc4-pipeline v{}'.format(p['sparc4-pipeline-version']), 'data reduction software'),
             'DRSROUT': ('master image', 'data reduction routine'),
             'NORMALIZ': (normalize, 'normalized master'),
             'NORMMEAN': (norm_mean_value.value, 'normalization mean value in {}'.format(norm_mean_value.unit)),
@@ -1917,7 +1956,14 @@ def reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", match_fr
 
         # write information into an info dict
         info = {'BUNIT': ('{}'.format(data_units), 'data units'),
-                'DRSINFO': ('astropop', 'data reduction software'),
+                'APOPINFO': ('astropop v{}'.format(p['astropop-version']), 'data reduction software'),
+                'APYINFO': ('astropy v{}'.format(p['astropy-version']), 'data reduction software'),
+                'SPYPINFO': ('scipy v{}'.format(p['scipy-version']), 'data reduction software'),
+                'NPYINFO': ('numpy v{}'.format(p['numpy-version']), 'data reduction software'),
+                'AQYINFO': ('astroquery v{}'.format(p['astroquery-version']), 'data reduction software'),
+                'MPLTINFO': ('matplotlib v{}'.format(p['matplotlib-version']), 'data reduction software'),
+                'PHUTINFO': ('photutils v{}'.format(p['photutils-version']), 'data reduction software'),
+                'DRSINFO': ('sparc4-pipeline v{}'.format(p['sparc4-pipeline-version']), 'data reduction software'),
                 'DRSROUT': ('science frame', 'data reduction routine'),
                 'BIASSUB': (p["APPLY_BIAS_CORRECTION"] , 'bias subtracted'),
                 'BIASFILE': (p["master_bias"], 'bias file name'),
@@ -2208,7 +2254,14 @@ def stack_science_images(p, inputlist, reduce_dir="./", force=False, stack_suffi
 
     # write information into an info dict
     info = {'BUNIT': ('{}'.format(data_units), 'data units'),
-            'DRSINFO': ('astropop', 'data reduction software'),
+            'APOPINFO': ('astropop v{}'.format(p['astropop-version']), 'data reduction software'),
+            'APYINFO': ('astropy v{}'.format(p['astropy-version']), 'data reduction software'),
+            'SPYPINFO': ('scipy v{}'.format(p['scipy-version']), 'data reduction software'),
+            'NPYINFO': ('numpy v{}'.format(p['numpy-version']), 'data reduction software'),
+            'AQYINFO': ('astroquery v{}'.format(p['astroquery-version']), 'data reduction software'),
+            'MPLTINFO': ('matplotlib v{}'.format(p['matplotlib-version']), 'data reduction software'),
+            'PHUTINFO': ('photutils v{}'.format(p['photutils-version']), 'data reduction software'),
+            'DRSINFO': ('sparc4-pipeline v{}'.format(p['sparc4-pipeline-version']), 'data reduction software'),
             'DRSROUT': ('science frame', 'data reduction routine'),
             'BIASSUB': (True, 'bias subtracted'),
             'BIASFILE': (p["master_bias"], 'bias file name'),
@@ -3053,8 +3106,28 @@ def generate_catalogs(p, data, hdr, sources, fwhm, err_data=None, catalogs=[], c
         # no input catalogs, then create new ones
         dx, dy = estimate_dxdy(sources['x'], sources['y'])
         
+        # set tolerance
+        tolerance = p["MATCH_PAIRS_TOLERANCE"]
+        
+        # When there are only 2 stars in the field, the match pairs algorithm can get confused
+        # Below is a patch to fix that issue
+        min_delta = 1e30
+        if 2 < len(sources['x']) <= 5 :
+            for i in range(len(sources['x'])) :
+                for j in range(len(sources['x'])) :
+                    if i != j :
+                        ddx = (sources['x'][j] - sources['x'][i])
+                        ddy = (sources['y'][j] - sources['y'][i])
+                        dist = np.sqrt(ddx**2 + ddy**2)
+                        delta = np.abs(dist - p['POLAR_PAIRS_DIST'])
+                        if delta < p["MATCH_PAIRS_TOLERANCE"] and delta < min_delta:
+                            dx, dy = ddx, ddy
+                            tolerance = delta+1 # alwasy give +1 pixel of tolerance
+                            min_delta = delta
+        #--- end of patch
+        
         # match polarimetric pairs (dual beam polarimetry)
-        pairs = match_pairs(sources['x'], sources['y'], dx, dy, tolerance=p["MATCH_PAIRS_TOLERANCE"])
+        pairs = match_pairs(sources['x'], sources['y'], dx, dy, tolerance=tolerance)
 
         sources_table = Table()
 
@@ -4085,6 +4158,7 @@ def phot_time_series(sci_list,
     info['DATE-END'] = (tstop.isot, 'TSTOP as UTC calendar date')
     info['NEXPS'] = (nexps, 'number of exposures')
     info['NSOURCES'] = (nsources, 'number of sources')
+    info['DRSINFO'] = ('sparc4-pipeline v{}'.format(s4v.version), 'data reduction software')
 
     if best_apertures:
         minrms = np.arange(nsources)*0 + 1e20
@@ -4743,7 +4817,8 @@ def compute_polarimetry(sci_list, output_filename="", wppos_key='WPPOS', save_ou
         info['DATE-END'] = (tstop.isot, 'TSTOP as UTC calendar date')
         info['NSOURCES'] = (nsources, 'number of sources')
         info['NEXPS'] = (len(sci_list), 'number of exposures in sequence')
-
+        info['DRSINFO'] = ('sparc4-pipeline v{}'.format(s4v.version), 'data reduction software')
+        
         for k in range(len(sci_list)):
             hdr = fits.getheader(sci_list[k])
             info["FILE{:04d}".format(k)] = (os.path.basename(sci_list[k]), 'file name of exposure')
@@ -5524,6 +5599,7 @@ def polar_time_series(sci_pol_list,
     info['PHOTSYS'] = ("SPARC4", 'photometric system')
     info['POLTYPE'] = (basehdr["POLTYPE"], 'polarimetry type l/2 or l/4')
     info['NSOURCES'] = (basehdr["NSOURCES"], 'number of sources')
+    info['DRSINFO'] = ('sparc4-pipeline v{}'.format(s4v.version), 'data reduction software')
 
     # get first and last times
     tstart = Time(ti, format='jd', scale='utc')
