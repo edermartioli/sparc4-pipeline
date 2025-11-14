@@ -105,3 +105,8 @@ Version 0.1.8 (2025-08-28)
 - Fixed problem with units of TimeDelta, which is probably what was causing the skipped objects
 - Included k in the label of polar plot
 - Added new feature to save input parameters to file
+- Patch to fix issue with match_pairs algorithm when only 2 stars are detected
+- Included software versions in the log and image headers
+
+Version 0.1.9 (2025-11-14)
+------------------------
