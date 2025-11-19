@@ -495,6 +495,27 @@ def identify_files(p, night, print_report=True):
     return p
 
 
+def safe_int_cast(s, default_value=None) :
+    """
+    Safely converts a string 's' to an integer.
+    Returns a default value (or None) if the conversion fails.
+    
+    Parameters
+    ----------
+    s : str
+        input string to cast into integer
+    default_value : int
+        default value to replace when convertion fails.
+    """
+    try:
+        # int() automatically handles leading/trailing whitespaces
+        return int(s)
+    except (ValueError, TypeError):
+        # Catch both ValueError (invalid literal) and TypeError (if input is not a string)
+        print(f"Error: '{s}' is not a valid integer. Returning default value.")
+        return default_value
+        
+
 def select_polar_sequences(list_of_files, sortlist=True, npos_in_seq=16, rolling_seq=False, nimages_per_seq_fixed=0, min_n_images_per_seq=4, verbose=False) :
     """ Pipeline module to select polarimetric sequences
     Parameters
@@ -551,8 +572,8 @@ def select_polar_sequences(list_of_files, sortlist=True, npos_in_seq=16, rolling
                             sequences.append(tmp_seq)
         else :
             # save WPPOS of first image
-            prev_pos = fits.getheader(sortedlist[0])['WPPOS']
-            
+            prev_pos = safe_int_cast(fits.getheader(sortedlist[0])['WPPOS'], default_value=None)
+                        
             block_index = 0
             blocks, block_pos = [], []
             blocks.append([])
@@ -562,7 +583,7 @@ def select_polar_sequences(list_of_files, sortlist=True, npos_in_seq=16, rolling
                     
             for i in range(1,len(sortedlist)) :
                 # save WPPOS of first image
-                pos = fits.getheader(sortedlist[i])['WPPOS']
+                pos = safe_int_cast(fits.getheader(sortedlist[0])['WPPOS'], default_value=None)
                 
                 if pos != prev_pos :
                     prev_pos = pos
