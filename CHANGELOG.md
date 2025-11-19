@@ -110,3 +110,4 @@ Version 0.1.8 (2025-08-28)
 
 Version 0.1.9 (2025-11-14)
 ------------------------
+- Implemented safe integer casting when getting WPPOS values from image header. 
