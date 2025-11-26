@@ -554,8 +554,11 @@ def plot_polarimetry_results(loc, pos_model_sampling=1, title_label="", wave_pla
     
     tsigmalab = r"$\sigma_t$: {:.5f} %".format(100*tsigma)
     kctelab = r"k: {:.5f}".format(kcte.nominal)
+    title_label += "  " + tsigmalab + "  " + kctelab
+    
     zerolab = r"$\psi_0$: {} deg".format(zero)
-    title_label += "  " + tsigmalab + "  " + kctelab + "  " + zerolab
+    if wave_plate == 'quarterwave' :
+        title_label += "  " + zerolab
 
     qlab = r"q: {:.4f}$\pm${:.4f} %".format(100*qpol.nominal, 100*qpol.std_dev)
     ulab = r"u: {:.4f}$\pm${:.4f} %".format(100*upol.nominal, 100*upol.std_dev)
