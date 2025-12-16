@@ -583,7 +583,7 @@ def select_polar_sequences(list_of_files, sortlist=True, npos_in_seq=16, rolling
                     
             for i in range(1,len(sortedlist)) :
                 # save WPPOS of first image
-                pos = safe_int_cast(fits.getheader(sortedlist[0])['WPPOS'], default_value=None)
+                pos = safe_int_cast(fits.getheader(sortedlist[i])['WPPOS'], default_value=None)
                 
                 if pos != prev_pos :
                     prev_pos = pos
@@ -653,7 +653,7 @@ def select_polar_sequences(list_of_files, sortlist=True, npos_in_seq=16, rolling
             if verbose :
                 for k in range(len(sequences)) :
                     print("Sequence {} of {} : {} files for {} waveplate positions".format(k+1,len(sequences),len(sequences[k]),blocksinseq[k]))
-                
+                    
     return sequences
 
 
