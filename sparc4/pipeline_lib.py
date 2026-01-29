@@ -205,7 +205,7 @@ def build_target_list_from_data(object_list=[], skycoords_list=[], search_radius
     return tbl
     
    
-def astrometry_from_existing_wcs(wcs, img_data, pixel_coords=None, sky_coords=None, pixel_scale=0.335, fov_search_factor=2.0, max_number_of_catalog_sources=300, compute_wcs_tolerance=10, nsources_to_plot=30, twirl_find_peak_threshold=2.0, sip_degree=None, use_vizier=False, vizier_catalogs=["UCAC"], vizier_catalog_idx=2, plot_solution=False, ra_offset=0., dec_offset=0., plot_filename="") :
+def astrometry_from_existing_wcs(wcs, img_data, pixel_coords=None, sky_coords=None, pixel_scale=0.335, fov_search_factor=2.0, max_number_of_catalog_sources=300, nsources_to_plot=30, twirl_find_peak_threshold=2.0, sip_degree=None, use_vizier=False, vizier_catalogs=["UCAC"], vizier_catalog_idx=2, plot_solution=False, ra_offset=0., dec_offset=0., propagate_gaia_positions=True, safe_sip_factor=15, min_number_of_matched_sources=3, plot_filename="") :
 
     """ Pipeline module to calcualte astrometric solution from an existing wcs
     Parameters
@@ -228,12 +228,8 @@ def astrometry_from_existing_wcs(wcs, img_data, pixel_coords=None, sky_coords=No
         size of FoV to search Gaia sources in units of the image FoV
     max_number_of_catalog_sources : int
         limit to truncate number of Gaia sources to be matched for astrometry
-    compute_wcs_tolerance : float
-        tolerance passed as a parameter to the function twirl.compute_wcs()
     plot_solution : bool
         to plot image and Gaia sources using new astrometric solution
-    plot_filename : str
-        output plot file name
     nsources_to_plot : int
         number of Gaia sources to plot
     sip_degree : int
@@ -242,6 +238,16 @@ def astrometry_from_existing_wcs(wcs, img_data, pixel_coords=None, sky_coords=No
         apply offset in right ascension (arcmin)
     dec_offset : float
         apply offset in declination (arcmin)
+    propagate_gaia_positions : bool
+        to propagate RA and Dec coods of gaia sources to the observed epoch
+    safe_sip_factor : int
+        Factor to make sure the number of sources is sufficient for the DOF introduced by the selected sip degree:
+        It must satisfy the following:  number of sources > safe_sip_factor * sip_degree
+    min_number_of_matched_sources : int
+        Minimum number of matched sources for fitting astrometric solution.
+
+    plot_filename : str
+        output plot file name
 
     Returns
         wcs : astropy.wcs.WCS
@@ -252,6 +258,15 @@ def astrometry_from_existing_wcs(wcs, img_data, pixel_coords=None, sky_coords=No
     loc = {}
     loc['ASTROMETRY_SOURCES_SKYCOORDS'] = None
 
+    # get j2000_epoch to propagate coordinates to the current epoch
+    t = Time.now()
+    wcs_hdr = wcs.to_header(relax=True)
+    if 'DATE-OBS' in wcs_hdr.keys() :
+        t = Time(wcs_hdr['DATE-OBS'], format='isot')
+    j2000_epoch = t.jyear
+    logger.info(f"WCS date: {t.isot} Epoch (J2000/Jyear): {j2000_epoch}")
+    ###
+    
     # detect stars in the image if a list of pixel coordinates is not provided
     if pixel_coords is None :
         logger.info("Detecting peaks using twirl")
@@ -302,9 +317,32 @@ def astrometry_from_existing_wcs(wcs, img_data, pixel_coords=None, sky_coords=No
                     logger.info("Querying Gaia DR3")
                     # query Gaia DR3 sources in the field
                     gaia_tbl = s4utils.gaiadr3_query(center.ra.deg, center.dec.deg, radius=fov_search_factor * fov_radius_arcmin, max_nsrcs=max_number_of_catalog_sources)
-                    # grab ra and dec sky coords of returned gaia dr3 sources
-                    sources_skycoords = np.array([gaia_tbl["ra"].value.data, gaia_tbl["dec"].value.data]).T
-  
+                    
+                    # make sure all sources have finite RA and Dec coords data
+                    keep = (np.isfinite(gaia_tbl["ra"].value.data)) & (np.isfinite(gaia_tbl["dec"].value.data))
+                    
+                    if propagate_gaia_positions :
+                        # make sure all sources have finite proper motion and parallax data
+                        keep &= (np.isfinite(gaia_tbl["pmra"].value.data)) & (np.isfinite(gaia_tbl["pmra"].value.data))
+                        keep &= np.isfinite(gaia_tbl["parallax"].value.data)
+                        # below it propagates the RA and Dec coordinates of gaia sources to the observed epoch
+                        p_ra, p_dec = s4utils.propagate_gaia_positions(gaia_tbl["ra"].value.data[keep],
+                                                                   gaia_tbl["dec"].value.data[keep],
+                                                                   gaia_tbl["pmra"].value.data[keep],
+                                                                   gaia_tbl["pmdec"].value.data[keep],
+                                                                   gaia_tbl["parallax"].value.data[keep],
+                                                                   epoch_catalog=2016.0,
+                                                                   epoch_target=j2000_epoch,
+                                                                   allow_negative_parallaxes=True)
+                        sources_skycoords = np.column_stack([p_ra, p_dec])
+                    else :
+                        # grab ra and dec sky coords of returned gaia dr3 sources
+                        sources_skycoords = column_stack([gaia_tbl["ra"].value.data[keep], gaia_tbl["dec"].value.data[keep]])
+                    
+                    if max_number_of_catalog_sources > len(sources_skycoords) :
+                        logger.warning("Resetting number of max_number_of_catalog_sources to {}".format(len(sources_skycoords)))
+                        max_number_of_catalog_sources = len(sources_skycoords)
+                    
                 except Exception as e :
                     logger.warning("Could not acesss Gaia, using Vizier -> {}:  {}".format(vizier_catalogs,e))
                     result = Vizier.query_region(center, width=[fov_search_factor * fov,fov_search_factor * fov], catalog=vizier_catalogs)
@@ -313,7 +351,7 @@ def astrometry_from_existing_wcs(wcs, img_data, pixel_coords=None, sky_coords=No
                         ra_i, dec_i = result[vizier_catalog_idx]['RAJ2000'][i], result[vizier_catalog_idx]['DEJ2000'][i]
                         sources_skycoords.append([ra_i,dec_i])
                     sources_skycoords = np.array(sources_skycoords,dtype=float)
-            
+                    
             # use input wcs to generate a "guess" for the set of pixel coordinates of Gaia sources
             sources_radecs_guess = np.array(wcs.world_to_pixel_values(sources_skycoords))
 
@@ -342,25 +380,53 @@ def astrometry_from_existing_wcs(wcs, img_data, pixel_coords=None, sky_coords=No
 
             # cast list of coordinates into SkyCoords
             all_sky_coords = SkyCoord(matched_sky_coords, unit='deg', frame='icrs')
+
+            if len(matched_sky_coords) >= min_number_of_matched_sources :
+                logger.info("Number of matched sources to solve astrometry: {}".format(len(matched_sky_coords)))
             
-            # generate wcs from fit to array of sources
-            wcs = fit_wcs_from_points(np.array([source_pos_array[:,0], source_pos_array[:,1]]), all_sky_coords, proj_point='center', projection='TAN', sip_degree=sip_degree)
-            #print(repr(wcs.to_header()))
+                if sip_degree:
+                    if len(matched_sky_coords) < safe_sip_factor*sip_degree :
+                        new_sip_degree = int(np.floor(len(matched_sky_coords) / safe_sip_factor))
+                        if new_sip_degree < 1 :
+                            new_sip_degree = None
+                        logger.warning("Insufficient number of sources ({}) for selected sip_degree={}. Resetting sip_degree to {}".format(len(matched_sky_coords),sip_degree, new_sip_degree))
+                        sip_degree = new_sip_degree
+
+                # generate wcs from fit to array of sources
+                wcs = fit_wcs_from_points(np.array([source_pos_array[:,0], source_pos_array[:,1]]), all_sky_coords, proj_point='center', projection=wcs, sip_degree=sip_degree)
+                loc['NUMBER_OF_MATCHED_SOURCES'] = len(matched_sky_coords)
+            else :
+                logger.warning("Insufficient number of sources for astrometry: {} < minimum={}. Aborting WCS fit.".format(len(matched_sky_coords),min_number_of_matched_sources))
                 
             loc['ASTROMETRY_SOURCES_SKYCOORDS'] = sources_skycoords[:max_number_of_catalog_sources]
         else :
             all_sky_coords = SkyCoord(sky_coords, unit='deg', frame='icrs')
-            wcs = fit_wcs_from_points(np.array([pixel_coords[:,0], pixel_coords[:,1]]), all_sky_coords, proj_point='center', projection='TAN', sip_degree=sip_degree)
+            logger.info("Number of input sources to solve astrometry: {}".format(len(sky_coords)))
+            
+            if len(sky_coords) >= min_number_of_matched_sources :
+                if sip_degree:
+                    if len(sky_coords) < safe_sip_factor*sip_degree :
+                        new_sip_degree = int(np.floor(len(sky_coords) / safe_sip_factor))
+                        if new_sip_degree < 1 :
+                            new_sip_degree = None
+                        logger.warning("Insufficient number of sources ({}) for selected sip_degree={}. Resetting sip_degree to {}".format(len(sky_coords), sip_degree, new_sip_degree))
+                        sip_degree = new_sip_degree
+                wcs = fit_wcs_from_points(np.array([pixel_coords[:,0], pixel_coords[:,1]]), all_sky_coords, proj_point='center', projection=wcs, sip_degree=sip_degree)
+                loc['NUMBER_OF_MATCHED_SOURCES'] = len(sky_coords)
+            else :
+                logger.warning("Insufficient number of sources for astrometry: {} < minimum={}. Aborting WCS fit.".format(len(sky_coords),min_number_of_matched_sources))
+                
             loc['ASTROMETRY_SOURCES_SKYCOORDS'] = sky_coords
 
     except Exception as e :
         loc['ASTROMETRY_SOURCES_SKYCOORDS'] = np.array(wcs.pixel_to_world_values(pixel_coords))
         logger.warning("Could not solve astrometry : {}".format(e))
 
-    # plot Gaia sources using new wcs to visually check if solution is correct
-    astrometry_sources_pixcoords = np.array(wcs.world_to_pixel_values(loc['ASTROMETRY_SOURCES_SKYCOORDS'][:nsources_to_plot]))
 
     if plot_solution :
+        # plot Gaia sources using new wcs to visually check if solution is correct
+        astrometry_sources_pixcoords = np.array(wcs.world_to_pixel_values(loc['ASTROMETRY_SOURCES_SKYCOORDS'][:nsources_to_plot]))
+
         fig = plt.figure(figsize=(10,10))
         
         plt.imshow(img_data, vmin=np.median(img_data), vmax=3 * np.median(img_data), cmap="Greys_r")
@@ -372,6 +438,9 @@ def astrometry_from_existing_wcs(wcs, img_data, pixel_coords=None, sky_coords=No
         else :
             plt.show()
         
+    # write DATE-OBS into new wcs:
+    wcs.wcs.dateobs = t.isot
+    
     return wcs
     
 @timeout(10)
@@ -3234,18 +3303,25 @@ def generate_catalogs(p, data, hdr, sources, fwhm, err_data=None, catalogs=[], c
                     pixel_coords_atm = None
                     if p['USE_DETECTED_SRC_FOR_ASTROMETRY'] :
                         pixel_coords_atm = pixel_coords
-                    
+                                        
                     # First pass to get initial astrometric solution
-                    p['WCS'] = astrometry_from_existing_wcs(deepcopy(p['WCS']), data, pixel_coords=pixel_coords_atm, pixel_scale=p["PLATE_SCALE"], fov_search_factor=2.0, max_number_of_catalog_sources=p['MAX_NUMBER_OF_GAIA_SRCS_FOR_ASTROMETRY'], nsources_to_plot=100, sip_degree=p['SIP_DEGREE'], use_vizier=p['USE_VIZIER'], vizier_catalogs=p['VIZIER_CATALOGS'], vizier_catalog_idx=p['VIZIER_CATALOG_IDX'], plot_solution=p['PLOT_ASTROMETRY_RESULTS_IN_STACK'])
+                    p['WCS'] = astrometry_from_existing_wcs(deepcopy(p['WCS']), data, pixel_coords=pixel_coords_atm, pixel_scale=p["PLATE_SCALE"], fov_search_factor=2.0, max_number_of_catalog_sources=p['MAX_NUMBER_OF_GAIA_SRCS_FOR_ASTROMETRY'], nsources_to_plot=100, sip_degree=None, use_vizier=p['USE_VIZIER'], vizier_catalogs=p['VIZIER_CATALOGS'], vizier_catalog_idx=p['VIZIER_CATALOG_IDX'], plot_solution=p['PLOT_ASTROMETRY_RESULTS_IN_STACK'])
                     
                     # Iterative improvement of astrometric solution
                     for iter in range(p['N_ITER_ASTROMETRY']) :
                         logger.info("Refining astrometric solution in POLAR-MODE -> iter={}".format(iter))
-                        w = astrometry_from_existing_wcs(deepcopy(p['WCS']), data, pixel_coords=pixel_coords_atm, pixel_scale=p["PLATE_SCALE"], fov_search_factor=p['FOV_SERACH_FACTOR'], max_number_of_catalog_sources=p['MAX_NUMBER_OF_GAIA_SRCS_FOR_ASTROMETRY'], nsources_to_plot=100, sip_degree=p['SIP_DEGREE'], use_vizier=p['USE_VIZIER'], vizier_catalogs=p['VIZIER_CATALOGS'], vizier_catalog_idx=p['VIZIER_CATALOG_IDX'], plot_solution=p['PLOT_ASTROMETRY_RESULTS_IN_STACK'])
-                        p['WCS'] = w
+                        p['WCS'] = astrometry_from_existing_wcs(deepcopy(p['WCS']), data, pixel_coords=pixel_coords_atm, pixel_scale=p["PLATE_SCALE"], fov_search_factor=p['FOV_SERACH_FACTOR'], max_number_of_catalog_sources=p['MAX_NUMBER_OF_GAIA_SRCS_FOR_ASTROMETRY'], nsources_to_plot=100, sip_degree=p['SIP_DEGREE'], use_vizier=p['USE_VIZIER'], vizier_catalogs=p['VIZIER_CATALOGS'], vizier_catalog_idx=p['VIZIER_CATALOG_IDX'], plot_solution=p['PLOT_ASTROMETRY_RESULTS_IN_STACK'])
                         
+                    if p["RUN_FINAL_ASTROMETRY_FIT"] :
+                        ref_ras, ref_decs = s4utils.get_gaia_sources_coords_from_catalog(p['WCS'], pixel_coords_atm, search_radius=5., verbose=True)
+                        sky_coords_atm = np.ndarray((len(ref_ras), 2))
+                        for j in range(len(ref_ras)) :
+                            sky_coords_atm[j] = [ref_ras[j],ref_decs[j]]
+                        
+                        logger.info("Obtaining final astrometric solution in POLAR-MODE using {} ref stars from gaia".format(len(ref_ras)))
+                        p['WCS'] = astrometry_from_existing_wcs(deepcopy(p['WCS']), data, pixel_coords=pixel_coords_atm, sky_coords=sky_coords_atm, pixel_scale=p["PLATE_SCALE"], fov_search_factor=p['FOV_SERACH_FACTOR'], nsources_to_plot=100, sip_degree=p['SIP_DEGREE'], use_vizier=p['USE_VIZIER'], vizier_catalogs=p['VIZIER_CATALOGS'], vizier_catalog_idx=p['VIZIER_CATALOG_IDX'], plot_solution=p['PLOT_ASTROMETRY_RESULTS_IN_STACK'])
+
             except Exception as e:
-            
                 logger.warning("Could not solve astrometry in POLAR-MODE, using WCS from database: {}".format(e))
                 p['WCS'] = set_wcs_from_astrom_ref_image(p["ASTROM_REF_IMG"], hdr, ra_deg=p['RA_DEG'], dec_deg=p['DEC_DEG'],time_key=p['TIME_KEY'])
             
@@ -3328,12 +3404,21 @@ def generate_catalogs(p, data, hdr, sources, fwhm, err_data=None, catalogs=[], c
                         pixel_coords_atm = pixel_coords
 
                     # First pass to get initial astrometric solution
-                    p['WCS'] = astrometry_from_existing_wcs(deepcopy(p['WCS']), data, pixel_coords=pixel_coords_atm, pixel_scale=p["PLATE_SCALE"], fov_search_factor=2.0, max_number_of_catalog_sources=p['MAX_NUMBER_OF_GAIA_SRCS_FOR_ASTROMETRY'], nsources_to_plot=100, sip_degree=p['SIP_DEGREE'], use_vizier=p['USE_VIZIER'], vizier_catalogs=p['VIZIER_CATALOGS'], vizier_catalog_idx=p['VIZIER_CATALOG_IDX'], plot_solution=p['PLOT_ASTROMETRY_RESULTS_IN_STACK'])
+                    p['WCS'] = astrometry_from_existing_wcs(deepcopy(p['WCS']), data, pixel_coords=pixel_coords_atm, pixel_scale=p["PLATE_SCALE"], fov_search_factor=2.0, max_number_of_catalog_sources=p['MAX_NUMBER_OF_GAIA_SRCS_FOR_ASTROMETRY'], nsources_to_plot=100, sip_degree=None, use_vizier=p['USE_VIZIER'], vizier_catalogs=p['VIZIER_CATALOGS'], vizier_catalog_idx=p['VIZIER_CATALOG_IDX'], plot_solution=p['PLOT_ASTROMETRY_RESULTS_IN_STACK'])
+                    
                     # Iterative improvement of astrometric solution
                     for iter in range(p['N_ITER_ASTROMETRY']) :
                         logger.info("Refining astrometric solution in PHOT-MODE -> iter={}".format(iter))
-                        w = astrometry_from_existing_wcs(deepcopy(p['WCS']), data, pixel_coords=pixel_coords_atm, pixel_scale=p["PLATE_SCALE"], fov_search_factor=p['FOV_SERACH_FACTOR'], max_number_of_catalog_sources=p['MAX_NUMBER_OF_GAIA_SRCS_FOR_ASTROMETRY'], plot_solution=p['PLOT_ASTROMETRY_RESULTS_IN_STACK'], nsources_to_plot=100, sip_degree=p['SIP_DEGREE'], use_vizier=p['USE_VIZIER'], vizier_catalogs=p['VIZIER_CATALOGS'], vizier_catalog_idx=p['VIZIER_CATALOG_IDX'])
-                        p['WCS'] = w
+                        p['WCS'] = astrometry_from_existing_wcs(deepcopy(p['WCS']), data, pixel_coords=pixel_coords_atm, pixel_scale=p["PLATE_SCALE"], fov_search_factor=p['FOV_SERACH_FACTOR'], max_number_of_catalog_sources=p['MAX_NUMBER_OF_GAIA_SRCS_FOR_ASTROMETRY'], plot_solution=p['PLOT_ASTROMETRY_RESULTS_IN_STACK'], nsources_to_plot=100, sip_degree=p['SIP_DEGREE'], use_vizier=p['USE_VIZIER'], vizier_catalogs=p['VIZIER_CATALOGS'], vizier_catalog_idx=p['VIZIER_CATALOG_IDX'])
+                        
+                    if p["RUN_FINAL_ASTROMETRY_FIT"] :
+                        ref_ras, ref_decs = s4utils.get_gaia_sources_coords_from_catalog(p['WCS'], pixel_coords_atm, search_radius=5., verbose=True)
+                        sky_coords_atm = np.ndarray((len(ref_ras), 2))
+                        for j in range(len(ref_ras)) :
+                            sky_coords_atm[j] = [ref_ras[j],ref_decs[j]]
+                       
+                        logger.info("Obtaining final astrometric solution in PHOT-MODE using {} Gaia reference stars".format(len(ref_ras)))
+                        p['WCS'] = astrometry_from_existing_wcs(deepcopy(p['WCS']), data, pixel_coords=pixel_coords_atm, sky_coords=sky_coords_atm, pixel_scale=p["PLATE_SCALE"], fov_search_factor=p['FOV_SERACH_FACTOR'], plot_solution=p['PLOT_ASTROMETRY_RESULTS_IN_STACK'], nsources_to_plot=100, sip_degree=p['SIP_DEGREE'], use_vizier=p['USE_VIZIER'], vizier_catalogs=p['VIZIER_CATALOGS'], vizier_catalog_idx=p['VIZIER_CATALOG_IDX'])
                     
             except Exception as e:
                 logger.warning("Could not solve astrometry in PHOT-MODE, using WCS from database: {}".format(e))
@@ -3837,7 +3922,7 @@ def build_catalogs(p, data, hdr, catalogs=[], xshift=0., yshift=0., solve_astrom
                 # delete preview sorted mask, which has a size inconsistent with the new one
                 del p['SORTED_MASK']
                 # generate catalogs again, now with the new targets added
-                new_catalogs, p = generate_catalogs(p, data, hdr, sources, fwhm, err_data=rms, catalogs=[], aperture_radius=p['PHOT_FIXED_APERTURE'], r_ann=r_ann, polarimetry=polarimetry, solve_astrometry=p["SOLVE_ASTROMETRY_IN_STACK"], exptime=exptime, readnoise=readnoise, sortbyflux=True, update_xycenter_from_profile_fit=p["UPDATE_XY_SRC_COORDINATES_FROM_PROFILE_FIT"], fwhm_from_global_fit=p["FWHM_FROM_GLOBAL_FIT_IN_STACK"], calculate_fwhm=True)
+                new_catalogs, p = generate_catalogs(p, data, hdr, sources, fwhm, err_data=rms, catalogs=[], aperture_radius=p['PHOT_FIXED_APERTURE'], r_ann=r_ann, polarimetry=polarimetry, solve_astrometry=False, exptime=exptime, readnoise=readnoise, sortbyflux=True, update_xycenter_from_profile_fit=p["UPDATE_XY_SRC_COORDINATES_FROM_PROFILE_FIT"], fwhm_from_global_fit=p["FWHM_FROM_GLOBAL_FIT_IN_STACK"], calculate_fwhm=True)
                
                 if p['UPDATE_TARGET_INDEX_FROM_INPUT'] and not p['UPDATE_TARGET_INDEX_TO_SS_OBJECT']:
                     # use current wcs to generate the set of pixel coordinates of input targets
@@ -3893,16 +3978,14 @@ def build_catalogs(p, data, hdr, catalogs=[], xshift=0., yshift=0., solve_astrom
             
             # First pass to get initial astrometric solution
             p['WCS'] = astrometry_from_existing_wcs(deepcopy(p['WCS']), data, pixel_coords=pixel_coords_atm, pixel_scale=p["PLATE_SCALE"], fov_search_factor=2.0, max_number_of_catalog_sources=p['MAX_NUMBER_OF_GAIA_SRCS_FOR_ASTROMETRY'], nsources_to_plot=100, sip_degree=None, use_vizier=p['USE_VIZIER'], vizier_catalogs=p['VIZIER_CATALOGS'], vizier_catalog_idx=p['VIZIER_CATALOG_IDX'], plot_solution=False)
+            
             # Iterative improvement of astrometric solution
             for iter in range(p['N_ITER_ASTROMETRY']) :
                 # run full astrometry for individual frames using the existing WCS as reference
-                w = astrometry_from_existing_wcs(deepcopy(p['WCS']), data, pixel_coords=pixel_coords_atm, pixel_scale=p["PLATE_SCALE"], fov_search_factor=p['FOV_SERACH_FACTOR'], max_number_of_catalog_sources=p['MAX_NUMBER_OF_GAIA_SRCS_FOR_ASTROMETRY'], plot_solution=False, nsources_to_plot=100, sip_degree=p['SIP_DEGREE'], use_vizier=p['USE_VIZIER'], vizier_catalogs=p['VIZIER_CATALOGS'], vizier_catalog_idx=p['VIZIER_CATALOG_IDX'])
-                p['WCS'] = w
-
+                p['WCS'] = astrometry_from_existing_wcs(deepcopy(p['WCS']), data, pixel_coords=pixel_coords_atm, pixel_scale=p["PLATE_SCALE"], fov_search_factor=p['FOV_SERACH_FACTOR'], max_number_of_catalog_sources=p['MAX_NUMBER_OF_GAIA_SRCS_FOR_ASTROMETRY'], plot_solution=False, nsources_to_plot=100, sip_degree=p['SIP_DEGREE'], use_vizier=p['USE_VIZIER'], vizier_catalogs=p['VIZIER_CATALOGS'], vizier_catalog_idx=p['VIZIER_CATALOG_IDX'])
         else :
             # update WCS using the set of x+offset,y+offset and ra,dec arrays in the catalog.
-            w = astrometry_from_existing_wcs(deepcopy(p['WCS']), data, pixel_coords=pixel_coords, sky_coords=sky_coords, pixel_scale=p["PLATE_SCALE"], plot_solution=False, nsources_to_plot=100, sip_degree=p['SIP_DEGREE'], use_vizier=p['USE_VIZIER'], vizier_catalogs=p['VIZIER_CATALOGS'], vizier_catalog_idx=p['VIZIER_CATALOG_IDX'])
-            p['WCS'] = w
+            p['WCS'] = astrometry_from_existing_wcs(deepcopy(p['WCS']), data, pixel_coords=pixel_coords, sky_coords=sky_coords, pixel_scale=p["PLATE_SCALE"], plot_solution=False, nsources_to_plot=100, sip_degree=p['SIP_DEGREE'], use_vizier=p['USE_VIZIER'], vizier_catalogs=p['VIZIER_CATALOGS'], vizier_catalog_idx=p['VIZIER_CATALOG_IDX'])
         
         if 'WCS_HEADER' in p.keys() :
             # clean wcs header keywords
@@ -5386,7 +5469,7 @@ def stack_and_reduce_sci_images(p, sci_list, reduce_dir, ref_img="", stack_suffi
             if polarimetry :
                 s4plt.plot_sci_polar_frame(p['OBJECT_STACK'], percentile=99.5, output=stack_plot_file)
             else :
-                s4plt.plot_sci_frame(p['OBJECT_STACK'], nstars=20, use_sky_coords=True, output=stack_plot_file)
+                s4plt.plot_sci_frame(p['OBJECT_STACK'], nstars=20, use_sky_coords=False, output=stack_plot_file)
         except Exception as e:
             logger.warning("Could not generate plot for product {} : {}".format(p['OBJECT_STACK'], e))
     

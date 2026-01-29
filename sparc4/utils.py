@@ -13,7 +13,7 @@ import glob
 from copy import deepcopy
 
 from astropy import units as u
-from astropy.coordinates import AltAz, EarthLocation, SkyCoord
+from astropy.coordinates import AltAz, EarthLocation, SkyCoord, Distance
 from astropy.io import fits
 from astropy.time import Time, TimeDelta
 
@@ -33,6 +33,7 @@ import logging
 from astroquery.gaia import Gaia
 from astroquery.simbad import Simbad
 
+from astropop.catalogs import gaia
 
 def clean_wcs_in_header(header) :
     
@@ -855,6 +856,136 @@ def gaiadr3_query(ra, dec,
     gaia_tbl = job.get_results()
     
     return gaia_tbl
+
+
+def propagate_gaia_positions(ra, dec, pmra, pmdec, parallax, epoch_catalog=2016.0, epoch_target=2024.0, min_parallax=0.1, allow_negative_parallaxes=True) :
+    """
+    Propagate Gaia positions from catalog epoch to target epoch using proper motion.
+    
+    Parameters:
+    -----------
+    ra : array-like
+        Right Ascension in degrees (ICRS)
+    dec : array-like
+        Declination in degrees (ICRS)
+    pmra : array-like
+        Proper motion in RA * cos(dec) in mas/yr
+    pmdec : array-like
+        Proper motion in Dec in mas/yr
+    parallax : array-like
+        Parallax in mas
+    epoch_catalog : float
+        Catalog epoch (default: 2016.0 for Gaia DR3)
+    epoch_target (jyear) : float
+        Target epoch to propagate to
+    min_parallax : float
+        Minimum parallax in mas (default: 0.1 mas = 10 kpc)
+    allow_negative_parallaxes : bool
+        to allow negative values of parallax
+        
+    Returns:
+    --------
+    ra_new, dec_new : arrays
+        Propagated coordinates in degrees
+    """
+    
+    parallax = np.atleast_1d(parallax)
+    
+    if allow_negative_parallaxes :
+        distance_pc = 1000.0 / parallax
+        distance = np.abs(Distance(distance_pc * u.pc, allow_negative=True))
+    else :
+        distance_pc = np.where(
+            parallax > min_parallax,
+            1000.0 / parallax,
+            10000.0  # 10 kpc for distant/uncertain sources
+        )
+        distance = Distance(distance_pc * u.pc, allow_negative=False)
+    
+    # Create SkyCoord object with proper motion
+    coords = SkyCoord(
+        ra=ra * u.deg,
+        dec=dec * u.deg,
+        pm_ra_cosdec=pmra * u.mas/u.yr,
+        pm_dec=pmdec * u.mas/u.yr,
+        distance=distance,
+        obstime=Time(epoch_catalog, format='jyear')
+    )
+    
+    # Propagate to target epoch
+    coords_new = coords.apply_space_motion(Time(epoch_target, format='jyear'))
+    
+    return coords_new.ra.deg, coords_new.dec.deg
+
+
+def get_gaia_sources_coords_from_catalog(wcs, pixel_coords, search_radius=6., verbose=False) :
+
+    # define observation time
+    obstime = None
+    wcs_hdr = wcs.to_header(relax=True)
+    if 'DATE-OBS' in wcs_hdr.keys() :
+        obstime = Time(wcs_hdr['DATE-OBS'], format='isot')
+    j2000_epoch = obstime.jyear
+
+    raw_sky_coords = wcs.pixel_to_world_values(pixel_coords)
+    raw_ra, raw_dec = np.array([]), np.array([])
+    for i in range(len(raw_sky_coords)) :
+        raw_ra = np.append(raw_ra,raw_sky_coords[i][0])
+        raw_dec = np.append(raw_dec,raw_sky_coords[i][1])
+
+    # get predicted coordinates of sources from given wcs solution
+    sky_coords = SkyCoord(raw_ra, raw_dec, unit='deg', frame='icrs')
+    
+    # get the center of the image
+    ra_cen, dec_cen = wcs.wcs.crval[0], wcs.wcs.crval[1]
+    
+    # set image center coordinates
+    center = SkyCoord(ra_cen, dec_cen, unit=(u.deg,u.deg), frame='icrs')
+
+    # define search radius in arcmin
+    r = search_radius * u.arcminute
+    
+    # retrieve all gaia sources within the field of view
+    gaia_tbl = gaiadr3_query(ra_cen, dec_cen, radius=search_radius, max_nsrcs=1999)
+    
+    # make sure all sources have finite RA and Dec coords data
+    keep = (np.isfinite(gaia_tbl["ra"].value.data)) & (np.isfinite(gaia_tbl["dec"].value.data))
+
+    # get ras and decs
+    p_ra, p_dec = gaia_tbl["ra"].value.data[keep], gaia_tbl["dec"].value.data[keep]
+    
+    if obstime is not None:
+        keep &= (np.isfinite(gaia_tbl["pmra"].value.data)) & (np.isfinite(gaia_tbl["pmdec"].value.data))
+        keep &= np.isfinite(gaia_tbl["parallax"].value.data)
+
+        # propagate Gaia DR3 coordinates to the epoch of observation
+        p_ra, p_dec = propagate_gaia_positions(gaia_tbl["ra"].value.data[keep],
+                                           gaia_tbl["dec"].value.data[keep],
+                                           gaia_tbl["pmra"].value.data[keep],
+                                           gaia_tbl["pmdec"].value.data[keep],
+                                           gaia_tbl["parallax"].value.data[keep],
+                                           epoch_catalog=2016.0,
+                                           epoch_target=j2000_epoch,
+                                           allow_negative_parallaxes=True)
+        
+    # cast ra and dec into SkyCoord
+    gaia_coords = SkyCoord(p_ra, p_dec, unit='deg', frame='icrs')
+    
+    # match observed sources with gaia catalog
+    indx, dist, _  = sky_coords.match_to_catalog_sky(gaia_coords)
+    
+    if verbose :
+        n_gaia_matched_sources = len(indx)
+        print("Number of observed sources in catalog: {}".format(len(sky_coords)))
+        print("Number of Gaia sources in the field: {}".format(len(gaia_tbl)))
+        print("Number of matched sources with Gaia: {}".format(n_gaia_matched_sources))
+
+    """
+    for i in range(len(indx)) :
+        print(i, gaia_coords.ra.deg[indx][i], gaia_coords.dec.deg[indx][i], raw_ra[i], raw_dec[i])
+    """
+
+    return gaia_coords.ra.deg[indx], gaia_coords.dec.deg[indx]
 
 
 def match_object_with_simbad(obj_id, ra=None, dec=None, search_radius_arcsec=10) :
