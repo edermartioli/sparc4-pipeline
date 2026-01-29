@@ -113,3 +113,5 @@ Version 0.1.9 (2025-11-14)
 - Implemented safe integer casting when getting WPPOS values from image header. 
 - Removed psi_0 from L2 polar plots
 - Fixed bug in rolling polar sequence -> changed a "0" index by "i" -> bug introduced in v0.1.7 when casting WPPOS to integer.
+- Improved robustness of astrometry -> following referee's suggestions
+- Implemented more features in the quicklook tool
