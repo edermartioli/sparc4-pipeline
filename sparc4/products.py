@@ -297,7 +297,11 @@ def scienceImageProduct(original_image, img_data=[], info={}, catalogs=[], polar
         else:
             cat_label = "CATALOG_PHOT_AP{:03d}".format(aperture_value)
 
-        hdu_catalog = fits.TableHDU(data=catalog_array, header=catalog_header, name=cat_label)
+        # cast catalog data into astropy.table.Table
+        tbl_catalog = Table(catalog_array)
+        
+        # convert catalog data into a FITS binary table hdu
+        hdu_catalog = fits.BinTableHDU(data=tbl_catalog, header=catalog_header, name=cat_label)
 
         # set each column unit
         column_units = ["", "DEG", "DEG", "PIXEL", "PIXEL","PIXEL", "PIXEL", "MAG", "MAG", "MAG", "MAG", "PIXEL", ""]
