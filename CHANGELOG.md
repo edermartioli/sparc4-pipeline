@@ -116,3 +116,4 @@ Version 0.1.9 (2025-11-14)
 - Improved robustness of astrometry -> following referee's suggestions
 - Implemented more features in the quicklook tool
 - Save catalog data as binary FITS tables (instead of ASCII) in the Science Image Products
+- Added tool sparc4_polarimetry_standard.py to analyze data from polarimetric standards
