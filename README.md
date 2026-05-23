@@ -3,7 +3,7 @@
 
 The `sparc4-pipeline` is a set of routines that make use of the [`AstroPoP`](https://github.com/juliotux/astropop) package and other astronomical packages to reduce the data of photometric and polarimetric observations obtained with the [SPARC4](https://ui.adsabs.harvard.edu/abs/2012AIPC.1429..252R/abstract) instrument installed at the [Pico dos Dias Observatory (OPD/LNA)](https://www.gov.br/lna/pt-br/composicao-1/coast/obs/opd). 
 
-More information about the pipeline is available in the [SPARC4 Pipeline paper](https://iopscience.iop.org/article/10.1088/1538-3873/ae5b25) and [SAB 2025 Proceedings](https://sab-astro.org.br/wp-content/uploads/2025/05/EderMartioliSPARC4Pipeline.pdf). If you use the SPARC4 Pipeline in your research, please cite [Martioli et al. (2026)](https://ui.adsabs.harvard.edu/abs/2026PASP..138e4502M/abstract)
+More information about the pipeline performance is available in the [SPARC4 Pipeline paper](https://iopscience.iop.org/article/10.1088/1538-3873/ae5b25) and [SAB 2025 Proceedings](https://sab-astro.org.br/wp-content/uploads/2025/05/EderMartioliSPARC4Pipeline.pdf). If you use the SPARC4 Pipeline in your research, please cite [Martioli et al. (2026)](https://ui.adsabs.harvard.edu/abs/2026PASP..138e4502M/abstract)
 
 # Before installation
 
