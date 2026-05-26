@@ -35,10 +35,12 @@ parser.add_option("-c", "--calibdbdir", dest="calibdbdir", help="Calibration dat
 parser.add_option("-b", "--bias", dest="bias", help="wildcard for bias selection", type='string', default="")
 parser.add_option("-F", "--flat", dest="flat", help="wildcard for flat selection", type='string', default="")
 parser.add_option("-s", "--science", dest="science", help="wildcard for science data selection", type='string', default="")
-parser.add_option("-o", "--object", dest="object", help="object id", type='string', default="unknown_object")
+parser.add_option("-o", "--object", dest="object", help="object id", type='string', default="Object")
 parser.add_option("-t", "--time_key", dest="time_key", help="time keyword", type='string', default="DATE-OBS")
-parser.add_option("-a", "--ra", dest="ra", help="RA", type='string', default="")
-parser.add_option("-d", "--dec", dest="dec", help="Dec", type='string', default="")
+parser.add_option("-a", "--ra", dest="ra", help="RA", type='float', default=0.)
+parser.add_option("-d", "--dec", dest="dec", help="Dec", type='float', default=0.)
+parser.add_option("-B", "--band", dest="band", help="band", type='string', default="Band")
+parser.add_option("-N", "--night", dest="night", help="night", type='string', default="Night")
 parser.add_option("-m", "--params", dest="params",help="Input parameters yaml file",type='string',default="")
 parser.add_option("-f", action="store_true", dest="force", help="Force reduction", default=False)
 parser.add_option("-p", action="store_true", dest="plot", help="plot", default=False)
@@ -50,9 +52,16 @@ except:
     print("Error: check usage with  -h opd_mini_pipeline.py")
     sys.exit(1)
 
-# load pipeline parameters
-p = s4params.load_sparc4_parameters()
+ra, dec = options.ra, options.dec
 
+# load pipeline parameters
+p = s4pipelib.init_s4_p(options.night, datadir="", reducedir="", channels="", print_report=False, param_file=options.params, save_params=True, create_reduce_dirs=False)
+
+p['SOLAR_SYSTEM_OBJECT'] = False
+p['SOLVE_ASTROMETRY_IN_STACK'] = False
+p['RA_DEG'] = ra
+p['DEC_DEG'] = dec
+    
 # if reduced dir doesn't exist create one
 if not os.path.exists(options.reducedir):
     os.mkdir(options.reducedir)
@@ -61,8 +70,8 @@ bias_list = sorted(glob.glob(options.bias))
 flat_list = sorted(glob.glob(options.flat))
 sci_list = sorted(glob.glob(options.science))
 
-p['master_bias'] = "{}/MasterZero.fits".format(options.reducedir)
-p['master_flat'] = "{}/MasterDomeFlat.fits".format(options.reducedir)
+p['master_bias'] = "{}/{}_MasterZero.fits".format(options.reducedir,options.night)
+p['master_flat'] = "{}/{}_{}_MasterDomeFlat.fits".format(options.reducedir,options.night,options.band)
 
 # calculate master bias and save product to fits
 p = s4pipelib.run_master_calibration(p,
@@ -70,7 +79,8 @@ p = s4pipelib.run_master_calibration(p,
                                      output=p['master_bias'],
                                      obstype='bias',
                                      reduce_dir=options.reducedir,
-                                     force=options.force)
+                                     force=options.force,
+                                     plot=True)
                             
 if options.plot:
     # plot master bias
@@ -83,7 +93,8 @@ p = s4pipelib.run_master_calibration(p,
                                      obstype='flat',
                                      reduce_dir=options.reducedir,
                                      normalize=True,
-                                     force=options.force)
+                                     force=options.force,
+                                     plot=True)
 
 if options.calibdbdir != "" :
     p["CALIBDB_DIR"] = options.calibdbdir
@@ -93,14 +104,13 @@ if options.plot:
     s4plt.plot_cal_frame(p["master_flat"], percentile=99.5, xcut=512, ycut=512)
 
 # set reference image for astrometry
-p["ASTROM_REF_IMG"] = "{}/20230503_s4c3_CR1_astrometryRef_stack.fits".format(
-    p["CALIBDB_DIR"])
+p["ASTROM_REF_IMG"] = "{}/20230503_s4c3_CR1_astrometryRef_stack.fits".format(p["CALIBDB_DIR"])
 
 # set object id
 object_id = options.object
 
 # set suffix for stack product
-stack_suffix = "{}".format(object_id.replace(" ", ""))
+stack_suffix = "{}_{}_{}".format(options.night, object_id.replace(" ", ""), options.band)
 
 if options.time_key != "":
     p["TIME_KEY"] = options.time_key
@@ -123,9 +133,9 @@ p = s4pipelib.stack_and_reduce_sci_images(p,
                                           force=options.force,
                                           match_frames=True,
                                           polarimetry=False,
-                                          plot=options.plot)
+                                          plot=True)
 
-ts_suffix = "{}".format(object_id.replace(" ", ""))
+ts_suffix = "{}_{}_{}".format(options.night, object_id.replace(" ", ""), options.band)
 
 if options.verbose:
     print("Start generating photometric time series products with suffix: ",ts_suffix)
@@ -140,6 +150,8 @@ phot_ts_product = s4pipelib.phot_time_series(p['OBJECT_REDUCED_IMAGES'][1:],
                                              time_format=p['TIME_FORMAT_IN_PROC'],
                                              catalog_names=list_of_catalogs,
                                              time_span_for_rms=p['TIME_SPAN_FOR_RMS'],
+                                             ra_deg=ra,
+                                             dec_deg=dec,
                                              force=options.force)
 
 
@@ -147,8 +159,8 @@ target = p['TARGET_INDEX']
 comps = p['COMPARISONS']
 
 # Uncomment below to override deafult target/comparison definitions
-target = 5
-comps = [2, 3, 4, 6, 7]
+target = 0
+comps = [1]
 
 s4plt.plot_light_curve(phot_ts_product,
                        target=target,
