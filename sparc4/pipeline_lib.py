@@ -821,16 +821,15 @@ def measure_fwhm_from_2DGaussianFit(img_data, xypos, err_data=None, sigma_ini=3,
     for i in range(len(xypos)) :
     
         xc, yc = xypos[i][0], xypos[i][1]
-        
         x1, y1 =int(np.floor((xc+0.5) - (window_size-1)/2)), int(np.floor((yc+0.5) - (window_size-1)/2))
         x2, y2 = x1 + window_size - 1, y1 + window_size - 1
-       
+
         if x1 < 0 : x1, x2 = 0, window_size - 1
         if x2 > nx - 1: x1, x2 = nx - window_size, nx - 1
         if y1 < 0 : y1, y2 = 0, window_size - 1
         if y2 > ny - 1: y1, y2 = ny - window_size, ny - 1
     
-        box_data = deepcopy(img_data[y1:y2,x1:x2])
+        box_data = deepcopy(img_data[y1:y2+1,x1:x2+1])
         bkg_value = np.nanmedian(box_data)
         box_data -= bkg_value
         box_data[box_data < 0] = 0
@@ -886,7 +885,7 @@ def measure_fwhm_from_2DGaussianFit(img_data, xypos, err_data=None, sigma_ini=3,
     return fwhmx, fwhmy, out_xc, out_yc
 
 
-def init_s4_p(nightdir, datadir="", reducedir="", channels="", print_report=False, param_file="", save_params=True):
+def init_s4_p(nightdir, datadir="", reducedir="", channels="", print_report=False, param_file="", save_params=True, create_reduce_dirs=True):
     """ Pipeline module to initialize SPARC4 parameters
     Parameters
     ----------
@@ -902,6 +901,8 @@ def init_s4_p(nightdir, datadir="", reducedir="", channels="", print_report=Fals
         Boolean to print out report on all existing data for reduction
     save_params : bool, optional
         Boolean to save parameters to file
+    create_reduce_dirs : bool, optional
+        To create reduction directories if they don't exist
 
     Returns
     -------
@@ -992,7 +993,8 @@ def init_s4_p(nightdir, datadir="", reducedir="", channels="", print_report=Fals
         channel_data_pattern = '{}/{}'.format(night_ch_data_dir,p["PATTERN_TO_INCLUDE_DATA"])
 
         # if reduced dir doesn't exist create one
-        os.makedirs(root_reduce_dir, exist_ok=True)
+        if create_reduce_dirs :
+            os.makedirs(root_reduce_dir, exist_ok=True)
         
         # if reduced dir doesn't exist create one
         os.makedirs(reduce_dir, exist_ok=True)
@@ -2165,7 +2167,7 @@ def reduce_science_images(p, inputlist, data_dir="./", reduce_dir="./", match_fr
                             if polarimetry :
                                 s4plt.plot_sci_polar_frame(obj_red_images[i], percentile=99.5, output=proc_plot_file, toplabel="UT {}".format(frame_obstime[:-3]), bottomlabel=os.path.basename(obj_fg.files[i]))
                             else :
-                                s4plt.plot_sci_frame(obj_red_images[i], nstars=20, use_sky_coords=True, output=proc_plot_file, toplabel="UT {}".format(frame_obstime[:-3]), bottomlabel=os.path.basename(obj_fg.files[i]))
+                                s4plt.plot_sci_frame(obj_red_images[i], nstars=20, use_sky_coords=False, output=proc_plot_file, toplabel="UT {}".format(frame_obstime[:-3]), bottomlabel=os.path.basename(obj_fg.files[i]))
                         except Exception as e:
                             logger.warning("Could not generate plot for product {} : {}".format(obj_red_images[i], e))
                             
@@ -4216,11 +4218,15 @@ def phot_time_series(sci_list,
     equinox = 'J2000.0'
 
     if "RA" in hdr.keys() and "DEC" in hdr.keys() :
-        source = SkyCoord(hdr["RA"], hdr["DEC"], unit=(
-            u.hourangle, u.deg), frame='icrs', equinox=equinox)
-        info['RA'] = (source.ra.value, '[DEG] RA of object of interest')
-        info['DEC'] = (source.dec.value, '[DEG] DEC of object of interest')
-        
+        try :
+            source = SkyCoord(hdr["RA"], hdr["DEC"], unit=(u.hourangle, u.deg), frame='icrs', equinox=equinox)
+            info['RA'] = (source.ra.value, '[DEG] RA of object of interest')
+            info['DEC'] = (source.dec.value, '[DEG] DEC of object of interest')
+        except Exception as e:
+            info['RA'] = (0., '[DEG] RA of object of interest')
+            info['DEC'] = (0., '[DEG] DEC of object of interest')
+            logger.warning("Could not retrieve RA and Dec from header -> {}".format(e))
+
     if ra_deg :
         info['RA'] = (ra_deg, '[DEG] RA of object of interest')
     if dec_deg :
