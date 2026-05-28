@@ -1303,15 +1303,12 @@ def select_sources_interactive(
     try:
         mgr = plt.get_current_fig_manager()
         try:
-            mgr.window.state("zoomed")       # TkAgg on Windows
+            mgr.window.state("zoomed")   # TkAgg on Windows (titlebar stays)
         except Exception:
             try:
                 mgr.window.showMaximized()   # Qt backends
             except Exception:
-                try:
-                    mgr.full_screen_toggle()  # macOS TkAgg
-                except Exception:
-                    pass
+                pass   # leave at the figsize set above
     except Exception:
         pass
     plt.show(block=True)
